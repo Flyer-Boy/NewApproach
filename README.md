@@ -15,3 +15,7 @@ RideHailing_Queries. cipher —  This script contains a few Cypher queries that 
 
 RideHailing_Templates.cypher  — This script contains Cypher commands that to build the mockup application as they appear in the Article. You will need to pars the script by replacing the <field name> with the proper variable.  
 
+
+
+You can try it with Neo4j Aura. If you don't have an Aura account yet, get one here: https://neo4j.com/cloud/aura-free/ 
+If you are new to Cypher, you can get started at Neo4j's GraphAcademy: https://graphacademy.neo4j.com/
