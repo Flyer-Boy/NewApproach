@@ -13,7 +13,7 @@ RideHailing.cypher — This script can be executed in full to create the 12 Pass
    
 RideHailing_Queries. cipher —  This script contains a few Cypher queries that you can execute against the Database. I will add more queries over time.
 
-RideHailing_Templates.cypher  — This script contains Cypher commands that to build the mockup application as they appear in the Article. You will need to pars the script by replacing the <field name> with the proper variable.  
+RideHailing_Templates.cypher  — This script contains Cypher commands to build the mockup application as they appear in the Article. You will need to pars the script by replacing the <field name> with the proper variable.  
 
 
 
