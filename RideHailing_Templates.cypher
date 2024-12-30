@@ -1,7 +1,23 @@
 
 
 
-// ****************  Driver  App  *******************
+// ****************  Passenger  App  *******************
+
+
+
+// Check if the Passenger has an Active Booking:
+
+MATCH (p:Passenger  {Phone: "<phone>"})-[:HAS_ACTIVE_BOOKING]->(b) RETURN count(*);
+
+// If 0, there is no active booking; If 1, then has an Active Booking
+
+//or
+
+MATCH (p:Passenger {Phone:"<phone>"}) RETURN EXISTS((p)-[:HAS_ACTIVE_BOOKING]->()) AS recordExists
+
+// If FALSE, there is no active booking; If TRUE, then has an Active Booking
+
+
 
 //Passenger Particulars & Structure
 
@@ -41,7 +57,7 @@ MERGE (ab)-[:HAS]->(:FavAddress {Name: "<Nickname>"})-[:IS_ADDRESS]->(:Address {
 //  We Create the Booking and connect it to both Origin and Destination Addresses and to a Payment Method. We then connect the Booking to the WaitinG collection - create 1 Node, create 6 relationships in one Transaction
 
 OPTIONAL MATCH  (p:Passenger {Phone: "<phone number>"})-[:HAS_PREFERED_PAYMENT]-(pm), (w:WaitinG {Name: "WaitinG"}), (oa:Address {GeoHash: "<GeoHash>"})<-[:HAS]-(:AddresseS)-[:HAS]->(da:Address {GeoHash: "<GeoHash>"})
-CREATE (b:Booking {BookingID: "<BookingID>", Date: localdatetime.transaction(), Fare: <fare> })-[:HAS_PASSENGER]->(p),
+CREATE (b:Booking {BookingID: "B"+left(randomUUID(),8)+right(randomUUID(),4), Date: localdatetime.transaction(), Fare: ceil(rand()*20)+10 })-[:HAS_PASSENGER]->(p),
        (b)-[:HAS_PAYMENT]->(pm),
        (b)-[:HAS_ORIGIN]->(oa),
        (b)-[:HAS_DESTINATION]->(da),
@@ -62,6 +78,20 @@ CREATE (b)-[:HAS_RATING]->(r:Rating {Date: localdatetime.transaction(), Stars: <
 
 // ****************  Driver  App  *******************
 
+// Check if the Driver has an Active Booking:
+
+MATCH (d:Driver  {ID: "<Driver ID>"})-[:HAS_CAR]->(c)-[:HAS_ACTIVE_BOOKING]->(b) RETURN count(*);
+
+// If 0, there is no active booking; If 1, then has an Active Booking
+
+//or
+
+MATCH (d:Driver {ID: "<Driver ID>"}) RETURN EXISTS((d)-[:HAS_CAR]->(c)-[:HAS_ACTIVE_BOOKING]->(b)) AS recordExists
+
+// If FALSE, there is no active booking; If TRUE, then has an Active Booking
+
+
+
 
 //  Driver/Car Particulars & Structure
 
@@ -74,7 +104,7 @@ CREATE  (d:Driver {Name: "<Driver Name>", ID: "<Driver ID>", License: "<Drivers 
 (d)-[:HAS_WALLET]->(w:WalleT {Name: "WalleT"}); 
 
 
-// Create a Car and assigne (connect) it to the Driver - set current location
+// Create a Car and assigne (connect) it to the Driver - set current location  (Anchor nodes: Driver ID)
 
 MATCH (d:Driver {ID:"<Driver's ID>"}), (p:PendinG {Name: "PendinG"})
 CREATE (d)-[:HAS_CAR]->(c:Car { Plate: "<Car licence plate number> ", Make: "<Car make>", Model:"<Car model>", Year: <Car Year>, Capacity: <Car passenger capacity>, Color: "<Car color>"})-[:HAS_DRIVER]->(d),
@@ -82,7 +112,7 @@ CREATE (d)-[:HAS_CAR]->(c:Car { Plate: "<Car licence plate number> ", Make: "<Ca
 (p)-[:HAS]->(c);
 
 
-// Create a new Credit Method and set it as Prefered 
+// Create a new Credit Method and set it as Prefered (Anchor nodes: Driver ID)
 
 MATCH (d:Driver {ID:"<Driver's ID>"})-[:HAS_WALLET]->(w:WalleT {Name: "WalleT"})
 CREATE (w)-[:HAS]->(cm:CreditMethod {Type: "Bank Tranfer", AccName: "<Account Name>" , AccNumber: <account number>, SWIFT_BIC: "<SWIFT Code>"}),
@@ -96,14 +126,14 @@ CREATE (w)-[:HAS]->(cm:CreditMethod {Type: "Bank Tranfer", AccName: "<Account Na
 
 OPTIONAL MATCH (p:PendinG {Name: "PendinG"}), (dc:DriverS {Name: "DriverS"})
 CREATE  (d:Driver {Name: "<Driver Name>", ID: "<Driver ID>", License: "<Drivers License>", Phone: "<Driver Phone Number>", Email: "<driver email>" , Photo: "<URL of Driver's photo>" })-[:HAS_CAR]->(c:Car { Plate: "<Car licence plate number> ", Make: "<Car make>", Model:"<Car model>", Year: <Car Year>, Capacity: <Car passenger capacity>, Color: "<Car color>"})-[:HAS_DRIVER]->(d), 
-(d)<-[:HAS]-(dc), 
+(dc)-[:HAS]->(d), 
 (d)-[:HAS_HISTORY]->(:HistorY {Name: "HistorY"}), 
 (d)-[:HAS_WALLET]->(w:WalleT {Name: "WalleT"})-[:HAS]->(cm1:CreditMethod {Type: "Bank Tranfer", AccName: "<Account Name>" , AccNumber: <account number>, SWIFT_BIC: "<SWIFT Code>"}),
 (d)-[:HAS_PREFERED_CREDIT]->(cm1),
 (c)-[:IS_AT]->(:Loc {GeoHash: "<GeoHash>" , Time: localdatetime.transaction()}),
-(c)<-[:HAS]-(p);
+(p)-[:HAS]->(c);
 
-// Update Car Location (Anchor nodes: Driver ID)
+// Update Car Location (Anchor nodes: Driver ID)
 
 // Cypher command to Updating a Car current location from time to time - The system will need a Microservice to generate the GeoHash of the current car location based on GPS Latitude and Longitude
 
