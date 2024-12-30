@@ -37,7 +37,7 @@ REQUIRE n.Phone IS UNIQUE;
 
 MATCH (ps:PassengerS) 
 CREATE  (ps)-[:HAS]->(p:Passenger {Name: "Antonio", Phone: "23456683", Email: "Antonio@email.com" , Photo: "https://photos.com/img/Antonio.jpg"})-[:HAS_HISTORY]->(:HistorY {Name: "HistorY"}), 
-(p)-[:HAS_WALLET]->(w:WalleT {Name: "WalleT"})-[:HAS]->(pm1:PaymentMethod {Type: "CreditCard", Issuer: "MasterCard", NameOnCard: "Antonio Banderas", CardNumber: 2222420000001113, ExpDate: "08/26", CVV: 321}),
+(p)-[:HAS_WALLET]->(w:WalleT {Name: "WalleT"})-[:HAS]->(pm1:PaymentMethod {Type: "CreditCard", Issuer: "MasterCard", NameOnCard: "Antonio Banderas", CardNumber: 5590120400002540, ExpDate: "08/26", CVV: 321}),
 (w)-[:HAS]->(pm2:PaymentMethod {Type: "DebitCard", Issuer: "Visa", NameOnCard: "Antonio Banderas", CardNumber: 4701322211111234, ExpDate: "12/26", CVV: 837}),
 (p)-[:HAS_PREFERED_PAYMENT]->(pm1),
 (p)-[:HAS_ADDRESS]->(ab:AddressBooK {Name:"AddressBooK"});
@@ -84,7 +84,7 @@ MERGE (ab)-[:HAS]->(:FavAddress {Name: "Work"})-[:IS_ADDRESS]->(a:Address {GeoHa
 MATCH (ps:PassengerS), (ad:AddresseS)
 CREATE  (ps)-[:HAS]->(p:Passenger {Name: "Peter", Phone: "98456683", Email: "Peter@email.com" , Photo: "https://photos.com/img/Peter.jpg"})-[:HAS_HISTORY]->(:HistorY {Name: "HistorY"}), 
 (p)-[:HAS_WALLET]->(w:WalleT {Name: "WalleT"})-[:HAS]->(pm1:PaymentMethod {Type: "CreditCard", Issuer: "MasterCard", NameOnCard: "Peter Pan", CardNumber: 2222420000001113, ExpDate: "08/26", CVV: 321}),
-(w)-[:HAS]->(pm2:PaymentMethod {Type: "DebitCard", Issuer: "Visa", NameOnCard: "Peter Pan", CardNumber: 4701322211111234, ExpDate: "12/26", CVV: 837}),
+(w)-[:HAS]->(pm2:PaymentMethod {Type: "DebitCard", Issuer: "Visa", NameOnCard: "Peter Pan", CardNumber: 4512954215235590, ExpDate: "12/26", CVV:291}),
 (p)-[:HAS_PREFERED_PAYMENT]->(pm1),
 (p)-[:HAS_ADDRESS]->(ab:AddressBooK {Name:"AddressBooK"})-[:HAS]->(:FavAddress {Name: "Home"})-[:IS_ADDRESS]->(:Address {GeoHash: "9xj6hs9cxw65", StreetNum: 2315, StreetName: "Krameria St", City: "Denver", State: "CO", ZIP: 80207})<-[:HAS]-(ad),
 (ab)-[:HAS]->(:FavAddress {Name: "Work"})-[:IS_ADDRESS]->(:Address {GeoHash: "9xj6kq1xv0c2", StreetNum: 5990, StreetName: "Dahlia St", City: "Commerce City", State: "CO", ZIP: 80022})<-[:HAS]-(ad);
@@ -216,16 +216,16 @@ DELETE r1;
 // Passenger creation with PaymentMethod and Address placeholder Collections
 
 MATCH (pc:PassengerS)
-CREATE  (pc)-[:HAS]->(p2:Passenger {Name: "Benson", Phone: "40985343" , Email: "Benson@email.com" , Photo: "https://photos.com/img/Benson.jpg"})-[:HAS_HISTORY]->(:HistorY {Name: "HistorY"}), (p2)-[:HAS_WALLET]->(:WalleT {Name: "WalleT"})-[:HAS]->(pm2:PaymentMethod {Type: "CreditCard", Issuer: "MasterCard", NameOnCard: "Benson Tan", CardNumber: 2222420000001113, ExpDate: "08/26", CVV: 321}), (p2)-[:HAS_PREFERED_PAYMENT]->(pm2), (p2)-[:HAS_ADDRESS]->(:AddressBooK {Name:"AddressBooK"}),
-        (pc)-[:HAS]->(p3:Passenger {Name: "Cleber", Phone: "56230987" , Email: "Cleber@email.com" , Photo: "https://photos.com/img/Cleber.jpg"})-[:HAS_HISTORY]->(:HistorY {Name: "HistorY"}), (p3)-[:HAS_WALLET]->(:WalleT {Name: "WalleT"})-[:HAS]->(pm3:PaymentMethod {Type: "CreditCard", Issuer: "MasterCard", NameOnCard: "Cleber Santos", CardNumber: 2222420000001113, ExpDate: "08/26", CVV: 321}), (p3)-[:HAS_PREFERED_PAYMENT]->(pm3), (p3)-[:HAS_ADDRESS]->(:AddressBooK {Name:"AddressBooK"}),
-        (pc)-[:HAS]->(p4:Passenger {Name: "David", Phone: "29837442" , Email: "David@email.com" , Photo: "https://photos.com/img/David.jpg"})-[:HAS_HISTORY]->(:HistorY {Name: "HistorY"}), (p4)-[:HAS_WALLET]->(:WalleT {Name: "WalleT"})-[:HAS]->(pm4:PaymentMethod {Type: "CreditCard", Issuer: "MasterCard", NameOnCard: "David Copperland", CardNumber: 2222420000001113, ExpDate: "08/26", CVV: 321}), (p4)-[:HAS_PREFERED_PAYMENT]->(pm4), (p4)-[:HAS_ADDRESS]->(:AddressBooK {Name:"AddressBooK"}),
-        (pc)-[:HAS]->(p5:Passenger {Name: "Ernest", Phone: "89207651" , Email: "Ernest@email.com" , Photo: "https://photos.com/img/Ernest.jpg"})-[:HAS_HISTORY]->(:HistorY {Name: "HistorY"}), (p5)-[:HAS_WALLET]->(:WalleT {Name: "WalleT"})-[:HAS]->(pm5:PaymentMethod {Type: "CreditCard", Issuer: "MasterCard", NameOnCard: "Ernest Hemingroad", CardNumber: 2222420000001113, ExpDate: "08/26", CVV: 321}), (p5)-[:HAS_PREFERED_PAYMENT]->(pm5), (p5)-[:HAS_ADDRESS]->(:AddressBooK {Name:"AddressBooK"}),
-        (pc)-[:HAS]->(p6:Passenger {Name: "Frank", Phone: "78383822" , Email: "Frank@email.com" , Photo: "https://photos.com/img/Frank.jpg"})-[:HAS_HISTORY]->(:HistorY {Name: "HistorY"}), (p6)-[:HAS_WALLET]->(:WalleT {Name: "WalleT"})-[:HAS]->(pm6:PaymentMethod {Type: "CreditCard", Issuer: "MasterCard", NameOnCard: "Frank Zatta", CardNumber: 2222420000001113, ExpDate: "08/26", CVV: 321}), (p6)-[:HAS_PREFERED_PAYMENT]->(pm6), (p6)-[:HAS_ADDRESS]->(:AddressBooK {Name:"AddressBooK"}),
-        (pc)-[:HAS]->(p7:Passenger {Name: "Gunter", Phone: "30982321" , Email: "Gunter@email.com" , Photo: "https://photos.com/img/Gunter.jpg"})-[:HAS_HISTORY]->(:HistorY {Name: "HistorY"}), (p7)-[:HAS_WALLET]->(:WalleT {Name: "WalleT"})-[:HAS]->(pm7:PaymentMethod {Type: "CreditCard", Issuer: "MasterCard", NameOnCard: "Gunter Schmidt", CardNumber: 2222420000001113, ExpDate: "08/26", CVV: 321}), (p7)-[:HAS_PREFERED_PAYMENT]->(pm7), (p7)-[:HAS_ADDRESS]->(:AddressBooK {Name:"AddressBooK"}),
-        (pc)-[:HAS]->(p8:Passenger {Name: "Herbert", Phone: "78323862" , Email: "Herbert@email.com" , Photo: "https://photos.com/img/Herbert.jpg"})-[:HAS_HISTORY]->(:HistorY {Name: "HistorY"}), (p8)-[:HAS_WALLET]->(:WalleT {Name: "WalleT"})-[:HAS]->(pm8:PaymentMethod {Type: "CreditCard", Issuer: "MasterCard", NameOnCard: "Herbert Richards", CardNumber: 2222420000001113, ExpDate: "08/26", CVV: 321}), (p8)-[:HAS_PREFERED_PAYMENT]->(pm8), (p8)-[:HAS_ADDRESS]->(:AddressBooK {Name:"AddressBooK"}),
-        (pc)-[:HAS]->(p9:Passenger {Name: "Igor", Phone: "40989221" , Email: "Igor@email.com" , Photo: "https://photos.com/img/Igor.jpg"})-[:HAS_HISTORY]->(:HistorY {Name: "HistorY"}), (p9)-[:HAS_WALLET]->(:WalleT {Name: "WalleT"})-[:HAS]->(pm9:PaymentMethod {Type: "CreditCard", Issuer: "MasterCard", NameOnCard: "Igor Stravonsky", CardNumber: 2222420000001113, ExpDate: "08/26", CVV: 321}), (p9)-[:HAS_PREFERED_PAYMENT]->(pm9), (p9)-[:HAS_ADDRESS]->(:AddressBooK {Name:"AddressBooK"}),
-        (pc)-[:HAS]->(p10:Passenger {Name: "John", Phone: "94003822" , Email: "John@email.com" , Photo: "https://photos.com/img/John.jpg"})-[:HAS_HISTORY]->(:HistorY {Name: "HistorY"}), (p10)-[:HAS_WALLET]->(:WalleT {Name: "WalleT"})-[:HAS]->(pm10:PaymentMethod {Type: "CreditCard", Issuer: "MasterCard", NameOnCard: "John Lemon", CardNumber: 2222420000001113, ExpDate: "08/26", CVV: 321}), (p10)-[:HAS_PREFERED_PAYMENT]->(pm10), (p10)-[:HAS_ADDRESS]->(:AddressBooK {Name:"AddressBooK"}),
-        (pc)-[:HAS]->(p11:Passenger {Name: "Karl", Phone: "820042321" , Email: "Karl@email.com", Photo: "https://photos.com/img/Karl.jpg" })-[:HAS_HISTORY]->(:HistorY {Name: "HistorY"}), (p11)-[:HAS_WALLET]->(:WalleT {Name: "WalleT"})-[:HAS]->(pm11:PaymentMethod {Type: "CreditCard", Issuer: "MasterCard", NameOnCard: "Karl Mix", CardNumber: 2222420000001113, ExpDate: "08/26", CVV: 321}), (p11)-[:HAS_PREFERED_PAYMENT]->(pm11), (p11)-[:HAS_ADDRESS]->(:AddressBooK {Name:"AddressBooK"}); 
+CREATE  (pc)-[:HAS]->(p2:Passenger {Name: "Benson", Phone: "40985343" , Email: "Benson@email.com" , Photo: "https://photos.com/img/Benson.jpg"})-[:HAS_HISTORY]->(:HistorY {Name: "HistorY"}), (p2)-[:HAS_WALLET]->(:WalleT {Name: "WalleT"})-[:HAS]->(pm2:PaymentMethod {Type: "CreditCard", Issuer: "MasterCard", NameOnCard: "Benson Tan", CardNumber: 5554740400899688, ExpDate: "08/26", CVV: 883}), (p2)-[:HAS_PREFERED_PAYMENT]->(pm2), (p2)-[:HAS_ADDRESS]->(:AddressBooK {Name:"AddressBooK"}),
+        (pc)-[:HAS]->(p3:Passenger {Name: "Cleber", Phone: "56230987" , Email: "Cleber@email.com" , Photo: "https://photos.com/img/Cleber.jpg"})-[:HAS_HISTORY]->(:HistorY {Name: "HistorY"}), (p3)-[:HAS_WALLET]->(:WalleT {Name: "WalleT"})-[:HAS]->(pm3:PaymentMethod {Type: "CreditCard", Issuer: "MasterCard", NameOnCard: "Cleber Santos", CardNumber: 5590120400374378, ExpDate: "04/26", CVV: 700}), (p3)-[:HAS_PREFERED_PAYMENT]->(pm3), (p3)-[:HAS_ADDRESS]->(:AddressBooK {Name:"AddressBooK"}),
+        (pc)-[:HAS]->(p4:Passenger {Name: "David", Phone: "29837442" , Email: "David@email.com" , Photo: "https://photos.com/img/David.jpg"})-[:HAS_HISTORY]->(:HistorY {Name: "HistorY"}), (p4)-[:HAS_WALLET]->(:WalleT {Name: "WalleT"})-[:HAS]->(pm4:PaymentMethod {Type: "CreditCard", Issuer: "MasterCard", NameOnCard: "David Copperland", CardNumber: 5590120400468360, ExpDate: "02/26", CVV: 126}), (p4)-[:HAS_PREFERED_PAYMENT]->(pm4), (p4)-[:HAS_ADDRESS]->(:AddressBooK {Name:"AddressBooK"}),
+        (pc)-[:HAS]->(p5:Passenger {Name: "Ernest", Phone: "89207651" , Email: "Ernest@email.com" , Photo: "https://photos.com/img/Ernest.jpg"})-[:HAS_HISTORY]->(:HistorY {Name: "HistorY"}), (p5)-[:HAS_WALLET]->(:WalleT {Name: "WalleT"})-[:HAS]->(pm5:PaymentMethod {Type: "CreditCard", Issuer: "MasterCard", NameOnCard: "Ernest Hemingroad", CardNumber: 25590120400077120, ExpDate: "10/28", CVV: 664}), (p5)-[:HAS_PREFERED_PAYMENT]->(pm5), (p5)-[:HAS_ADDRESS]->(:AddressBooK {Name:"AddressBooK"}),
+        (pc)-[:HAS]->(p6:Passenger {Name: "Frank", Phone: "78383822" , Email: "Frank@email.com" , Photo: "https://photos.com/img/Frank.jpg"})-[:HAS_HISTORY]->(:HistorY {Name: "HistorY"}), (p6)-[:HAS_WALLET]->(:WalleT {Name: "WalleT"})-[:HAS]->(pm6:PaymentMethod {Type: "CreditCard", Issuer: "MasterCard", NameOnCard: "Frank Zatta", CardNumber: 5590120400844131, ExpDate: "03/26", CVV: 493}), (p6)-[:HAS_PREFERED_PAYMENT]->(pm6), (p6)-[:HAS_ADDRESS]->(:AddressBooK {Name:"AddressBooK"}),
+        (pc)-[:HAS]->(p7:Passenger {Name: "Gunter", Phone: "30982321" , Email: "Gunter@email.com" , Photo: "https://photos.com/img/Gunter.jpg"})-[:HAS_HISTORY]->(:HistorY {Name: "HistorY"}), (p7)-[:HAS_WALLET]->(:WalleT {Name: "WalleT"})-[:HAS]->(pm7:PaymentMethod {Type: "CreditCard", Issuer: "MasterCard", NameOnCard: "Gunter Schmidt", CardNumber: 5554740400521373, ExpDate: "05/26", CVV: 833}), (p7)-[:HAS_PREFERED_PAYMENT]->(pm7), (p7)-[:HAS_ADDRESS]->(:AddressBooK {Name:"AddressBooK"}),
+        (pc)-[:HAS]->(p8:Passenger {Name: "Herbert", Phone: "78323862" , Email: "Herbert@email.com" , Photo: "https://photos.com/img/Herbert.jpg"})-[:HAS_HISTORY]->(:HistorY {Name: "HistorY"}), (p8)-[:HAS_WALLET]->(:WalleT {Name: "WalleT"})-[:HAS]->(pm8:PaymentMethod {Type: "CreditCard", Issuer: "MasterCard", NameOnCard: "Herbert Richards", CardNumber: 5590120400473279, ExpDate: "07/26", CVV: 287}), (p8)-[:HAS_PREFERED_PAYMENT]->(pm8), (p8)-[:HAS_ADDRESS]->(:AddressBooK {Name:"AddressBooK"}),
+        (pc)-[:HAS]->(p9:Passenger {Name: "Igor", Phone: "40989221" , Email: "Igor@email.com" , Photo: "https://photos.com/img/Igor.jpg"})-[:HAS_HISTORY]->(:HistorY {Name: "HistorY"}), (p9)-[:HAS_WALLET]->(:WalleT {Name: "WalleT"})-[:HAS]->(pm9:PaymentMethod {Type: "CreditCard", Issuer: "MasterCard", NameOnCard: "Igor Stravonsky", CardNumber: 25554740400770046, ExpDate: "08/27", CVV: 357}), (p9)-[:HAS_PREFERED_PAYMENT]->(pm9), (p9)-[:HAS_ADDRESS]->(:AddressBooK {Name:"AddressBooK"}),
+        (pc)-[:HAS]->(p10:Passenger {Name: "John", Phone: "94003822" , Email: "John@email.com" , Photo: "https://photos.com/img/John.jpg"})-[:HAS_HISTORY]->(:HistorY {Name: "HistorY"}), (p10)-[:HAS_WALLET]->(:WalleT {Name: "WalleT"})-[:HAS]->(pm10:PaymentMethod {Type: "CreditCard", Issuer: "MasterCard", NameOnCard: "John Lemon", CardNumber: 5554740400123295, ExpDate: "11/27", CVV: 488}), (p10)-[:HAS_PREFERED_PAYMENT]->(pm10), (p10)-[:HAS_ADDRESS]->(:AddressBooK {Name:"AddressBooK"}),
+        (pc)-[:HAS]->(p11:Passenger {Name: "Karl", Phone: "820042321" , Email: "Karl@email.com", Photo: "https://photos.com/img/Karl.jpg" })-[:HAS_HISTORY]->(:HistorY {Name: "HistorY"}), (p11)-[:HAS_WALLET]->(:WalleT {Name: "WalleT"})-[:HAS]->(pm11:PaymentMethod {Type: "CreditCard", Issuer: "MasterCard", NameOnCard: "Karl Mix", CardNumber: 5554740400497350, ExpDate: "12/28", CVV: 786}), (p11)-[:HAS_PREFERED_PAYMENT]->(pm11), (p11)-[:HAS_ADDRESS]->(:AddressBooK {Name:"AddressBooK"}); 
         
 
 
@@ -270,9 +270,11 @@ MATCH  (ad:AddresseS)
 MERGE (:Address {GeoHash: "9xj65bnd6p9g", StreetNum: 3728, StreetName: "E 7th Ave Pkwy", City: "Denver", State: "CO", ZIP: 80206})<-[:HAS]-(ad);
 
 // 1 - We Create the Booking and connect it to both Origin and Destination Addresses and to a Payment Method. We then connect the Booking to the WaitinG collection - create 1 Node, create 6 relationships in one Transaction
+// FYI - In our POC, for the Booking ID we will use the formula:  "B"+left(randomUUID(),8)+right(randomUUID(),4) , 
+// and for the ride Fare, instead of calculating a real Fare, we will use the formula: ceil(rand()*20)+10" , to generate a random Fare.
 
 OPTIONAL MATCH  (p:Passenger {Phone: "29837442"})-[:HAS_PREFERED_PAYMENT]-(pm), (w:WaitinG {Name: "WaitinG"}), (oa:Address {GeoHash: "9xj65189uetb"})<-[:HAS]-(:AddresseS)-[:HAS]->(da:Address {GeoHash: "9xj65bnd6p9g"})
-CREATE (b:Booking {BookingID: "B12345", Date: localdatetime.transaction(), Fare: 10.00 })-[:HAS_PASSENGER]->(p),
+CREATE (b:Booking {BookingID: "B09637f9d543c", Date: localdatetime.transaction(), Fare: ceil(rand()*20)+10 })-[:HAS_PASSENGER]->(p),
        (b)-[:HAS_PAYMENT]->(pm),
        (b)-[:HAS_ORIGIN]->(oa),
        (b)-[:HAS_DESTINATION]->(da),
@@ -287,7 +289,7 @@ ORDER BY b.Date;
 
 // 2 - Driver selects a Waiting booking: Assigne Car to Booking, Remove Car from Available, Connect Car as Busy, Connect Booking as Active, and Remove Booking from Waiting  -  create 4 relationships, disconnect 2 relationships in one Transaction 
 
-OPTIONAL MATCH (b:Booking {BookingID:"B12345"})<-[r1:HAS]-(w:WaitinG)<-[:HAS]-()-[:HAS]->(a:ActivE),
+OPTIONAL MATCH (b:Booking {BookingID:"B09637f9d543c"})<-[r1:HAS]-(w:WaitinG)<-[:HAS]-()-[:HAS]->(a:ActivE),
        (d:Driver {ID:"S84765968N"})-[:HAS_CAR]->(c)<-[r2:HAS]-(:AvailablE)<-[:HAS]-()-[:HAS]->(u:BusY) 
 DELETE r1, r2
 CREATE (a)-[:HAS]->(b),
@@ -312,7 +314,7 @@ DELETE r1, r2, r3, r4;
 
 // 4 - Passenger Rates the ride:
 
-MATCH (p:Passenger {Phone: "29837442"})-[:HAS_HISTORY]->()-[:HAS]-(b:Booking {BookingID:"B12345"}) 
+MATCH (p:Passenger {Phone: "29837442"})-[:HAS_HISTORY]->()-[:HAS]-(b:Booking {BookingID:"B09637f9d543c"}) 
 CREATE (b)-[:HAS_RATING]->(r:Rating {Date: localdatetime.transaction(), Stars: 4, Comments: "Good ride, good navigaton, polite driver"});
 
 
@@ -322,7 +324,7 @@ CREATE (b)-[:HAS_RATING]->(r:Rating {Date: localdatetime.transaction(), Stars: 4
 // Create a Booking, Put in Waiting  in one Transaction 
 
 OPTIONAL MATCH  (p:Passenger {Phone: "40985343"})-[:HAS_PREFERED_PAYMENT]-(pm), (w:WaitinG {Name: "WaitinG"}), (oa:Address {GeoHash: "9xj64gcq9vjt"})<-[:HAS]-(:AddresseS)-[:HAS]->(da:Address {GeoHash: "9xj3dpfeuguu"})
-CREATE (b:Booking {BookingID: "B67890", Date: localdatetime.transaction(), Fare: 10.00 })-[:HAS_PASSENGER]->(p),
+CREATE (b:Booking {BookingID: "B85518e3420c7", Date: localdatetime.transaction(), Fare: ceil(rand()*20)+10 })-[:HAS_PASSENGER]->(p),
        (b)-[:HAS_PAYMENT]->(pm),
        (b)-[:HAS_ORIGIN]->(oa),
        (b)-[:HAS_DESTINATION]->(da),
@@ -330,7 +332,7 @@ CREATE (b:Booking {BookingID: "B67890", Date: localdatetime.transaction(), Fare:
        (w)-[:HAS]->(b);
 
 OPTIONAL MATCH  (p:Passenger {Phone: "56230987"})-[:HAS_PREFERED_PAYMENT]-(pm), (w:WaitinG {Name: "WaitinG"}), (oa:Address {GeoHash: "9xj3fuwsetzu"})<-[:HAS]-(:AddresseS)-[:HAS]->(da:Address {GeoHash: "9xj6508tghbr"})
-CREATE (b:Booking {BookingID: "B34567", Date: localdatetime.transaction(), Fare: 12.00 })-[:HAS_PASSENGER]->(p),
+CREATE (b:Booking {BookingID: "B22318cb24f70", Date: localdatetime.transaction(), Fare: ceil(rand()*20)+10 })-[:HAS_PASSENGER]->(p),
        (b)-[:HAS_PAYMENT]->(pm),
        (b)-[:HAS_ORIGIN]->(oa),
        (b)-[:HAS_DESTINATION]->(da),
@@ -338,7 +340,7 @@ CREATE (b:Booking {BookingID: "B34567", Date: localdatetime.transaction(), Fare:
        (w)-[:HAS]->(b);
 
 OPTIONAL MATCH  (p:Passenger {Phone: "820042321"})-[:HAS_PREFERED_PAYMENT]-(pm), (w:WaitinG {Name: "WaitinG"}), (oa:Address {GeoHash: "9xj6juhv9401"})<-[:HAS]-(:AddresseS)-[:HAS]->(da:Address {GeoHash: "9xj3duugfzhy"})
-CREATE (b:Booking {BookingID: "B45678", Date: localdatetime.transaction(), Fare: 22.00 })-[:HAS_PASSENGER]->(p), 
+CREATE (b:Booking {BookingID: "B60b8e871d140", Date: localdatetime.transaction(), Fare: ceil(rand()*20)+10 })-[:HAS_PASSENGER]->(p), 
        (b)-[:HAS_PAYMENT]->(pm),
        (b)-[:HAS_ORIGIN]->(oa),
        (b)-[:HAS_DESTINATION]->(da),
@@ -346,7 +348,7 @@ CREATE (b:Booking {BookingID: "B45678", Date: localdatetime.transaction(), Fare:
        (w)-[:HAS]->(b);
 
 OPTIONAL MATCH  (p:Passenger {Phone: "94003822"})-[:HAS_PREFERED_PAYMENT]-(pm), (w:WaitinG {Name: "WaitinG"}), (oa:Address {GeoHash: "9xj70g6z1xry"})<-[:HAS]-(:AddresseS)-[:HAS]->(da:Address {GeoHash: "9xj6cvxyeen7"})
-CREATE (b:Booking {BookingID: "B56789", Date: localdatetime.transaction(), Fare: 13.00 })-[:HAS_PASSENGER]->(p),
+CREATE (b:Booking {BookingID: "B28096628141b", Date: localdatetime.transaction(), Fare: ceil(rand()*20)+10 })-[:HAS_PASSENGER]->(p),
        (b)-[:HAS_PAYMENT]->(pm),
        (b)-[:HAS_ORIGIN]->(oa),
        (b)-[:HAS_DESTINATION]->(da),
@@ -363,7 +365,7 @@ MATCH (p:Passenger {Phone: "23456683"})-[:HAS_ADDRESS]->()-[:HAS]->(fa:FavAddres
 
 
 OPTIONAL MATCH  (p:Passenger {Phone: "23456683"})-[:HAS_PREFERED_PAYMENT]-(pm), (w:WaitinG {Name: "WaitinG"}), (oa:Address {GeoHash: "9xj3gen11ug3"})<-[:HAS]-(:AddresseS)-[:HAS]->(da:Address {GeoHash: "9xj64g7vxjtr"})
-CREATE (b:Booking {BookingID: "B23456", Date: localdatetime.transaction() ,  Fare: 10.00 })-[:HAS_PASSENGER]->(p),
+CREATE (b:Booking {BookingID: "Be0ad83f4eca1", Date: localdatetime.transaction() ,  Fare: ceil(rand()*20)+10 })-[:HAS_PASSENGER]->(p),
        (b)-[:HAS_PAYMENT]->(pm),
        (b)-[:HAS_ORIGIN]->(oa),
        (b)-[:HAS_DESTINATION]->(da),
@@ -378,7 +380,7 @@ ORDER BY b.Date;
 
 // Driver selects a Booking - Assigne Car to Booking, Remove Car from Available, Mark Car as Busy, Mark Booking as Active, and Remove Booking from Waiting in one Transaction 
 
-OPTIONAL MATCH  (b:Booking {BookingID:"B23456"})<-[r1:HAS]-(w:WaitinG), 
+OPTIONAL MATCH  (b:Booking {BookingID:"Be0ad83f4eca1"})<-[r1:HAS]-(w:WaitinG), 
        (c:Car {Plate: "ABC-1234"})<-[r2:HAS]-(:AvailablE), 
        (a:ActivE {Name: "ActivE"}), 
        (u:BusY {Name: "BusY"}) 
@@ -387,6 +389,7 @@ CREATE (a)-[:HAS]->(b),
        (c)-[r:HAS_ACTIVE_BOOKING]->(b), 
        (b)-[t:HAS_CAR]->(c),
        (u)-[:HAS]->(c);
+
 
 
 
