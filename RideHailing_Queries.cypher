@@ -39,8 +39,8 @@ WHERE NOT (b)<-[:HAS_ACTIVE_BOOKING]-(:Car) AND left(a.GeoHash, 4) = "9xj6" RETU
 
 // Find all Elements of a Passenger 
 
-MATCH (p:Passenger {Phone: "29837442"})-[r:HAS_ADDRESS|HAS_HISTORY|HAS_WALLET|HAS]->{1,4}(n)  RETURN p,n 
-MATCH (p:Passenger {Phone: "23456683"})-[]->{1,5}(n) RETURN p,n
+MATCH (p:Passenger {Phone: "29837442"})-[r:HAS_ADDRESS|HAS_HISTORY|HAS_WALLET|HAS]->{1,4}(n)  RETURN p,n, r
+MATCH (p:Passenger {Phone: "23456683"})-[r]->{1,5}(n) RETURN p,n,r
 
 
 
@@ -67,21 +67,38 @@ MATCH (c:Car)<-[:HAS]-(n:AvailablE) RETURN count (c) as Cars_Available
 
 MATCH (b:Booking)<-[:HAS]-(:WaitinG) RETURN count(b) AS Bookings_Waiting
 
-// Compare the Cardinality of Available Cars vs. Bookings Waiting
+// Compare the Cardinality of Available Cars vs. Bookings Waiting and use then to creat a dynamic Fare 
 
-MATCH (c:Car)<-[:HAS]-(:AvailablE)
-CALL {MATCH (b:Booking)<-[:HAS]-(:WaitinG) RETURN count(b) AS Bookings_Waiting}
-WITH Bookings_Waiting, count (c) as Cars_Available RETURN Cars_Available, Bookings_Waiting  
-
-
+OPTIONAL MATCH (c:Car)<-[:HAS]-(:AvailablE)
+CALL () {MATCH (b:Booking)<-[:HAS]-(:WaitinG) RETURN toFloat(count(b)) AS Bookings_Waiting}
+WITH Bookings_Waiting, toFloat(count (c)+0.5) as Cars_Available RETURN round(toFloat(Bookings_Waiting/(Cars_Available))*ceil(rand()*25)+15,2) as Fare
 
 
-// CREATE a Customer with ShoppingCarT (empty), WalleT (2 cards) and AddressBooK (2 addresses) collections - Used in the Article
+// Booking Times Audit:
 
-CREATE (c:Customer {FirstName: "John", LastName: "Connor" , DOB: "02051985", ID: 83773729322 ,Phone: "(303)2345683", Email: "JohnC@email.com" , Photo: "https://photos.com/img/JohnC.jpg"})-[:HAS_CART]->(:ShoppingCarT {Name: "ShoppingCarT"}), 
-(c)-[:HAS_WALLET]->(w:HAS_WALLET {Name: "WalleT"})-[:HAS]->(:PaymentMethod {Type: "CreditCard", Issuer: "Amex", NameOnCard: "John Connor", CardNumber: 3742454554001263, ExpDate: "05/26", CVV: 9065}),
-(w)-[:HAS]->(:PaymentMethod {Type: "DebitCard", Issuer: "Visa", NameOnCard: "John Connor", CardNumber: 4701322211111234, ExpDate: "12/26", CVV: 837}),
-(c)-[:HAS_ADDRESS]->(ab:HAS_ADDRESSBooK {Name:"AddressBooK"})-[:HAS]->(:BillingAddress {Name: "Home" , StreetNum: 950, StreetName: "S Elizabeth St", Complement: "Suite #5", City: "Denver", State: "CO", ZIP: 80209}),
-(ab)-[:HAS]->(:ShippingAddress {Name: "Work", StreetNum: 600, StreetName: "17th St", Complement: "Suite #5899", City: "Denver", State: "CO", ZIP: 80202});
+MATCH (:PasT)-[f:HAS]->(b:Booking )-[p:PICKED_UP]->(c:Car), (b)-[bt:HAS_CAR]-(c) 
+RETURN b.BookingID, apoc.temporal.format(b.Date,'DD-MMM-YY @ HH:MM:SS') as Booked_Time,  apoc.temporal.format(duration.between(b.Date,bt.Date),'HH:mm:ss') as Car_WaitingTime,
+apoc.temporal.format(bt.Date,'DD-MMM-YY @ HH:MM:SS') as CarAssigned_Time, apoc.temporal.format(duration.between(bt.Date,p.Date),'HH:mm:ss') as PickUp_WaitingTime,
+apoc.temporal.format(p.Date,'DD-MMM-YY @ HH:MM:SS') as PickUp_Time, apoc.temporal.format(duration.between(p.Date,f.Date),'HH:mm:ss') as RideTime,
+apoc.temporal.format(f.Date,'DD-MMM-YY @ HH:MM:SS') as DropOff_Time 
+ORDER BY b.Date DESC
+
+
+// Comparison: 
+// Retrieving the past Bookings from a Passenger using the Passenger's HistorY collection 
+
+PROFILE MATCH (dr:Passenger {Phone: "83987809"})-[:HAS_HISTORY]->(h:HistorY)-[:HAS]->(b:Booking)-[:HAS_CAR]->(c)-[:HAS_DRIVER]-(d), (pickUp:Address)<-[:HAS_ORIGIN]-(b)-[:HAS_DESTINATION]->(dropOff:Address)
+RETURN toString(b.Fare) as Fare, d.Name as Name, d.Photo as Photo, d.Phone as Phone, apoc.temporal.format(b.Date,'DD, MMM YYYY - HH:mm') as Date,
+pickUp.StreetNum + " " + pickUp.StreetName + ", " + pickUp.City + ", " + pickUp.State + ", " + pickUp.ZIP  as pickUpName, 
+dropOff.StreetNum + " " + dropOff.StreetName + ", " + dropOff.City + ", " + dropOff.State + ", " + dropOff.ZIP  as dropOffName ORDER BY b.Date DESC LIMIT 10
+
+
+// Retrieving the past Bookings from a Passenger  without using the Passenger's HistorY collection 
+
+PROFILE MATCH (dr:Passenger {Phone: "83987809"})<-[:HAS_PASSENGER]-(b:Booking)-[:HAS_CAR]->(c)-[:HAS_DRIVER]-(d), (pickUp:Address)<-[:HAS_ORIGIN]-(b)-[:HAS_DESTINATION]->(dropOff:Address)
+RETURN toString(b.Fare) as Fare, d.Name as Name, d.Photo as Photo, d.Phone as Phone, apoc.temporal.format(b.Date,'DD, MMM YYYY - HH:mm') as Date,
+pickUp.StreetNum + " " + pickUp.StreetName + ", " + pickUp.City + ", " + pickUp.State + ", " + pickUp.ZIP  as pickUpName, 
+dropOff.StreetNum + " " + dropOff.StreetName + ", " + dropOff.City + ", " + dropOff.State + ", " + dropOff.ZIP  as dropOffName ORDER BY b.Date DESC LIMIT 10
+
 
 
