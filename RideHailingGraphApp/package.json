@@ -1,0 +1,61 @@
+{
+  "name": "ride-hailing",
+  "private": true,
+  "version": "0.0.0",
+  "type": "module",
+  "scripts": {
+    "dev": "vite",
+    "build": "tsc && vite build",
+    "lint": "eslint . --ext ts,tsx --report-unused-disable-directives --max-warnings 0",
+    "lint:fix": "eslint --fix .",
+    "preview": "vite preview",
+    "format": "prettier --write \"./src/**/*.{js,jsx,ts,tsx,json,css,scss,md}\"",
+    "commit": "git-cz",
+    "prepare": "husky install",
+    "lint-staged": "eslint --fix"
+  },
+  "dependencies": {
+    "@chakra-ui/icons": "^2.1.1",
+    "@chakra-ui/react": "^2.8.2",
+    "@emotion/react": "^11.11.4",
+    "@emotion/styled": "^11.11.5",
+    "@hookform/resolvers": "^3.9.1",
+    "@tanstack/react-query": "^5.61.3",
+    "axios": "^1.7.8",
+    "framer-motion": "^11.1.9",
+    "husky": "^9.0.11",
+    "jwt-decode": "^4.0.0",
+    "react": "^18.2.0",
+    "react-dom": "^18.2.0",
+    "react-error-boundary": "^4.0.13",
+    "react-helmet-async": "^2.0.5",
+    "react-hook-form": "^7.53.2",
+    "react-router-dom": "^6.23.1",
+    "styled-components": "^6.1.13",
+    "use-neo4j": "^0.3.13",
+    "vite-plugin-svgr": "^4.2.0",
+    "yup": "^1.4.0",
+    "zustand": "^5.0.1"
+  },
+  "devDependencies": {
+    "@types/react": "^18.2.66",
+    "@types/react-dom": "^18.2.22",
+    "@typescript-eslint/eslint-plugin": "^7.2.0",
+    "@typescript-eslint/parser": "^7.2.0",
+    "@vitejs/plugin-react-swc": "^3.5.0",
+    "eslint": "^8.57.0",
+    "eslint-config-prettier": "^9.1.0",
+    "eslint-plugin-jsx-a11y": "^6.8.0",
+    "eslint-plugin-prettier": "^5.1.3",
+    "eslint-plugin-react": "^7.34.1",
+    "eslint-plugin-react-hooks": "^4.6.0",
+    "eslint-plugin-react-refresh": "^0.4.6",
+    "prettier": "^3.2.5",
+    "typescript": "^5.2.2",
+    "vite": "^5.2.0"
+  },
+  "lint-staged": {
+    "src/**/*.{js,jsx,ts,tsx}": "eslint --no-cache --fix",
+    "src/**/*.{js,jsx,ts,tsx,css,scss,md}": "prettier --write --ignore-unknown"
+  }
+}
