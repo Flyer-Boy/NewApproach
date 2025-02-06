@@ -1,5 +1,6 @@
 # A new approach to application development using Cypher/GQL (Graphs)
  
+After decades of working with RDBMS and SQL, I spent five years building and exploring Graph Databases. As a passionate Graph enthusiast, I refuse to see their use limited to Data Science, Knowledge Graphs, or Graph RAG for LLMs. Graphs are the ideal data repository for almost any type of application. Data should be born in the Graph, not created elsewhere, and then imported.
 
 This repository is part of my Articles on developing applications using a Graph Database:
 
