@@ -3,10 +3,11 @@
 
 This repository is part of my Articles on developing applications using a Graph Database:
 
- 1. https://medium.com/@marcospinedo/a-new-approach-to-application-development-using-cypher-gql-graphs-7d191e0c55d3 
- 2. https://medium.com/@marcospinedo/ride-hailing-graph-app-prototype-explainer-071a89543a90 
+ 1. **The Concept:**  https://medium.com/@marcospinedo/a-new-approach-to-application-development-using-cypher-gql-graphs-7d191e0c55d3
+ 2. **The App Explainer:** https://medium.com/@marcospinedo/ride-hailing-graph-app-prototype-explainer-071a89543a90
 
-It comprises a few Cypher scripts that I used to demonstrate concepts applied to a Ride-Hailing scenario and the code for a Prototype (POC) Application.
+
+It comprises a few Cypher scripts that I used to demonstrate concepts applied to a Ride-Hailing scenario and the Prototype (POC) Application code.
 
 The files are:
 
