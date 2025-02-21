@@ -22,4 +22,7 @@ You can try it with Neo4j Aura. If you don't have an Aura account yet, get one 
 
 I used Neo4j Cypher on my scripts and the code above. Given their close compatibility with GQL (ISO/IEC 39075:2024), they should work with any Graph Database that supports GQL with minimal amendments for compatibility. 
 
+"Alea iacta est"
+
 Enjoy! 
+
