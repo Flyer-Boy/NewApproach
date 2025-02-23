@@ -1,6 +1,6 @@
 # A new approach to application development using Cypher/GQL (Graphs)
  
-After decades of working with RDBMS and SQL, I spent five years building and exploring Graph Databases. As a passionate Graph enthusiast, I refuse to see their use limited to Data Science, Knowledge Graphs, or Graph RAG for LLMs. Graphs are the ideal data repository for almost any type of application. Data should be born in the Graph, not created elsewhere, and then imported.
+After decades of working with RDBMS and SQL, I spent five years building and exploring Graph Databases. As a passionate Graph enthusiast, I refuse to see their use limited to Data Science, Knowledge Graphs, or Graph RAG for LLMs (~2% of the Database Market). Graphs are the ideal data repository for almost any type of application. Data should be born in the Graph, not created elsewhere, and then imported.
 
 This repository is part of my Articles on developing applications using a Graph Database:
 
@@ -20,7 +20,7 @@ The files are:
 
 You can try it with Neo4j Aura. If you don't have an Aura account yet, get one here: https://neo4j.com/cloud/aura-free/ If you are new to Cypher, you can get started at Neo4j's GraphAcademy: https://graphacademy.neo4j.com/
 
-I used Neo4j Cypher on my scripts and the code above. Given their close compatibility with GQL (ISO/IEC 39075:2024), they should work with any Graph Database that supports GQL with minimal amendments for compatibility. 
+I used Neo4j Cypher on my scripts and the code above. Given their close compatibility with GQL (ISO/IEC 39075:2024) and OpenCypher, they should work with any Graph Database that supports GQL/OpenCypher with minimal amendments for compatibility. 
 
 "Alea iacta est"
 
