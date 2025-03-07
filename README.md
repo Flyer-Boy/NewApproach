@@ -1,8 +1,8 @@
 # A new approach to application development using Cypher/GQL (Graphs)
  
-After decades of working with RDBMS and SQL, I spent five years building and exploring Graph Databases. As a passionate Graph enthusiast, I refuse to see their use limited to Data Science, Knowledge Graphs, or Graph RAG for LLMs (~2% of the Database Market). Graphs are the ideal data repository for almost any type of application. Data should be born in the Graph, not created elsewhere, and then imported.
+After decades of working with RDBMS and SQL, I dedicated five years to building and exploring Graph Databases, discovering innovative ways to leverage them beyond conventional approaches. My deep dive into Graphs turned me into a passionate advocate, unwilling to see their potential confined to Data Science, Knowledge Graphs, or Graph RAG for LLMs—currently a mere 2% of the database market. Graphs aren’t just specialized tools; they are the ideal foundation for almost any application. Data should be born in the Graph, not created elsewhere and then imported. By doing so, we unlock the full power of Data Science and Knowledge Graphs from the start.
 
-This repository is part of my Articles on developing applications using a Graph Database:
+This repository is part of my Articles on developing applications using a Graph Database, using an alternative approach:
 
  1. **The Concept:**  https://medium.com/@marcospinedo/a-new-approach-to-application-development-using-cypher-gql-graphs-7d191e0c55d3
  2. **The App Explainer:** https://medium.com/@marcospinedo/ride-hailing-graph-app-prototype-explainer-071a89543a90
