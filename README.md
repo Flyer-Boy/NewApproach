@@ -20,9 +20,9 @@ The files are:
 
 You can try it with Neo4j Aura. If you don't have an Aura account yet, get one here: https://neo4j.com/cloud/aura-free/ If you are new to Cypher, you can get started at Neo4j's GraphAcademy: https://graphacademy.neo4j.com/
 
-I used Neo4j Cypher on my scripts and the code above. Given their close compatibility with GQL (ISO/IEC 39075:2024) and OpenCypher, they should work with any Graph Database that supports GQL/OpenCypher with minimal amendments for compatibility. 
+I used Neo4j Cypher on my scripts and the code above. With the standardization of GQL and the widespread adoption of OpenCypher, the portability of these Cypher-based scripts across different Graph Databases is becoming more feasible—though always subject to Graph implementation nuances.  
 
-"Alea iacta est"
+"Alea iacta est"—crossing the rubicon of Graph adoption! 🚀
 
 Enjoy! 
 
