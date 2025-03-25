@@ -6,6 +6,7 @@ This repository is part of my Articles on developing applications using a Graph 
 
  1. **The Concept:**  https://medium.com/@marcospinedo/a-new-approach-to-application-development-using-cypher-gql-graphs-7d191e0c55d3
  2. **The App Explainer:** https://medium.com/@marcospinedo/ride-hailing-graph-app-prototype-explainer-071a89543a90
+ 3. **How to use Graphs to build Busniess Processes/Workflows:** https://medium.com/@marcospinedo/how-graphs-simplify-business-processes-and-workflows-like-moving-balls-between-baskets-c9606c9e973f
 
 
 It comprises a few Cypher scripts that I used to demonstrate concepts applied to a Ride-Hailing scenario and the Prototype (POC) Application code.
