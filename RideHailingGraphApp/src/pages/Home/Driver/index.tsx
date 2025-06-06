@@ -15,11 +15,11 @@ const Driver = () => {
 
   const { stage, setStage, setBookingId, bookingId } = useUserData();
 
-  const userTypeId = localStorage.getItem("userTypeId");
-  
-  const statusQuery = `MATCH (d:Driver {ID: $userTypeId})-[:HAS_CAR]->(c:Car)-[:HAS_ACTIVE_BOOKING]->(b:Booking) RETURN b.BookingID`;
+  const driverId = sessionStorage.getItem("driverId");
 
-  const { records } = useReadCypher(statusQuery, { userTypeId });
+  const statusQuery = `MATCH (d:Driver {ID: $driverId})-[:HAS_CAR]->(c:Car),(c)-[:HAS_ACTIVE_BOOKING]->(b:Booking) RETURN b.BookingID`;
+
+  const { records } = useReadCypher(statusQuery, { driverId });
 
   const { run } = useWriteCypher(
     `MATCH (b:Booking {BookingID: $bookingId})-[:PICKED_UP]->(c) RETURN c`
@@ -78,7 +78,7 @@ const Driver = () => {
           </Text>
         </HStack>
       </HStack>
-    
+
       {component}
     </Stack>
   );

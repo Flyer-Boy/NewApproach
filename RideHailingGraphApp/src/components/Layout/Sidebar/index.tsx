@@ -5,7 +5,7 @@ import DriverProfileCard from "@ride-hailing/components/UserProfileCard/DriverPr
 import PassengerProfileCard from "@ride-hailing/components/UserProfileCard/PassengerProfileCard";
 
 const Sidebar = ({ element }: CustomLayoutProps) => {
-  const userType = localStorage.getItem("userType");
+  const userType = sessionStorage.getItem("userType");
 
   const profileComponent = useMemo(() => {
     if (userType) {

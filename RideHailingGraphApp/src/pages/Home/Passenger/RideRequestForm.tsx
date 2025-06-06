@@ -11,15 +11,14 @@ import { useUserData } from "@ride-hailing/store";
 import { useEffect, useState } from "react";
 
 const RideRequestForm = () => {
-  const userTypeId = localStorage.getItem("userTypeId");
+  const passengerId = sessionStorage.getItem("passengerId");
 
-  const get_prefered_payment_methods = `MATCH (:Passenger {Phone: $userTypeId})-[:HAS_PREFERED_PAYMENT]->(pm:PaymentMethod) RETURN   pm.Type+", "+ pm.Issuer + ", ending in " + left(toString(pm.CardNumber),4) as paymentString, pm.CardNumber;`;
+  // Get the prefered payment method 
+  const get_prefered_payment_methods = `MATCH (:Passenger {Phone: $passengerId})-[:HAS_PREFERED_PAYMENT]->(pm:PaymentMethod) RETURN   pm.Type+", "+ pm.Issuer + ", ending in " + right(toString(pm.CardNumber),4) as paymentString, pm.CardNumber;`;
 
   const { records: prefered_payment, loading: paymentLoading } = useReadCypher(
     get_prefered_payment_methods,
-    {
-      userTypeId: userTypeId,
-    },
+    { passengerId },
   );
 
   const methods = useForm({
@@ -41,7 +40,8 @@ const RideRequestForm = () => {
 
   const { setStage, setBookingId } = useUserData();
 
-    const { records: fareData } = useReadCypher(`OPTIONAL MATCH (c:Car)<-[:HAS]-(:AvailablE)
+  // Get the fare
+const { records: fareData } = useReadCypher(`OPTIONAL MATCH (c:Car)<-[:HAS]-(:AvailablE)
 CALL () {MATCH (b:Booking)<-[:HAS]-(:WaitinG) RETURN toFloat(count(b)) AS Bookings_Waiting}
 WITH Bookings_Waiting, toFloat(count (c)+0.5) as Cars_Available RETURN round(toFloat(Bookings_Waiting/(Cars_Available))*ceil(rand()*25)+15,2) as Fare;
 `);
@@ -54,19 +54,21 @@ WITH Bookings_Waiting, toFloat(count (c)+0.5) as Cars_Available RETURN round(toF
     }
   }, [fareData]);
 
+  //Create the Booking!
   const { run, loading } = useWriteCypher(
-    `OPTIONAL MATCH  (p:Passenger {Phone: $userTypeId })-[:HAS_PREFERED_PAYMENT]->(pm ), (w:WaitinG {Name: "WaitinG"}), 
+    `OPTIONAL MATCH  (p:Passenger {Phone: $passengerId })-[:HAS_PREFERED_PAYMENT]->(pm ), (w:WaitinG {Name: "WaitinG"}),
 (pickUp:Address {GeoHash: $pickUpId})<-[:HAS]-(:AddresseS)-[:HAS]->(dropOff:Address {GeoHash: $dropOffId})
 CREATE (b:Booking {BookingID: "B"+left(randomUUID(),8)+right(randomUUID(),4), Date: localdatetime.transaction(), Fare: $fare })-[:HAS_PASSENGER]->(p),
        (b)-[:HAS_PAYMENT]->(pm),
          (b)-[:HAS_ORIGIN]->(pickUp),
        (b)-[:HAS_DESTINATION]->(dropOff),
-       (p)-[:HAS_ACTIVE_BOOKING]->(b), 
+       (p)-[:HAS_ACTIVE_BOOKING]->(b),
        (w)-[:HAS]->(b)
 RETURN b.BookingID;
 `,
   );
 
+  // Get existing Addresses for the user to select from
   const address_query = `MATCH (n:Address) RETURN n.GeoHash, n.StreetNum + " " + n.StreetName + ", " + n.City + ", " + n.State + ", " + n.ZIP  as Address;`;
 
   const { records } = useReadCypher(address_query);
@@ -81,7 +83,7 @@ RETURN b.BookingID;
 
     try {
       const result = await run({
-        userTypeId: userTypeId,
+        passengerId,
         pickUpId,
         dropOffId,
         fare: fare.toFixed(2),

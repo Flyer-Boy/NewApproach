@@ -11,13 +11,13 @@ import { useUserData } from "@ride-hailing/store";
 
 const Passenger = () => {
   const currentTime = useCurrentTime();
-  const userTypeId = localStorage.getItem("userTypeId");
+  const passengerId = sessionStorage.getItem("passengerId");
 
   const { stage, setBookingId, setStage, bookingId } = useUserData();
 
-  const statusQuery = `OPTIONAL MATCH (p:Passenger {Phone: $userTypeId })-[:HAS_ACTIVE_BOOKING]->(b:Booking) 
-  OPTIONAL MATCH (b)<-[:HAS]-(a:ActivE) 
-  OPTIONAL MATCH (b)<-[:HAS]->(w:WaitinG) 
+  const statusQuery = `OPTIONAL MATCH (p:Passenger {Phone: $passengerId })-[:HAS_ACTIVE_BOOKING]->(b:Booking)
+  OPTIONAL MATCH (b)<-[:HAS]-(a:ActivE)
+  OPTIONAL MATCH (b)<-[:HAS]->(w:WaitinG)
   RETURN b.BookingID, COALESCE( a.Name, w.Name, "Free") AS stateName`;
 
   const { run } = useWriteCypher(statusQuery);
@@ -26,7 +26,7 @@ const Passenger = () => {
 
   const handleApiCall = async () => {
     try {
-      const status = await run({ userTypeId });
+      const status = await run({ passengerId });
 
       setRefetchCount((prev) => prev++);
       const stage = status?.records?.[0]?.get("stateName");

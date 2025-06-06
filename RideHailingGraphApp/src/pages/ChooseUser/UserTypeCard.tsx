@@ -32,7 +32,7 @@ const UserTypeCard = ({ icon, name, title }: UserTypeCardTypes) => {
       _hover={{ bg: "gray.lightest" }}
       cursor={"pointer"}
       onClick={() => {
-        localStorage.setItem("userType", name.toUpperCase());
+        sessionStorage.setItem("userType", name.toUpperCase());
         navigate(getRoute(name.toUpperCase()));
       }}
     >

@@ -19,7 +19,7 @@ const PassengerCard = ({ data }: { data: PassengerListProps }) => {
       borderRadius={"2xl"}
       cursor={"pointer"}
       onClick={() => {
-        localStorage.setItem("userTypeId", String(Phone));
+        sessionStorage.setItem("passengerId", String(Phone));
         setStage("INITIAL");
         navigate(ROUTES.HOME);
         setReload(true);

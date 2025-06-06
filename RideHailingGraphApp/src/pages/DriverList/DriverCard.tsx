@@ -31,7 +31,7 @@ const DriverCard = ({ data }: { data: DriverListProps }) => {
       borderRadius={"2xl"}
       cursor={"pointer"}
       onClick={() => {
-        localStorage.setItem("userTypeId", ID);
+        sessionStorage.setItem("driverId", ID);
 
         setStage("INITIAL");
         navigate(ROUTES.HOME);

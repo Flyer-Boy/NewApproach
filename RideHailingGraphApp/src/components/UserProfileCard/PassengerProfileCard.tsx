@@ -4,11 +4,11 @@ import { useReadCypher } from "use-neo4j";
 import CustomSpinner from "../Spinner";
 
 const PassengerProfileCard = () => {
-  const userTypeId = localStorage.getItem("userTypeId");
+  const passengerId = sessionStorage.getItem("passengerId");
 
-  const query = `MATCH (p:Passenger {Phone: $id}) RETURN p`;
+  const query = `MATCH (p:Passenger {Phone: $passengerId}) RETURN p`;
 
-  const { records, loading } = useReadCypher(query, { id: userTypeId });
+  const { records, loading } = useReadCypher(query, { passengerId });
 
   if (loading) {
     return (

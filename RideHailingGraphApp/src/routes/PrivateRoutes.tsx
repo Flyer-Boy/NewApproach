@@ -4,11 +4,12 @@ import { ROUTES } from "./routes.constant";
 import Layout from "@ride-hailing/components/Layout";
 
 const PrivateRoutes = ({ element }: CustomLayoutProps) => {
-  const userType = localStorage.getItem("userType");
-  const userTypeId = localStorage.getItem("userTypeId");
+  const userType = sessionStorage.getItem("userType");
+  const isPassenger = userType === "PASSENGER";
+  const userId = isPassenger ? sessionStorage.getItem("passengerId") : sessionStorage.getItem("driverId");
 
-  if (!userType || !userTypeId) {
-    localStorage.clear();
+  if (!userType || !userId) {
+    sessionStorage.clear();
     return <Navigate to={ROUTES.CHOOSE_USER} />;
   }
   return <Layout>{element}</Layout>;

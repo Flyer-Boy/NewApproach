@@ -11,7 +11,7 @@ type ProfileInformationType = {
 };
 
 const UserProfileCard = ({ data }: { data: ProfileInformationType }) => {
-  const userType = localStorage.getItem("userType");
+  const userType = sessionStorage.getItem("userType");
 
   const { rideCount } = useUserData();
 

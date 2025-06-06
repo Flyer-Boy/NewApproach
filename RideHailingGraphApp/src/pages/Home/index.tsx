@@ -5,7 +5,7 @@ import Driver from "./Driver";
 import { useMemo } from "react";
 
 const Home = () => {
-  const userType = localStorage.getItem("userType");
+  const userType = sessionStorage.getItem("userType");
 
   const component = useMemo(() => {
     if (userType) {

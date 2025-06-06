@@ -9,11 +9,11 @@ import { useReadCypher, useWriteCypher } from "use-neo4j";
 const StartRide = () => {
   const { setBookingId, setStage, bookingId } = useUserData();
 
-  const userTypeId = localStorage.getItem("userTypeId");
+  const driverId = sessionStorage.getItem("driverId");
 
   const query = `
 OPTIONAL MATCH (b:Booking {BookingID: $bookingId })<-[r1:HAS]-(w:WaitinG)<-[:HAS]-()-[:HAS]->(a:ActivE),
-(d:Driver {ID: $userTypeId})-[:HAS_CAR]->(c)<-[r2:HAS]-(:AvailablE)<-[:HAS]-()-[:HAS]->(u:BusY)
+(d:Driver {ID: $driverId})-[:HAS_CAR]->(c)<-[r2:HAS]-(:AvailablE)<-[:HAS]-()-[:HAS]->(u:BusY)
 DELETE r1, r2
 CREATE (a)-[:HAS]->(b),
        (c)-[r:HAS_ACTIVE_BOOKING]->(b),
@@ -37,7 +37,7 @@ CREATE (a)-[:HAS]->(b),
     try {
       const result = await run({
         bookingId,
-        userTypeId,
+        driverId,
       });
       setStage(result?.records ? "RIDE_ACCEPTED" : "RIDE_REQUESTED");
     } catch (e) {}

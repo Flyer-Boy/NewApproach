@@ -4,7 +4,7 @@ import { ROUTES } from "./routes.constant";
 import Layout from "@ride-hailing/components/Layout";
 
 const RestrictedRoutes = ({ element }: CustomLayoutProps) => {
-  const userType = localStorage.getItem("userType");
+  const userType = sessionStorage.getItem("userType");
 
   if (userType) {
     return <Navigate to={ROUTES.HOME} />;

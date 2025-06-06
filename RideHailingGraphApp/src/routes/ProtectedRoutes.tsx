@@ -4,10 +4,11 @@ import { ROUTES } from "./routes.constant";
 import Layout from "@ride-hailing/components/Layout";
 
 const ProtectedRoutes = ({ element }: CustomLayoutProps) => {
-  const userType = localStorage.getItem("userType");
-  const userTypeId = localStorage.getItem("userTypeId");
+  const userType = sessionStorage.getItem("userType");
+  const isPassenger = userType === "PASSENGER";
+  const userId = isPassenger ? sessionStorage.getItem("passengerId") : sessionStorage.getItem("driverId");
 
-  if (userType && userTypeId) {
+  if (userType && userId) {
     return <Navigate to={ROUTES.HOME} />;
   }
   return <Layout onlyNavbar={true}>{element}</Layout>;

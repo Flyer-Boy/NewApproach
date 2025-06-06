@@ -11,23 +11,23 @@ const CompleteRide = () => {
   const { bookingId, setStage } = useUserData();
 
   const { records: passengerData } = useReadCypher(
-      `MATCH (b:Booking {BookingID: $bookingId})<-[:HAS_ACTIVE_BOOKING]-(p:Passenger), (b)-[:HAS_ORIGIN]->(pickUp:Address), (b)-[:HAS_DESTINATION]->(dropOff:Address) 
+      `MATCH (b:Booking {BookingID: $bookingId})<-[:HAS_ACTIVE_BOOKING]-(p:Passenger), (b)-[:HAS_ORIGIN]->(pickUp:Address), (b)-[:HAS_DESTINATION]->(dropOff:Address)
        RETURN p.Name, p.Phone, p.Photo, pickUp.StreetNum + " " + pickUp.StreetName + ", " + pickUp.City + ", " + pickUp.State + ", " + pickUp.ZIP  as pickUpName,
        dropOff.StreetNum + " " + dropOff.StreetName + ", " + dropOff.City + ", " + dropOff.State + ", " + dropOff.ZIP  as dropOffName, b.Fare`,
     { bookingId },
   );
 
-  const userTypeId = localStorage.getItem("userTypeId");
+  const driverId = sessionStorage.getItem("driverId");
 
   const passengerInfo = passengerData?.[0];
 
   const { run, loading } = useWriteCypher(
-    `OPTIONAL MATCH (dh:HistorY)<-[:HAS_HISTORY]-(d:Driver {ID: $userTypeId })-[:HAS_CAR]->(c)-[r1:HAS_ACTIVE_BOOKING]->(b)<-[r3:HAS]-(:ActivE)<-[:HAS]-(:BookingS)-[:HAS]->(t:PasT), 
+    `OPTIONAL MATCH (dh:HistorY)<-[:HAS_HISTORY]-(d:Driver {ID: $driverId })-[:HAS_CAR]->(c)-[r1:HAS_ACTIVE_BOOKING]->(b)<-[r3:HAS]-(:ActivE)<-[:HAS]-(:BookingS)-[:HAS]->(t:PasT),
                 (a:AvailablE)<-[:HAS]-(:FleeT)-[:HAS]->(u:BusY)-[r2:HAS]->(c),(ph:HistorY)<-[:HAS_HISTORY]-(p:Passenger)-[r4:HAS_ACTIVE_BOOKING]->(b)
-CREATE (t)-[:HAS {Date: datetime()}]->(b), 
-      (a)-[:HAS]->(c), 
+CREATE (t)-[:HAS {Date: datetime()}]->(b),
+      (a)-[:HAS]->(c),
       (dh)-[:HAS {Date: datetime()}]->(b),
-      (b)<-[:HAS {Date: datetime()}]-(ph) 
+      (b)<-[:HAS {Date: datetime()}]-(ph)
 DELETE r1, r2, r3, r4 RETURN b;
 `,
   );
@@ -35,7 +35,7 @@ DELETE r1, r2, r3, r4 RETURN b;
   const handleRideCompleted = async () => {
     try {
       const result = await run({
-        userTypeId,
+        driverId,
       });
       setStage(
         Array.isArray(result?.records) && result?.records?.length > 0
@@ -65,11 +65,11 @@ DELETE r1, r2, r3, r4 RETURN b;
           <FromTo
             from={passengerInfo?.get("pickUpName")}
             to={passengerInfo?.get("dropOffName")}
-        />  
+        />
         </GridItem>
       </Grid>
       <Stack gap={0} flex={1} textAlign={"center"}>
-        <Text color={"#0A9726"} fontWeight={600} fontSize={24} >Fare: ${passengerInfo?.get("b.Fare")}</Text> 
+        <Text color={"#0A9726"} fontWeight={600} fontSize={24} >Fare: ${passengerInfo?.get("b.Fare")}</Text>
       </Stack>
       <Button
         leftIcon={<CarIcon />}

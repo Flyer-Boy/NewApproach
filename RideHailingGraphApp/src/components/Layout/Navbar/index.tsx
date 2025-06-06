@@ -7,15 +7,16 @@ import { useReadCypher } from "use-neo4j";
 
 const Navbar = () => {
   const navigate = useNavigate();
-  const userTypeId = localStorage.getItem("userTypeId");
-  const userType = localStorage.getItem("userType");
+  const userType = sessionStorage.getItem("userType");
+  const isPassenger = userType === "PASSENGER";
+  const userId = isPassenger ? sessionStorage.getItem("passengerId") : sessionStorage.getItem("driverId");
   const driverquery = `MATCH (d:Driver {id: $id}) RETURN d`;
-  const passengerQuery = `MATCH (d:Passenger {id: $id}) RETURN d`;
+  const passengerQuery = `MATCH (d:Passenger {Phone: $id}) RETURN d`;
 
   const { setBookingId } = useUserData();
 
-  const query = userType === "PASSENGER" ? passengerQuery : driverquery;
-  const { records } = useReadCypher(query, { id: userTypeId });
+  const query = isPassenger ? passengerQuery : driverquery;
+  const { records } = useReadCypher(query, { id: userId });
   const data = records?.[0]?.get("d")?.properties;
   return (
     <Box py={"20px"} bg={"primary.800"}>
@@ -33,7 +34,7 @@ const Navbar = () => {
             <Box
               cursor={"pointer"}
               onClick={() => {
-                localStorage.clear();
+                sessionStorage.clear();
                 navigate(ROUTES.CHOOSE_USER);
                 setBookingId("");
               }}

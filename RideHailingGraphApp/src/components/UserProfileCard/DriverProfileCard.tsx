@@ -4,12 +4,12 @@ import { useReadCypher } from "use-neo4j";
 import CustomSpinner from "../Spinner";
 
 const DriverProfileCard = () => {
-  const userTypeId = localStorage.getItem("userTypeId");
+  const driverId = sessionStorage.getItem("driverId");
 
-  const query = `MATCH (d:Driver {ID: $id}) RETURN d`;
+  const query = `MATCH (d:Driver {ID: $driverId}) RETURN d`;
 
   const { records, loading } = useReadCypher(query, {
-    id: userTypeId,
+    driverId,
   });
 
   if (loading) {
