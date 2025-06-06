@@ -77,11 +77,11 @@ WITH Bookings_Waiting, toFloat(count (c)+0.5) as Cars_Available RETURN round(toF
 // Booking Times Audit:
 
 MATCH (:PasT)-[f:HAS]->(b:Booking )-[p:PICKED_UP]->(c:Car), (b)-[bt:HAS_CAR]-(c) 
-RETURN b.BookingID, apoc.temporal.format(b.Date,'DD-MMM-YY @ HH:MM:SS') as Booked_Time,  apoc.temporal.format(duration.between(b.Date,bt.Date),'HH:mm:ss') as Car_WaitingTime,
-apoc.temporal.format(bt.Date,'DD-MMM-YY @ HH:MM:SS') as CarAssigned_Time, apoc.temporal.format(duration.between(bt.Date,p.Date),'HH:mm:ss') as PickUp_WaitingTime,
-apoc.temporal.format(p.Date,'DD-MMM-YY @ HH:MM:SS') as PickUp_Time, apoc.temporal.format(duration.between(p.Date,f.Date),'HH:mm:ss') as RideTime,
-apoc.temporal.format(f.Date,'DD-MMM-YY @ HH:MM:SS') as DropOff_Time 
-ORDER BY b.Date DESC
+RETURN b.BookingID, b.Date as Booked_Time, apoc.temporal.format(duration.between(b.Date,bt.Date),'HH:mm:ss') as Car_WaitingTime,
+bt.Date as CarAssigned_Time, apoc.temporal.format(duration.between(bt.Date,p.Date),'HH:mm:ss') as PickUp_WaitingTime,
+p.Date as PickUp_Time, apoc.temporal.format(duration.between(p.Date,f.Date),'HH:mm:ss') as RideTime,
+f.Date as DropOff_Time 
+ORDER BY b.Date DESC; 
 
 
 // Comparison: 
