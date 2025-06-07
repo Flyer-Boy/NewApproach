@@ -24,7 +24,7 @@ You can try it with Neo4j Aura. If you don't have an Aura account yet, get one 
 
 I used Neo4j Cypher on my scripts and the code above. With the standardization of GQL and the widespread adoption of OpenCypher, the portability of these Cypher-based scripts across different Graph Databases is becoming more feasible—though always subject to Graph implementation nuances.  
 
-"Alea iacta est"—crossing the rubicon of Graph adoption! 🚀
+"Alea iacta est"—crossing the Rubicon of Graph adoption! 🚀
 
 Enjoy! 
 
