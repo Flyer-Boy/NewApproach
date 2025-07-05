@@ -19,10 +19,11 @@ The files are:
  4. **RideHailing_Templates.cypher** — This script contains Cypher commands you can use to build a mockup application as they appear in the Article. You must parse the script by replacing it with the proper variable.
  5. In the **RideHailingGraphApp** directory, you will find the code for a Prototype App built with React+TypeScript that uses the RideHailing data model to run. Download it and try it out!!
  6. **The RideHailingGraphModel.png** - The Ride Hailing Graph database model for your reference.
+ 7. **TenderWorkflow v5.cypher** - A Tendering System Proof of Concept (POC) simulation script. This script simulates a Tender system running on a Graph, where the Graph acts as both the Data and Logic layer.  
 
-You can try it with Neo4j Aura. If you don't have an Aura account yet, get one here: https://neo4j.com/cloud/aura-free/ If you are new to Cypher, you can get started at Neo4j's GraphAcademy: https://graphacademy.neo4j.com/
+You can try it with Neo4j Aura or Neo4j Desktop. If you don't have an Aura account yet, get one here: https://neo4j.com/cloud/aura-free/. If you are new to Cypher, you can get started at Neo4j's GraphAcademy: https://graphacademy.neo4j.com/
 
-I used Neo4j Cypher on my scripts and the code above. With the standardization of GQL and the widespread adoption of OpenCypher, the portability of these Cypher-based scripts across different Graph Databases is becoming more feasible—though always subject to Graph implementation nuances.  
+I used Neo4j Cypher on my scripts and the code above. With the standardization of GQL and the widespread adoption of OpenCypher, the portability of Cypher-based scripts across various graph databases is becoming increasingly feasible. However, it is always subject to nuances in graph implementation.  
 
 "Alea iacta est"—crossing the Rubicon of Graph adoption! 🚀
 
