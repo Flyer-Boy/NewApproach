@@ -53,10 +53,10 @@
 // 3.	Low-Code Development:
 //      Aside from the UI layer, minimal coding is required. Most of the application logic is embedded within the Graph itself and executed through Cypher, reducing development time and complexity.
 
-//4.	AI-Ready by Design:
+// 4.	AI-Ready by Design:
 //      The Graph naturally captures both information and context from the outset, making it immediately usable and comprehensible by AI agents. No additional data wrangling or restructuring needed.
 
-//5.    Built-in real-time Knowledge Graph
+// 5.    Built-in real-time Knowledge Graph
 //      Built on a Graph for business insights and all the amazing things Knowledge Graphs provide (No need to ingest data) 
 //
 
@@ -318,7 +318,7 @@ REQUIRE v.VendorCode IS UNIQUE;
 // or hardcode some of them for the same reasons. 
 
 // Create 10 Vendors and their respective Vendor Contacts. Let's add all of them to the PendingVendorS Collection, and then we will approve some of them later.
-//Each vendor should do this via a system UI, following the procurement instructions and RFI Document Template provided. 
+// Each vendor should do this via a system UI, following the procurement instructions and RFI Document Template provided. 
 // The UI will execute the Cypher commands below. In this Demo, we will process everything in a single batch.  
 MATCH (pv:PendingVendorS {Name: "PendingVendorS"}) 
 CREATE (pv)-[:HAS]->(v1:Vendor {VendorCode: "V"+left(randomUUID(),8)+right(randomUUID(),4), ShortName: "Vendor 1", LegalName: "Vendor One Pte Ltd", RegistrartionNumber: "SG409335548", Logo: "/src/assets/images/vlogo1.jpg"})-[:HAS_CONTACT]->(vc1:VendorContact {Name: "Benson", Phone: "40985343" , Email: "Benson@v1email.com" , Photo: "/src/assets/images/People/4140039.png"}), (v1)-[:HAS_CHAT]->(:ConversatioN {Name: "ConversatioN"}), (v1)-[:HAS_DOCS]->(:VendorDocS {Name: "VendorDocS"})-[:HAS]->(d:Doc {DocName: "VendorRFIDoc", Type: "PDF", URL: "https://docs.google.com/document/d/Vendor1/Vendor1RFIDoc.pdf", Description: "Vendor RFI template response", Date: localdatetime.transaction()}),
@@ -498,7 +498,7 @@ CREATE (t1:Tender {TenderCode: "T"+left(randomUUID(),8)+right(randomUUID(),4), T
 
 // -------- Tender #5
 
-//Create the Tender 5 + Schema and let the system generate the Tender Code  
+// Create the Tender 5 + Schema and let the system generate the Tender Code  
 MATCH (em:Employee {Name: "Eduard"}), (nt:NewTenderS {Name: "NewTenderS"}) , (ty:TenderType {Name: "Selective"}) 
 CREATE (t1:Tender {TenderCode: "T"+left(randomUUID(),8)+right(randomUUID(),4), Title: "Tender 5", Description: "This is the fifth tender for testing purposes", SubmissionDate: localdatetime.transaction(), EndBidingDate: localdatetime.transaction() + duration({days: 30}) , Budget: 200000 })<-[:HAS]-(nt),
          (t1)-[:HAS_DOCS]->(d:TenderDocS {Name: "TenderDocS"})-[:HAS]->(:Doc {DocName: "Tender_5_RFP", Type: "PDF", URL: "https://company-my.sharepoint.com/personal/Eduard/Tender5/RFPDocument_t5.pdf", Description: "This is the Tender 5 RFP Document", Date: localdatetime.transaction()}),
@@ -545,7 +545,7 @@ CREATE (t1:Tender {TenderCode: "T"+left(randomUUID(),8)+right(randomUUID(),4), T
 
 // -------- Tender #9
 
-//Create the ninth Tender + Schema and let the system generate the Tender Code  
+// Create the ninth Tender + Schema and let the system generate the Tender Code  
 MATCH (em:Employee {Name: "Ingrid"}), (nt:NewTenderS {Name: "NewTenderS"}) , (ty:TenderType {Name: "Negotiated"})
 CREATE (t1:Tender {TenderCode: "T"+left(randomUUID(),8)+right(randomUUID(),4), Title: "Tender 9", Description: "This is the tenth tender for testing purposes", SubmissionDate: localdatetime.transaction(), EndBidingDate: localdatetime.transaction() + duration({days: 30}) , Budget: 180000 })<-[:HAS]-(nt),
          (t1)-[:HAS_DOCS]->(d:TenderDocS {Name: "TenderDocS"})-[:HAS]->(:Doc {DocName: "Tender_9_RFQ", Type: "PDF", URL: "https://company-my.sharepoint.com/personal/Ingrid/Tender9/RFQDocument_t9.pdf", Description: "This is the Tender 9 RFQ Document", Date: localdatetime.transaction()}),
@@ -583,7 +583,7 @@ RETURN t.Title, t.TenderCode, t.Description, t.SubmissionDate, t.EndBidingDate, 
 
 // Before approving, Gloria has some questions. 
 // Chat UI - Let's have a chat about the Tender between the Tender Approver L1 and the Tender Requester for Tender 1
-//  I am using the Title property as I don't know what the auto-generated TenderCode in this Script
+// I am using the Title property as I don't know what the auto-generated TenderCode in this Script
 
 MATCH (t:Tender {Title: "Tender 1"})-[:HAS_CHAT]->(c), (l1:Employee {Name: "Gloria"})
 CREATE (c)-[:HAS {Date: localdatetime.transaction()}]->(m1:Message {Text: "Hi, I have a question about the tender. Can you please clarify the budget?"})-[:SENT_BY]->(l1);
@@ -595,13 +595,13 @@ MATCH (t:Tender {Title: "Tender 1"})-[:HAS_CHAT]->(c), (l1:Employee {Name: "Glor
 CREATE (c)-[:HAS {Date: localdatetime.transaction()}]->(m3:Message {Text: "No, that will be all. Thank you!"})-[:SENT_BY]->(l1);           
 
 // Gloria (l1) is now ready to approve Tender 1, as she has all the necessary information.
-//Let's have the L1 approver (Gloria) approve the Tender 1
+// Let's have the L1 approver (Gloria) approve the Tender 1
 MATCH (t:Tender {Title: "Tender 1"}), (l1:Employee {Name: "Gloria"})<-[:HAS]-(:Role {Name: "Level1Approver"})
 CREATE (t)-[:HAS_L1_APPROVAL {Date: localdatetime.transaction(), Comment: "This tender is approved"}]->(l1);
 
 
 // If Sara (L2) has a question, she uses the Chat to ask, or if she has no questions, she can approve the Tender 1
-//Let's have the Tender Approver Level 2 (Sara) query the NewTenderS Collection to see the Tenders available with a Budget >= 200000 and already Approved by L1 but not yet Approved by L2.
+// Let's have the Tender Approver Level 2 (Sara) query the NewTenderS Collection to see the Tenders available with a Budget >= 200000 and already Approved by L1 but not yet Approved by L2.
 MATCH (nt:NewTenderS {Name: "NewTenderS"})-[:HAS]->(t:Tender) 
 WHERE NOT (t)-[:HAS_L2_APPROVAL]->(:Employee) AND t.Budget >= 200000 AND (t)-[:HAS_L1_APPROVAL]->(:Employee {Name: "Gloria"})       
 RETURN t.Title, t.TenderCode, t.Description, t.SubmissionDate, t.EndBidingDate, t.Budget;
@@ -791,7 +791,7 @@ CREATE (t)-[:HAS_PUBLISHER_APPROVAL {Date: localdatetime.transaction(), Comment:
        (pt)-[:HAS]->(t)
 DELETE r1;    
 
-//As this Tender 3 is Type "Negotiated", we will invite a single Approved Vendor to it. In this case, we will invite the Vendor 7.
+// As this Tender 3 is Type "Negotiated", we will invite a single Approved Vendor to it. In this case, we will invite the Vendor 7.
 MATCH (t:Tender {Title: "Tender 3"})-[:HAS_INVITEES]->(iv:InvitedVendorS {Name: "InvitedVendorS"})
 MATCH (v:Vendor {ShortName: "Vendor 7"})<-[:HAS]-(:ApprovedVendorS)
         CREATE (iv)-[:HAS {Date: localdatetime.transaction()}]->(v);
@@ -869,7 +869,7 @@ MATCH (ti:AcceptedInvitationS {Name: "AcceptedInvitationS"})<-[:HAS_ACCEPTED_INV
 CREATE (ti)-[:HAS {Date: localdatetime.transaction()}]->(t);
 
 
-//UI Query—First, Vendor 4 will check what Tenders have been published and whether they have been invited to bid.
+// UI Query—First, Vendor 4 will check what Tenders have been published and whether they have been invited to bid.
 MATCH (v:Vendor {ShortName: "Vendor 4"})<-[:HAS]-(:InvitedVendorS)<-[:HAS_INVITEES]-(t:Tender)<-[:HAS]-(:PublishedTenderS), (t)-[:HAS_TYPE]-(ty:TenderType) RETURN t.TenderCode, t.Title, t.Description, t.SubmissionDate, t.Budget, ty.Name;
 
 // Now we will have Vendor 4 accept the Tender 1 (Open) and 7 Invitation. Vendor 4 will connect the selected tender to its Tender Invitation Collection (AcceptedInvitationS).
@@ -877,7 +877,7 @@ MATCH (ti:AcceptedInvitationS {Name: "AcceptedInvitationS"})<-[:HAS_ACCEPTED_INV
 CREATE (ti)-[:HAS {Date: localdatetime.transaction()}]->(t);
 
 
-//UI Query—First, Vendor 3 will check what Tenders have been published and whether they have been invited to bid.
+// UI Query—First, Vendor 3 will check what Tenders have been published and whether they have been invited to bid.
 MATCH (v:Vendor {ShortName: "Vendor 3"})<-[:HAS]-(:InvitedVendorS)<-[:HAS_INVITEES]-(t:Tender)<-[:HAS]-(:PublishedTenderS), (t)-[:HAS_TYPE]-(ty:TenderType) RETURN t.TenderCode, t.Title, t.Description, t.SubmissionDate, t.Budget, ty.Name;
 
 // Now we will have Vendor 3 accept the Tender 4 (Open) invitation. Vendor 4 will connect the selected tender to its Tender Invitation Collection (AcceptedInvitationS).
@@ -1253,7 +1253,7 @@ CREATE (t)-[:HAS_PUBLISHER_APPROVAL {Date: localdatetime.transaction(), Comment:
        (pt)-[:HAS]->(t)
 DELETE r1;    
 
-//As this Tender 12 is Type "Negotiated", we will invite a single Approved Vendor to it. In this case, we will invite Vendor 10.
+// As this Tender 12 is Type "Negotiated", we will invite a single Approved Vendor to it. In this case, we will invite Vendor 10.
 MATCH (t:Tender {Title: "Tender 12"})-[:HAS_INVITEES]->(iv:InvitedVendorS {Name: "InvitedVendorS"})
 MATCH (v:Vendor {ShortName: "Vendor 10"})<-[:HAS]-(:ApprovedVendorS)
         CREATE (iv)-[:HAS {Date: localdatetime.transaction()}]->(v);
