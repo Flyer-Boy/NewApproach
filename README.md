@@ -9,7 +9,7 @@ This repository is part of my Articles on developing applications using a Graph 
  3. **How to use Graphs to build Business Processes/Workflows:** https://medium.com/@marcospinedo/how-graphs-simplify-business-processes-and-workflows-like-moving-balls-between-baskets-c9606c9e973f
 
 
-It comprises a few Cypher scripts that I used to demonstrate concepts applied to a Ride-Hailing scenario and the Prototype (POC) Application code.
+It comprises a few Cypher scripts that I used to demonstrate concepts applied to a Ride-Hailing scenario and the Prototype (POC) Application code. It also includes the Tender Workflow script, illustrating how a Workflow application can be developed using Graphs. If I build a UI for the Tender Workflow in the future, I will place it in this repo as well.
 
 The files are:
 
