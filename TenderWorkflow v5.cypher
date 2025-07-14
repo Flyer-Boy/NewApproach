@@ -1,18 +1,18 @@
-// This Cypher script simulates a simplified Tendering System Proof of Concept (POC) featuring three distinct workflows: Vendor Approval, Tender Approval, and Bid Approval. 
+// This Cypher script simulates a simplified Tendering System Proof of Concept (POC) featuring three distinct workflows: Vendor vetting, Tender vetting, and Bid vetting. 
 // It includes the interactions between these workflows, as well as AI Agent iterations and conversations between various stakeholders. All in the Graph!
-// The simulation starts from an empty Graph and progressively builds out, simulating 130+ user/database interactions using Cypher commands that would typically be executed by 20+ users through their respective UIs.
-// This script simulates the creation of 19 employees, 6 Roles, 10 Vendors with respective Contact persons, 13 Tenders, and 6 Bids with all the respective vetting processes and interactions between parties. 
+// The simulation starts from an empty Graph and progressively builds out, simulating 130+ user/database interactions using Cypher commands that 20+ users would typically execute through their respective UIs.
+// This script simulates the creation of 19 employees, 6 Roles, 10 Vendors with respective Contact persons, 13 Tenders, and 6 Bids, Along with all the respective vetting processes and interactions between parties. 
 
 // Purpose:
 // The goal of this POC is to demonstrate that Graph databases can effectively power Line-of-Business (LOB) applications, such as workflow systems, in addition to traditional Knowledge Graphs or Graph RAG (Retrieval-Augmented Generation) solutions. 
 // It also showcases an alternative development approach to conventional RDBMS-based applications, leveraging the unique strengths of Graphs. 
 //
-// !! The script illustrates how Graphs can serve as both the DATA LAYER and the EXECUTION ENGINE for business applications, enabling a more intuitive and efficient development process. !!
+// !! The script illustrates how Graphs can serve as both the DATA LAYER and the EXECUTION ENGINE/LOGIC LAYER for business applications, enabling a more intuitive and efficient development process. !!
 
 
 // While this example focuses on a Tendering system, the underlying principles apply to any workflow-based system.
 // Considering that an estimated 70% to 90% of all Line-of-Business (LOB) applications (e.g., HR systems, CRM, ERP, Customer Support, Compliance) involve workflows,
-// this highlights the significant untapped potential for adopting Graph-Native systems in business application development.
+// This highlights the significant untapped potential for adopting Graph-Native systems in business application development.
 // This approach has the potential to be a true game changer.
 
 // Note: This is not a fully functional Tendering Solution. The script was developed in approximately four days and is intended purely as a conceptual demonstration. 
@@ -20,22 +20,21 @@
 //       I will keep enhancing it, so by the time you read this, there might be an improved version. 
 
 
-// Key Principles:
+// Key Principles (Design Goals):
 // 1)	Proper Noun Nodes:
-//      Nodes should only store properties that are immutable — those that define the uniqueness of the entity (the "Thing") and will never change.
-//      Any property that represents a state or relevance to another entity should be modeled as a relationship, not a node property.
+//      Nodes should only store properties that are immutable — those that define the uniqueness of the entity (the "Thing") and should never change.
+//      Any property that represents a state or relevance to another entity should be modelled as a relationship, not a node property.
 
 // 2)	Read-Only Nodes:
 //      Once created, node properties remain unchanged. (The SET command is reserved strictly for value corrections).
-//      This approach significantly simplifies transaction concurrency and consistency management, which is a major differentiator from traditional RDBMS models where updates are common and often introduce complexity.
+//      This approach significantly simplifies transaction concurrency and consistency management, which is a major differentiator from traditional RDBMS models where updates are common and often introduce complexity (concurrency & consistency).
 
 // 3)	Never Delete Nodes:
 //      Nodes are never deleted, ensuring full traceability of all entities over time. 
 //      (Time flows in one direction. What is done cannot be undone. If the model is a faithful representation of the real world, this principle should be respected.)
 
-// 4)	Relationships Drive the System:
-//      The system relies on creating new nodes and relationships, and deleting relationships as needed.
-//      Node deletions are intentionally forbidden.
+// 4)	Relationships Drive the System (workflow):
+//      The system relies on creating new nodes and relationships, and deleting relationships as per the workflow rules/state.
 
 // 5)	Lean Nodes:
 //      Outgoing relationships are minimized. For one-to-many connections, we use Collections.
@@ -44,11 +43,12 @@
 
 
 // Key Advantages:
-// 1.	Model Symmetry:
+// 1.	Model Symmetry with the real world:
 //      The Graph model closely mirrors the real-world domain model, enabling domain experts to easily understand (intuitive mental model), build, and evolve it without requiring deep technical skills.
 
 // 2.	Common Ground:
 //      Both developers (solution domain) and business stakeholders (problem domain) can collaborate directly on the model, without the need for complex translations or intermediaries.
+//      In an ideal scenario, the modelling process would be collaborative, involving both a Business domain expert and an Interaction designer with a development background.
 
 // 3.	Low-Code Development:
 //      Aside from the UI layer, minimal coding is required. Most of the application logic is embedded within the Graph itself and executed through Cypher, reducing development time and complexity.
@@ -56,22 +56,23 @@
 //4.	AI-Ready by Design:
 //      The Graph naturally captures both information and context from the outset, making it immediately usable and comprehensible by AI agents. No additional data wrangling or restructuring needed.
 
-//5.    Biult-in real-time Knowldge Grpah
+//5.    Built-in real-time Knowledge Graph
 //      Built on a Graph for business insights and all the amazing things Knowledge Graphs provide (No need to ingest data) 
 //
 
-// In an ideal scenario, the modeling process would be collaborative, involving both Business domain expert and an Interaction designer with development background.
+
+// Walkthrough:
 
 // You can run the entire script at once (it takes approximately 30 seconds to execute) to see and study the final resulting Graph, 
-// and then re-execute it step-by-step (or in batches) to observe how the Graph evolves (executes the logic) with each interaction/iteration by dinamicly changing the relationships between the Nodes.
+// and then re-execute it step-by-step (or in batches) to observe how the Graph evolves (executes the logic) with each interaction/iteration by dynamically changing the relationships between the Nodes.
 // I’ve included comments in the script to explain what’s happening at each phase. I hope you find them helpful.
 // I don't expect you to understand everything at once, but I hope you can follow the logic and see how the Graph evolves with each step.
-// Take your time to explore the approach as it very different from traditional RDBMS-based applications logic. So it might take a while to get used to it.
-// I am sure you will have a natural resistance to this approach at first. But don't let that discourage you. Keep an open mind and try to understand the logic behind it.
+// Take your time to explore the approach as it is very different from traditional RDBMS-based applications' logic. So it might take a while to get used to it.
+// I am sure you will have a natural resistance to this approach at first. But don't let that discourage you. Please keep an open mind and try to understand the logic behind it.
 // Once you get the hang of it, you will see how powerful and flexible this approach is, and you might never want to go back to the old way of doing things.
 
 // ----- Enjoy! (If you want to discuss or learn more, you can reach out to me at marcos.pinedo@outlook.com or https://www.linkedin.com/in/marcospinedo/) -----
-// ----- You can also read more about this approach on many articles I have published at https://medium.com/@marcospinedo -----
+// ----- You can also read more about this approach in many articles I have published at https://medium.com/@marcospinedo -----
 
 
 // -----  Here we go!!!  ----- 
@@ -108,7 +109,7 @@ DROP CONSTRAINT unique_Bid IF EXISTS;
 
 // About Collections as Nodes
 // The primary purpose of using Collections as Nodes is to align the Graph structure with the mental model of the domain expert, even though this comes at the cost of additional traversals.
-// (Yes, Collections could technically be replaced by direct relationships or adding Lables, but this design improves model clarity and usability besides other consideration - Principle #5.)
+// (Yes, Collections could technically be replaced by direct relationships or adding Labels, but this design improves model clarity and usability besides other considerations - Principle #5.)
 
 // In this approach, Collections are nodes like any other node in the Graph, but instead of representing individual Things, they represent Sets of Things.
 
@@ -125,7 +126,7 @@ DROP CONSTRAINT unique_Bid IF EXISTS;
 // Consistent Relationship:
 // I intentionally use the same relationship type, [:HAS], to represent all "contained-in" connections between Collections and their items.
 // Yes, this is a deliberate overuse of [:HAS], but it greatly simplifies:
-// 1) The modeling process
+// 1) The modelling process
 // 2) The design of reusable UI components
 
 // This design choice allows us to create reusable UI components that can handle any Collection, regardless of its type or content.
@@ -192,7 +193,7 @@ REQUIRE t.Name IS UNIQUE;
 
 
 
-//Create the Employee Directory Domain Collections Node for our Demo (In real life, this will come from the Company's Active Directory or other systems)
+// Create the Employee Directory Domain Collections Node for our Demo (In real life, this will come from the Company's Active Directory or other systems)
 CREATE (ed:EmployeeDirectorY {Name: "EmployeeDirectorY"});
 
 CREATE CONSTRAINT unique_mployeeDirectorY IF NOT EXISTS
@@ -210,15 +211,15 @@ CREATE (r:RoleS {Name: "RoleS"})-[:HAS]->(:Role {Name: "Requester"}),
 
 // So here we have a superset Collection Node (:RoleS) that contains all the subset Role Collection Node as well.
 // This allows us to have a single point of reference for all Roles in the system, and we can easily add or remove Roles as needed.
-// All emplyees that are elements of a given Role Collection "(:Role {Name:"Requester"})-[:HAS]->(:Employee)" will have that Role. 
-// The emplyee can have multiple Roles, as they can be part of multiple Role Collections.
-// You are probably wondering why I don't create a outgoing relationship from the Employee to the Role, to build the Role hierarchy.
+// All employees that are elements of a given Role Collection "(:Role {Name:"Requester"})-[:HAS]->(:Employee)" will have that Role. 
+// The employee can have multiple Roles, as they can be part of multiple Role Collections.
+// You are probably wondering why I don't create an outgoing relationship from the Employee to the Role, to build the Role hierarchy.
 // The reasons are: 
-// 1) The Roles are set by another system, and therefore set by an incoming relationship where the employee has no rights* to change them. 
+// 1) The Roles are set by another system, and therefore set by an incoming relationship where the employee has no right* to change them. 
 // 2) I want to avoid having a many-to-many relationship between Employees and Roles, as this would complicate the model and the queries (Principle #5).
 // 3) I want to keep the model simple and easy to understand for the domain expert.
 // 4) I want to keep the model flexible and adaptable to changes, as the Roles can change over time.
-// * There is a deeper explanation behind this, and considerations about rights managament and incoming relationships, but I won’t go down that rabbit hole here.
+// * There is a deeper explanation behind this, and considerations about rights management and incoming relationships, but I won’t go down that rabbit hole here.
 
 
 CREATE CONSTRAINT unique_RoleS IF NOT EXISTS
@@ -311,14 +312,14 @@ CREATE CONSTRAINT unique_Vendor IF NOT EXISTS
 FOR (v:Vendor)
 REQUIRE v.VendorCode IS UNIQUE;
 
-// Each Vendor will have a uniuqe VendorCode and we should always use it to retrive the Vendors, 
-// although for this Demo script we will use the ShortName as I don't have a mechanism of storing the auto-generated VendorCode in the script. This will be done via the UI in the real system.
-// We will do the same for Tenders and Bids, where each Tender and Bid will have a unique TenderCode and BidCode respectively but we will use other properties to retrieve them in this script, 
+// Each Vendor will have a unique VendorCode and we should always use it to retrieve the Vendors, 
+// although for this Demo script, we will use the ShortName, as I don't have a mechanism for storing the auto-generated VendorCode in the script. This will be done via the UI in the real system.
+// We will do the same for Tenders and Bids, where each Tender and Bid will have a unique TenderCode and BidCode, respectively, but we will use other properties to retrieve them in this script, 
 // or hardcode some of them for the same reasons. 
 
 // Create 10 Vendors and their respective Vendor Contacts. Let's add all of them to the PendingVendorS Collection, and then we will approve some of them later.
 //Each vendor should do this via a system UI, following the procurement instructions and RFI Document Template provided. 
-// The UI will execute the Cypher commands below. In this Demo, we will do all in one batch.  
+// The UI will execute the Cypher commands below. In this Demo, we will process everything in a single batch.  
 MATCH (pv:PendingVendorS {Name: "PendingVendorS"}) 
 CREATE (pv)-[:HAS]->(v1:Vendor {VendorCode: "V"+left(randomUUID(),8)+right(randomUUID(),4), ShortName: "Vendor 1", LegalName: "Vendor One Pte Ltd", RegistrartionNumber: "SG409335548", Logo: "/src/assets/images/vlogo1.jpg"})-[:HAS_CONTACT]->(vc1:VendorContact {Name: "Benson", Phone: "40985343" , Email: "Benson@v1email.com" , Photo: "/src/assets/images/People/4140039.png"}), (v1)-[:HAS_CHAT]->(:ConversatioN {Name: "ConversatioN"}), (v1)-[:HAS_DOCS]->(:VendorDocS {Name: "VendorDocS"})-[:HAS]->(d:Doc {DocName: "VendorRFIDoc", Type: "PDF", URL: "https://docs.google.com/document/d/Vendor1/Vendor1RFIDoc.pdf", Description: "Vendor RFI template response", Date: localdatetime.transaction()}),
        (pv)-[:HAS]->(v2:Vendor {VendorCode: "V"+left(randomUUID(),8)+right(randomUUID(),4), ShortName: "Vendor 2", LegalName: "Vendor Two Pte Ltd", RegistrartionNumber: "SG409335549", Logo: "/src/assets/images/vlogo2.jpg"})-[:HAS_CONTACT]->(vc2:VendorContact {Name: "Cleber", Phone: "56230987" , Email: "Cleber@v2email.com" , Photo: "/src/assets/images/People/4140061.png"}), (v2)-[:HAS_CHAT]->(:ConversatioN {Name: "ConversatioN"}), (v2)-[:HAS_DOCS]->(:VendorDocS {Name: "VendorDocS"})-[:HAS]->(d2:Doc {DocName: "VendorRFIDoc", Type: "PDF", URL: "https://docs.google.com/document/d/Vendor2/Vendor2RFIDoc.pdf", Description: "Vendor RFI template response", Date: localdatetime.transaction()}),     
@@ -332,7 +333,7 @@ CREATE (pv)-[:HAS]->(v1:Vendor {VendorCode: "V"+left(randomUUID(),8)+right(rando
        (pv)-[:HAS]->(v10:Vendor {VendorCode: "V"+left(randomUUID(),8)+right(randomUUID(),4), ShortName: "Vendor 10", LegalName: "Vendor Ten Pte Ltd", RegistrartionNumber: "SG409335557", Logo: "/src/assets/images/vlogo10.jpg"})-[:HAS_CONTACT]->(vc10:VendorContact {Name: "Karl", Phone: "820042321" , Email: "Karl@v10email.com", Photo: "/src/assets/images/People/4140066.png"}), (v10)-[:HAS_CHAT]->(:ConversatioN {Name: "ConversatioN"}), (v10)-[:HAS_DOCS]->(:VendorDocS {Name: "VendorDocS"})-[:HAS]->(d10:Doc {DocName: "VendorRFIDoc", Type: "PDF", URL: "https://docs.google.com/document/d/Vendor10/Vendor10RFIDoc.pdf", Description: "Vendor RFI template response", Date: localdatetime.transaction()});
 
 
-// -------- Vendor Approvals
+// -------- Vendor Vetting
 
 //--------- AI Agent Vendor Assessment
 
@@ -353,10 +354,10 @@ Advantages: "Lorem ipsum dolor sit amet, consectetur adipiscing elit. Integer bl
 Disadvantages: "Lorem ipsum dolor sit amet, consectetur adipiscing elit. Nulla bibendum elementum tristique. Fusce neque nisl, fermentum eget tellus elementum, semper consectetur dui. Morbi eros arcu, vehicula ac magna ut, lacinia ornare felis. Integer tincidunt mi vel dolor convallis pharetra. Cras viverra congue nisi et imperdiet. In posuere vehicula commodo. Ut viverra sapien arcu, vel maximus leo feugiat non."});
 
 
-// ---------  Vendor Approver Assesment
+// ---------  Vendor Approver Assessment
 
 // --- AI Agent Opportunity: I don't need to say this, but if AI agents are well-trained, this process can be fully automated. 
-// The AI Agents will perform the exact same Cypher commands instead of the UI
+// The AI Agents will perform the same Cypher commands instead of the UI
 
 // UI Query—Select the Vendors who have submitted their Forms and are willing to participate in Tenders. They are all in the PendingVenorS collection, waiting for approval.
 
@@ -365,7 +366,7 @@ RETURN ai.Rating as AI_Rating, ai.AssessmentSummary as AI_Assessment, v.VendorCo
 
 
 // Let's have the L1 Vendor Approvers (Robert or Mary) approve Vendor 1, 3, 4, 7, 8, 10 — one approval level only for this Demo 
-// We make sure the Vendor is in the PendigVendorS collection. We then move (delete a realationship and create another relatioship) the Vendor to the ApprovedVendorS collection 
+// We ensure the Vendor is in the PendingVendorS collection. We then move (delete a relationship and create another relationship) the Vendor to the ApprovedVendorS collection 
 // As the Vendor is now approved, we will also add a few Nodes to enhance the Vendor schema so it can accept Tenders and trace its Bids
 MATCH (pv:PendingVendorS {Name: "PendingVendorS"})-[r1:HAS]->(v:Vendor {ShortName: "Vendor 1"}), (l1:Employee {Name: "Robert"}), (av:ApprovedVendorS {Name: "ApprovedVendorS"})
 CREATE (v)-[:HAS_L1_APPROVAL {Date: localdatetime.transaction(), Comment: "This vendor is approved"}]->(l1),
@@ -422,7 +423,7 @@ CREATE (v)-[:HAS_L1_APPROVAL {Date: localdatetime.transaction(), Comment: "This 
        DELETE r1;   
 
 
-// We will reject Vendor 2 so we can query the RejectedVendorS Collection later on and have some data to work with.
+// We will reject Vendor 2 so we can query the RejectedVendorS Collection later and have some data to work with.
 MATCH (pv:PendingVendorS {Name: "PendingVendorS"})-[r1:HAS]->(v:Vendor {ShortName: "Vendor 2"}), (l1:Employee {Name: "Robert"}), (rv:RejectedVendorS {Name: "RejectedVendorS"}) 
 CREATE (v)-[:HAS_L1_REJECTION {Date: localdatetime.transaction(), Comment: "This vendor is rejected"}]->(l1),
        (rv)-[:HAS]->(v)
@@ -437,8 +438,8 @@ CREATE CONSTRAINT unique_Tender IF NOT EXISTS
 FOR (t:Tender)
 REQUIRE t.TenderCode IS UNIQUE;
 
-// Each Tender will have a uniuqe TenderCode and we should always use it to retrive the Tenders, 
-// although for this Demo script we will use the Title as I don't have a mechanism of storing the auto-generated TenderCode in the script 
+// Each Tender will have a unique TenderCode and we should always use it to retrieve the Tenders, 
+// although for this Demo script, we will use the Title as I don't have a mechanism for storing the auto-generated TenderCode in the script 
 
 // UI Query—Select the Tender Types available for the Tender. The results will be displayed on the UI for the User to select. 
 MATCH (TenderTypeS {Name: "TenderTypeS"})-[:HAS]->(ty) RETURN ty.Name, ty.Description, ty.Rules;
@@ -446,7 +447,7 @@ MATCH (TenderTypeS {Name: "TenderTypeS"})-[:HAS]->(ty) RETURN ty.Name, ty.Descri
 
 // -------- Tender #1
 
-// The Requester Emplyee will log in and the UI will gather all the information and execute the below Cypher command to create the Tender and supporting schema Nodes 
+// The Requester Employee will log in and the UI will gather all the information and execute the below Cypher command to create the Tender and supporting schema Nodes 
 // Create the Tender 1 + Schema and let the system generate the Tender Code 
 MATCH (em:Employee {Name: "Albert"}), (nt:NewTenderS {Name: "NewTenderS"}), (ty:TenderType {Name: "Open"}) 
 CREATE (t1:Tender {TenderCode: "T"+left(randomUUID(),8)+right(randomUUID(),4), Title: "Tender 1", Description: "This is the first tender for testing purposes", SubmissionDate: localdatetime.transaction(), EndBidingDate: localdatetime.transaction() + duration({days: 30}) , Budget: 400000 })<-[:HAS]-(nt),
@@ -557,7 +558,7 @@ CREATE (t1:Tender {TenderCode: "T"+left(randomUUID(),8)+right(randomUUID(),4), T
    
 
 
-// -------------- Tender Approval Workflow -------------------
+// -------------- Tender Vetting Workflow -------------------
 
 
 
@@ -575,14 +576,14 @@ RETURN t.Title, t.TenderCode, t.Description, t.SubmissionDate, t.EndBidingDate, 
 // ------ Tender #1 Approval
 
 // --- AI Agent Opportunity: I don't need to say, but the following process can be fully automated if AI Agents are well-tuned. 
-// The AI Agents will perform the exact same Cypher commands instead of the UI
+// The AI Agents will perform the same Cypher commands instead of the UI
 // Even the chat between the Approver and the Tender Requester can be performed by the GenAi Agents.
 
 // ------ Chat for Tender #1 Approval
 
 // Before approving, Gloria has some questions. 
 // Chat UI - Let's have a chat about the Tender between the Tender Approver L1 and the Tender Requester for Tender 1
-//  I am using the Title Property as I don't know what was the auto-generated TenderCode in this Script
+//  I am using the Title property as I don't know what the auto-generated TenderCode in this Script
 
 MATCH (t:Tender {Title: "Tender 1"})-[:HAS_CHAT]->(c), (l1:Employee {Name: "Gloria"})
 CREATE (c)-[:HAS {Date: localdatetime.transaction()}]->(m1:Message {Text: "Hi, I have a question about the tender. Can you please clarify the budget?"})-[:SENT_BY]->(l1);
@@ -691,7 +692,6 @@ CREATE (t)-[:HAS_L3_APPROVAL {Date: localdatetime.transaction(), Comment: "This 
 DELETE r1;
 
 
-
 // ------ Tender #8 Approval
 // Let's have the L1 approver (Gloria) approve the Tender 8.
 // As Tender 8 Budget is less than $200000, we will not have a L2 or L3 approver for it.
@@ -718,14 +718,15 @@ CREATE  (c)-[:HAS {Date: localdatetime.transaction()}]->(m2:Message {Text: "Opps
 MATCH (t:Tender {Title: "Tender 9"})-[:HAS_CHAT]->(c), (l1:Employee {Name: "Gloria"})
 CREATE (c)-[:HAS {Date: localdatetime.transaction()}]->(m3:Message {Text: "No Proble. I will reject it. So if you are willing to move forward, fix the compliance parts and resubmit it. Thank you!"})-[:SENT_BY]->(l1);          
 
-// Now the L1 approver (Gloria) is ready to reject the Tender 9, as she has all the information she needs.
+// Now the L1 approver (Gloria) is ready to reject Tender 9, as she has all the information she needs.
 MATCH (nt:NewTenderS {Name: "NewTenderS"})-[r1:HAS]->(t:Tender {Title: "Tender 9"}), (l1:Employee {Name: "Gloria"})<-[:HAS]-(:Role {Name: "Level1Approver"}), (rv:RejectedTenderS {Name: "RejectedTenderS"})
 CREATE (t)-[:HAS_L1_REJECTION {Date: localdatetime.transaction(), Comment: "This tender is rejected"}]->(l1),
        (rv)-[:HAS]->(t) 
 DELETE r1;
 
 
-// Before we continue with the Workflow, the Tender 9 that was rejected will be resubmitted with some changes by Ingrid (Tender Requester)
+// Before we continue with the Workflow, the Tender 9 that was rejected will be resubmitted with some changes by Ingrid (Tender Requester). 
+// Note that we do not update the existing Tender 9, but instead we create a new one for traceability. 
 
 // Let's have Ingrid resubmit/create the ninth Tender + Schema and let the system generate a new Tender Code 
 // As this is a resubmission, we will create a relationship to the previous version that is in the RejectedTenderS Collection. In this way, we can keep track of the changes made to the Tender.    
@@ -740,10 +741,10 @@ CREATE (t1:Tender {TenderCode: "T"+left(randomUUID(),8)+right(randomUUID(),4), T
 
 
 
-// --------------  Publishing (Auditing) Approved Tenders 
+// --------------  Publishing (Auditing) Vetting Tenders 
 
 // --- AI Agent Opportunity: I don't need to say this, but if AI agents are well-trained, this process can be fully automated or assisted. 
-// An AI Agent can flag Tenders that require special attention (long conversatons, multiple Approver messages, etc.) to the Publisher 
+// An AI Agent can flag Tenders that require special attention (long conversations, multiple Approver messages, etc.) to the Publisher 
 
 
 // UI Query -Let's have the Publisher (Cloe) query the Approved Tenders to audit the approvals before Publishing.
@@ -769,13 +770,13 @@ CREATE (t)-[:HAS_PUBLISHER_APPROVAL {Date: localdatetime.transaction(), Comment:
 DELETE r1;       
 
 // As Tender 1 is Type "Open", we can invite all the Approved Vendors to it. The UI will do this.
-// In a real scenario, there would be more criteria to select the Vendors (type, size, etc.), and the Cypher query would need to be tailored, but for this demo, we will just invite all of them.
+// In a real scenario, there would be more criteria to select the Vendors (type, size, etc.), and the Cypher query would need to be tailored, but for this demo, we will invite all of them.
 MATCH (t:Tender {Title: "Tender 1"})-[:HAS_INVITEES]->(iv:InvitedVendorS {Name: "InvitedVendorS"})
 UNWIND COLLECT {MATCH (v:Vendor)<-[:HAS]-(:ApprovedVendorS) RETURN v} AS vendor
         CREATE (iv)-[:HAS {Date: localdatetime.transaction()}]->(vendor);
 
 
-// Now we must communicate all the Tender 1 invitees about their invitation so they can decide if they want to participat in the Tender.
+// Now we must communicate all the Tender 1 invitees about their invitation so they can decide if they want to participate in the Tender.
 MATCH (e:Employee {Name: "System"}), (t:Tender {Title: "Tender 1"})-[:HAS_INVITEES]->()-[:HAS]->(v)-[:HAS_CHAT]->(c:ConversatioN)  
 CREATE (c)-[:HAS {Date: localdatetime.transaction()}]->(m:Message {Text: "You have been Invited to participate on a tender (Tender 1)."})-[:SENT_BY]->(e);
 
@@ -898,8 +899,8 @@ CREATE CONSTRAINT unique_Bid IF NOT EXISTS
 FOR (b:Bid)
 REQUIRE b.BidCode IS UNIQUE;
 
-// Each Bid will have a uniuqe BidCode and we should always use it to retrive the Bid. 
-// As I don't have a mechanism of storing the auto-generated BidCode in the script I will set a few manualy so we can retrive them later
+// Each Bid will have a unique BidCode, and we should always use it to retrieve the Bid. 
+// As I don't have a mechanism of storing the auto-generated BidCode in the script, I will set a few manually so we can retrieve them later
 
 
 // The Vendor 7 will query their AcceptedInvitationS collection to fetch the Tender and their respective Documentations in order to Submit the Bids:
@@ -914,7 +915,7 @@ CREATE (vb)-[:HAS {Date: localdatetime.transaction()}]->(b:Bid {BidCode: "B79c69
        (b)-[:HAS_CHAT]->(:ConversatioN {Name: "ConversatioN"});
 
 
-//Create Bid from the Vendor 7 for Tender 3 (this time we will let the system generate the Bid Code, this will be the default behaviour)
+// Create Bid from the Vendor 7 for Tender 3 (this time we will let the system generate the Bid Code; this will be the default behaviour)
 MATCH  (vb:ActiveBidS)<-[:HAS_ACTIVE_BIDS]-(v:Vendor {ShortName: "Vendor 7"})-[:HAS_ACCEPTED_INVITATONS]->()-[:HAS]->(t:Tender {Title: "Tender 3"})-[:HAS_BIDS]->(tb:TenderBidS {Name: "TenderBidS"})
 CREATE (vb)-[:HAS {Date: localdatetime.transaction()}]->(b:Bid {BidCode: "B"+left(randomUUID(),8)+right(randomUUID(),4), Title: "Title of Bid for Tender 3 from Vendor 7", Description: "Description of Bid for Tender 3 from Vendor 7", Scope: "Scope of Bid for Tender 3 from Vendor 7", Deliverables: "List of deliverables of Bid for Tender 3 from Vendor 7", CompletitionDate:  localdatetime.transaction() + duration({days: 160}), Price: 290000, Conditions: "Vendor 7 Conditions for Bid of Tender 3", Qualifications: "Vendor 7 qualifications for Tender 3", SubmissionDate: localdatetime.transaction()})<-[:HAS {Date: localdatetime.transaction()}]-(tb),
        (b)-[:HAS_VENDOR]->(v),
@@ -923,10 +924,10 @@ CREATE (vb)-[:HAS {Date: localdatetime.transaction()}]->(b:Bid {BidCode: "B"+lef
        (b)-[:HAS_CHAT]->(:ConversatioN {Name: "ConversatioN"});                                 
  
 
-// The Vendor 4 will query their AcceptedInvitationS collection to fetch the Tender and their respective Documentations in order to Submit the Bids:
+// The Vendor 4 will query their AcceptedInvitationS collection to fetch the Tender and their respective Documentations to Submit the Bids:
 MATCH (v:Vendor {ShortName: "Vendor 4"})-[:HAS_ACCEPTED_INVITATONS]->()-[:HAS]->(t)-[:HAS_DOCS]->()-[:HAS]->(d), (t)-[:HAS_TYPE]->(y) RETURN  t.TenderCode, t.Description, t.Budget, y.Name, d.URL;
 
-//Create Bid from the Vendor 4 for Tender 1 (this time we will let the system generate the Bid Code, this will be the default behaviour)
+// Create Bid from the Vendor 4 for Tender 1 (this time we will let the system generate the Bid Code; this will be the default behaviour)
 MATCH (vb:ActiveBidS)<-[:HAS_ACTIVE_BIDS]-(v:Vendor {ShortName: "Vendor 4"})-[:HAS_ACCEPTED_INVITATONS]->()-[:HAS]->(t:Tender {Title: "Tender 1"})-[:HAS_BIDS]->(tb:TenderBidS {Name: "TenderBidS"})
 CREATE (vb)-[:HAS {Date: localdatetime.transaction()}]->(b:Bid {BidCode: "B"+left(randomUUID(),8)+right(randomUUID(),4), Title: "Title of Bid for Tender 1 from Vendor 4", Description: "Description of Bid for Tender 1 from Vendor 4", Scope: "Scope of Bid for Tender 1 from Vendor 4", Deliverables: "List of deliverables of Bid for Tender 1 from Vendor 4", CompletitionDate:  localdatetime.transaction() + duration({days: 75}), Price: 75000, Conditions: "Vendor 4 Conditions for Bid of Tender 1", Qualifications: "Vendor 4 qualifications for Tender 1", SubmissionDate: localdatetime.transaction()})<-[:HAS {Date: localdatetime.transaction()}]-(tb),
        (b)-[:HAS_VENDOR]->(v),
@@ -938,7 +939,7 @@ CREATE (vb)-[:HAS {Date: localdatetime.transaction()}]->(b:Bid {BidCode: "B"+lef
 // The Vendor 3 will query their AcceptedInvitationS collection to fetch the Tender and their respective Documentations in order to Submit the Bids:
 MATCH (v:Vendor {ShortName: "Vendor 3"})-[:HAS_ACCEPTED_INVITATONS]->()-[:HAS]->(t)-[:HAS_DOCS]->()-[:HAS]->(d), (t)-[:HAS_TYPE]->(y) RETURN  t.TenderCode, t.Description, t.Budget, y.Name, d.URL;
 
-//Create Bid from the Vendor 3 for Tender 4 (this time we will let the system generate the Bid Code, this will be the default behaviour)
+// Create Bid from the Vendor 3 for Tender 4 (this time we will let the system generate the Bid Code; this will be the default behaviour)
 MATCH (vb:ActiveBidS)<-[:HAS_ACTIVE_BIDS]-(v:Vendor {ShortName: "Vendor 3"})-[:HAS_ACCEPTED_INVITATONS]->()-[:HAS]->(t:Tender {Title: "Tender 4"})-[:HAS_BIDS]->(tb:TenderBidS {Name: "TenderBidS"})
 CREATE (vb)-[:HAS {Date: localdatetime.transaction()}]->(b:Bid {BidCode: "B"+left(randomUUID(),8)+right(randomUUID(),4), Title: "Title of Bid for Tender 4 from Vendor 3", Description: "Description of Bid for Tender 4 from Vendor 3", Scope: "Scope of Bid for Tender 4 from Vendor 3", Deliverables: "List of deliverables of Bid for Tender 4 from Vendor 3", CompletitionDate:  localdatetime.transaction() + duration({days: 75}), Price: 75000, Conditions: "Vendor 3 Conditions for Bid of Tender 4", Qualifications: "Vendor 3 qualifications for Tender 4", SubmissionDate: localdatetime.transaction()})<-[:HAS {Date: localdatetime.transaction()}]-(tb),
        (b)-[:HAS_VENDOR]->(v),
@@ -949,7 +950,7 @@ CREATE (vb)-[:HAS {Date: localdatetime.transaction()}]->(b:Bid {BidCode: "B"+lef
 // The Vendor 8 will query their AcceptedInvitationS collection to fetch the Tender and their respective Documentations in order to Submit the Bids:
 MATCH (v:Vendor {ShortName: "Vendor 8"})-[:HAS_ACCEPTED_INVITATONS]->()-[:HAS]->(t)-[:HAS_DOCS]->()-[:HAS]->(d), (t)-[:HAS_TYPE]->(y) RETURN  t.TenderCode, t.Description, t.Budget, y.Name, d.URL;
 
-//Create Bid from the Vendor 8 for Tender 4  - We will use the Bid Code "B784981c5b0cc" manualy for this Bid for demonstration purposes, so that we can use it later. "B784981c5b0cc" 
+// Create Bid from the Vendor 8 for Tender 4  - We will use the Bid Code "B784981c5b0cc" manually for this Bid for demonstration purposes, so that we can use it later. "B784981c5b0cc" 
 MATCH (vb:ActiveBidS)<-[:HAS_ACTIVE_BIDS]-(v:Vendor {ShortName: "Vendor 8"})-[:HAS_ACCEPTED_INVITATONS]->()-[:HAS]->(t:Tender {Title: "Tender 4"})-[:HAS_BIDS]->(tb:TenderBidS {Name: "TenderBidS"})
 CREATE (vb)-[:HAS {Date: localdatetime.transaction()}]->(b:Bid {BidCode: "B784981c5b0cc", Title: "Title of Bid for Tender 4 from Vendor 8", Description: "Description of Bid for Tender 4 from Vendor 8", Scope: "Scope of Bid for Tender 4 from Vendor 8", Deliverables: "List of deliverables of Bid for Tender 4 from Vendor 8", CompletitionDate:  localdatetime.transaction() + duration({days: 75}), Price: 75000, Conditions: "Vendor 8 Conditions for Bid of Tender 4", Qualifications: "Vendor 8 qualifications for Tender 4", SubmissionDate: localdatetime.transaction()})<-[:HAS {Date: localdatetime.transaction()}]-(tb),
        (b)-[:HAS_VENDOR]->(v),
@@ -977,7 +978,7 @@ CREATE (c)-[:HAS {Date: localdatetime.transaction()}]->(m:Message {Text: "Tender
 
 
 
-// -------------- Bid Approval Workflow --------------------
+// -------------- Bid Vetting Workflow --------------------
 
 // --------- Bid Chat 
 
@@ -1024,7 +1025,7 @@ CREATE (c)-[:HAS {Date: localdatetime.transaction()}]->(m6:Message {Text: "Thank
 //--------- AI Agent Bid Assessment
 
 // Before we enter the Bid Approval workflow, we can have an AI Agent review the RFQs and RFPs submitted and do a pre-assessment to help the Bid Approvers, just as we did with the Vendor Approval 
-// So, we get the RFP or RFQ Documents URLs of all the Bids, plus all the Chats conversations (if any), and the AI Agent can make an assessment
+// So, we get the RFP or RFQ Documents URLs of all the Bids, plus all the Chat conversations (if any), and the AI Agent can make an assessment
 
 // AI Agent Queries to fetch the RFP or RFQ documents and their vendor responses, and the Chat conversations in the order in which they were created: 
 // The Tender FRQ, FRP, and other Tender Documentations for the AI Agent to understand the Tender requirements  
@@ -1033,11 +1034,11 @@ MATCH (:PublishedTenderS)-[:HAS]->(t)-[:HAS_DOCS]->()-[:HAS]-(d) RETURN t.Tender
 // The Vendor bid documents (RFQ/RFP templates filled) and any other documents submitted by the Vendor with the bid  
 MATCH (:PublishedTenderS)-[:HAS]->(t)-[:HAS_BIDS]->()-[:HAS]->(b)-[:HAS_DOCS]->()-[:HAS]-(d), (b)-[:HAS_VENDOR]-(v) RETURN t.TenderCode, v.VendorCode, b.BidCode, d.URL;
 
-//  All communications regarding the bid between the Tender team and the Vendor.
+// All communications regarding the bid between the Tender team and the Vendor.
 MATCH (:PublishedTenderS)-[:HAS]->(t)-[:HAS_BIDS]->()-[:HAS]->(b)-[:HAS_CHAT]->()-[r:HAS]->(c)-[:SENT_BY]-(p) RETURN t.TenderCode, b.BidCode, p.Name, c.Text ORDER by r.Date; 
 
 // With all this information, the AI Agent can now make a proper assessment of the Bids, compare them, and rate their adherence to the Tender requirements and other factors 
-// The AI Agent will then assess de Documents and the Conversations and create an output node for each Vendor.
+// The AI Agent will then assess the Documents and conversations and create an output node for each Vendor.
 
 
 // For demo purposes, we will simulate the AI Agent response and create random ratings for each Vendor and some Lorem ipsum assessments.
@@ -1048,12 +1049,12 @@ AssessmentSummary: "Lorem ipsum dolor sit amet, consectetur adipiscing elit. Mor
 Advantages: "Lorem ipsum dolor sit amet, consectetur adipiscing elit. Integer blandit auctor sem, ut pharetra erat mollis id. Vestibulum eu mi venenatis, lacinia orci nec, laoreet diam. Maecenas auctor ac ante eu vestibulum. Sed vitae placerat ex, sed pharetra ex. Donec pharetra mi lacus. Etiam et dapibus erat, a mattis diam. Pellentesque rhoncus tellus ac sem pellentesque laoreet. Sed accumsan maximus odio sed molestie.", 
 Disadvantages: "Lorem ipsum dolor sit amet, consectetur adipiscing elit. Nulla bibendum elementum tristique. Fusce neque nisl, fermentum eget tellus elementum, semper consectetur dui. Morbi eros arcu, vehicula ac magna ut, lacinia ornare felis. Integer tincidunt mi vel dolor convallis pharetra. Cras viverra congue nisi et imperdiet. In posuere vehicula commodo. Ut viverra sapien arcu, vel maximus leo feugiat non."});
 
-//Each Bid Approver will will Fetch the Bid + the respective RFP/RFQ Documents and the AI Agent Assement and decide. 
+// Each Bid Approver will fetch the Bid + the respective RFP/RFQ Documents and the AI Agent Assessment and decide. 
 
 
 
 // Bid Approval Workflow for Bid 1 of Tender 1 - The Bid Requester and the Approvers will approve the Bid in sequence
-// First, we will get the Bid Requester (Albert) and the Bid Approvers (Gloria, Sara, and Christine) for the Bid 1 of Tender 1  
+// First, we will get the Bid Requester (Albert) and the Bid Approvers (Gloria, Sara, and Christine) for Bid 1 of Tender 1  
 // Once all the approvals have been granted, the Tender will be moved to the AwardedTenderS Collection and the Bid will be moved to the AwarderBidS Collection of the Vendor.  
 
 // Albert (the Tender 1 Requester) will approve Bid 1 of Tender 1. The Requester is the person who created the Tender and is responsible for the Tender and the first approver of the Bid.
@@ -1082,15 +1083,15 @@ CREATE (b)-[:HAS_L2_APPROVAL {Date: localdatetime.transaction(), Comment: "This 
 MATCH (:PublishedTenderS)-[r1:HAS]->(t:Tender {Title: "Tender 1"})<-[:HAS_TENDER]-(b:Bid {BidCode: "B79c69d9843ff"})-[:HAS_VENDOR]->(v), (l3:Employee {Name: "Christine"})<-[:HAS]-(:Role {Name: "Level3Approver"}), (aw:AwardedTenderS {Name: "AwardedTenderS"})
 CREATE  (b)-[:HAS_L3_APPROVAL {Date: localdatetime.transaction(), Comment: "This bid is approved"}]->(l3),
         (aw)-[:HAS]->(t),
-        (t)-[:HAS_AWARDED_VENDOR]->(v),
-        (t)-[:HAS_AWARDED_BID]->(b)
-DELETE r1;
+        (t)-[:HAS_AWARDED_VENDOR {Date: localdatetime.transaction()}]->(v), // This relationship is redundant (optional), as the Bid already has a relationship with the Vendor, but it is kept for clarity and future reference.
+        (t)-[:HAS_AWARDED_BID {Date: localdatetime.transaction()}] ->(b)
+ DELETE r1;
 
 // Note that as we remove the Awarded Tender from the PublishedTenderS Domain Collection, it will not be available for further processing in the Tender Approval Workflow.
-// That is, the Tender 1 will not be available for further Tender Approvals, as it is now in the AwardedTenderS Domain Collection.
+// That is, Tender 1 will not be available for further Tender Approvals, as it is now in the AwardedTenderS Domain Collection.
 
 
-// Finally, let’s move Tender 1 to the AwardedTenders Domain Collection so that it can be used for further processing, like creating a contract or invoicing, eand perhaps the start of a new Supply Chain Workflow (Graph). 
+// Finally, let’s move Tender 1 to the AwardedTenders Domain Collection so that it can be used for further processing, like creating a contract or invoicing, and perhaps the start of a new Supply Chain Workflow (Graph). 
 // We will also remove Bid 1 from the ActiveBids Collection of Vendor 7 and move it to the AwardedBids Collection of Vendor 7
 MATCH  (aw:AwardedTenderS {Name: "AwardedTenderS"})-[HAS]->(t)<-[:HAS_TENDER]-(b:Bid {BidCode: "B79c69d9843ff"})<-[r1:HAS]-(:ActiveBidS)<-[:HAS_ACTIVE_BIDS]-(v)-[:HAS_AWARDED_BIDS]->(ab)
 CREATE (ab)-[:HAS]->(b)
@@ -1105,8 +1106,8 @@ MATCH (e:Employee {Name: "System"}), (t:Tender {Title: "Tender 1"})-[:HAS_BIDS]-
 CREATE (c)-[:HAS {Date: localdatetime.transaction()}]->(m:Message {Text: "The Bid for Tender 1 has not been awarded to you. We thank you for your participation and look forward to working with you in the future."})-[:SENT_BY]->(e);
 
 // We will also move the Bids from these vendors to ActiveBids to their respective PastBids Collection so that they can have them on record.
-// The Vendor can traverse from the Bids to get the Tender Info of previous Tenders they paricipated
-// We will also remove the Tender from their Accepted Invitations so only the active Tenders remain there. 
+// The Vendor can traverse from the Bids to get the Tender Info of previous Tenders in which they participated
+// We will also remove the Tender from their Accepted Invitations, so only the active Tenders remain there. 
 MATCH (t:Tender {Title: "Tender 1"})-[:HAS_BIDS]->(:TenderBidS)-[:HAS]->(b)<-[r1:HAS]-(ab)<-[:HAS_ACTIVE_BIDS]-(v)-[:HAS_PAST_BIDS]->(pb) WHERE NOT (t)-[:HAS_AWARDED_BID]->(b)
 WITH t , v , r1 , b, pb
 MATCH (v)-[:HAS_ACCEPTED_INVITATONS]->(ai)-[r2:HAS]-(t) 
@@ -1114,19 +1115,19 @@ CREATE (pb)-[:HAS]->(b)
 DELETE r1, r2;
 
 // This concludes a full Tender workflow for Tender 1. 
-// I will intentionalt leave other Tenders in different stages/states so you can query the Graph and see them where they are in the Workflow
+// I will intentionally leave other Tenders in different stages/states so you can query the Graph and see where they are in the Workflow
 // The tender will remain on the AwardedTendrS until the termination/full delivery of the Tender product/service. We can then move it to the ClosedTenderS Domain collection. 
-// Or... move it to another Domain Model (Graph) that will manage the Delivey (Supply Chain, Project Management, etc.)
+// Or... move it to another Domain Model (Graph) that will manage the Delivery (Supply Chain, Project Management, etc.)
 
 
 
 
 
-// Now that we have the complete cycle, with all schemas in place, we will create some aditional Tenders and run some aditional workflows just to create more Data for us to query. 
+// Now that we have the complete cycle, with all schemas in place, we will create some additional Tenders and run some additional workflows to create more Data for us to query. 
 
 // -------- Tender #10
 
-// The Requester Emplyee will log in and the UI will gather all the information and sublit the below Cypher command to create the Tender and supporting schema Nodes 
+// The Requester Employee will log in, and the UI will gather all the information and execute the following Cypher command to create the Tender and supporting schema Nodes 
 // Create the Tender 10 + Schema and let the system generate the Tender Code 
 MATCH (em:Employee {Name: "Albert"}), (nt:NewTenderS {Name: "NewTenderS"}), (ty:TenderType {Name: "Open"}) 
 CREATE (t1:Tender {TenderCode: "T"+left(randomUUID(),8)+right(randomUUID(),4), Title: "Tender 10", Description: "This is the tenth tender for testing purposes", SubmissionDate: localdatetime.transaction(), EndBidingDate: localdatetime.transaction() + duration({days: 20}) , Budget: 100000 })<-[:HAS]-(nt),
@@ -1237,13 +1238,9 @@ MATCH (t:Tender {Title: "Tender 10"})-[:HAS_INVITEES]->(iv:InvitedVendorS {Name:
 UNWIND COLLECT {MATCH (v:Vendor)<-[:HAS]-(:ApprovedVendorS) RETURN v} AS vendor
         CREATE (iv)-[:HAS {Date: localdatetime.transaction()}]->(vendor);
 
-
-// Now we must communicate all the Tender 1 invitees about their invitation so they can decide if they want to participat in the Tender.
+// Now we must communicate all the Tender 1 invitees about their invitation so they can decide if they want to participate in the Tender.
 MATCH (e:Employee {Name: "System"}), (t:Tender {Title: "Tender 10"})-[:HAS_INVITEES]->()-[:HAS]->(v)-[:HAS_CHAT]->(c:ConversatioN)  
 CREATE (c)-[:HAS {Date: localdatetime.transaction()}]->(m:Message {Text: "You have been Invited to participate on a tender (Tender 10)."})-[:SENT_BY]->(e);
-
-
-
 
 // Publish Tender 12
 
@@ -1256,12 +1253,17 @@ CREATE (t)-[:HAS_PUBLISHER_APPROVAL {Date: localdatetime.transaction(), Comment:
        (pt)-[:HAS]->(t)
 DELETE r1;    
 
-//As this Tender 12 is Type "Negotiated", we will invite a single Approved Vendor to it. In this case, we will invite the Vendor 10.
+//As this Tender 12 is Type "Negotiated", we will invite a single Approved Vendor to it. In this case, we will invite Vendor 10.
 MATCH (t:Tender {Title: "Tender 12"})-[:HAS_INVITEES]->(iv:InvitedVendorS {Name: "InvitedVendorS"})
 MATCH (v:Vendor {ShortName: "Vendor 10"})<-[:HAS]-(:ApprovedVendorS)
         CREATE (iv)-[:HAS {Date: localdatetime.transaction()}]->(v);
 
-
-// Now we must communicate all the Tender 12 invitees about their invitation so they can decide if they want to participat in the Tender.
+// Now we must communicate all the Tender 12 invitees about their invitation so they can decide if they want to participate in the Tender.
 MATCH (e:Employee {Name: "System"}), (t:Tender {Title: "Tender 12"})-[:HAS_INVITEES]->()-[:HAS]->(v)-[:HAS_CHAT]->(c:ConversatioN)  
 CREATE (c)-[:HAS {Date: localdatetime.transaction()}]->(m:Message {Text: "You have been Invited to participate on a tender (Tender 12)."})-[:SENT_BY]->(e);
+
+// End of Script!
+// This script has created a complete Tender Workflow with all the necessary schema and data to query and test the Tender Management System. 
+// Now you can query the Graph to see the Tenders, Bids, Vendors, and all the related information. 
+// Spend some time exploring the Graph and the data, traverse the Graph Database, understand the logic, and how the data is connected.
+// Learn how this approach can be used to build any Workflow Application in a Graph Database.
