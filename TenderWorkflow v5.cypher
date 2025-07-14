@@ -1,7 +1,7 @@
 // This Cypher script simulates a simplified Tendering System Proof of Concept (POC) featuring three distinct workflows: Vendor vetting, Tender vetting, and Bid vetting. 
 // It includes the interactions between these workflows, as well as AI Agent iterations and conversations between various stakeholders. All in the Graph!
 // The simulation starts from an empty Graph and progressively builds out, simulating 130+ user/database interactions using Cypher commands that 20+ users would typically execute through their respective UIs.
-// This script simulates the creation of 19 employees, 6 Roles, 10 Vendors with respective Contact persons, 13 Tenders, and 6 Bids, Along with all the respective vetting processes and interactions between parties. 
+// This script simulates the creation of 19 employees, 6 Roles, 10 Vendors with respective Contact persons, 13 Tenders, and 6 Bids, along with all the respective vetting processes and interactions between parties. 
 
 // Purpose:
 // The goal of this POC is to demonstrate that Graph databases can effectively power Line-of-Business (LOB) applications, such as workflow systems, in addition to traditional Knowledge Graphs or Graph RAG (Retrieval-Augmented Generation) solutions. 
