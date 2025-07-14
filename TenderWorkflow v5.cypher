@@ -134,7 +134,7 @@ DROP CONSTRAINT unique_Bid IF EXISTS;
 // I’d be happy to discuss this design choice further if you’re interested. It is not compulsory, but it is a good practice to follow. There are pros and cons, but I believe the pros outweigh the cons in this case.
 
 // There is only one occurrence of Domain Collections in the entire Graph. 
-// (When including them in the MATCH clause, you will often get a warning that this might create a cartesian product. It won't, as there is only one occurrence of these Nodes in the Graph)
+// (When including them in the MATCH clause, you will often get a warning that this might create a Cartesian product. It won't, as there is only one occurrence of these Node Labels in the Graph.)
 
 // There are two ways of implementing this: 1) Different Node Label or 2) Common Node Label but different Property. 
 // There are Pros and Cons, and probably depending on the Graph Database implementation and optimization, one could be better than the other.   
