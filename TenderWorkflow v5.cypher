@@ -202,12 +202,12 @@ REQUIRE e.Name IS UNIQUE;
 
 // For Roles I will use a Common Label (:Role) and different Property ({Name})
 // Create the Employee Roles Domain Collection Nodes
-CREATE (r:RoleS {Name: "RoleS"})-[:HAS]->(:Role {Name: "Requester"}),
-       (r)-[:HAS]->(:Role {Name: "VendorApprover"}),
-       (r)-[:HAS]->(:Role {Name: "Level1Approver"}),
-       (r)-[:HAS]->(:Role {Name: "Level2Approver"}),
-       (r)-[:HAS]->(:Role {Name: "Level3Approver"}),
-       (r)-[:HAS]->(:Role {Name: "Publisher"});
+CREATE (r:RoleS {Name: "RoleS"})-[:HAS]->(:Role {Name: "Requester", Description: "Requester", Rules: "Requests Tenders"}),
+       (r)-[:HAS]->(:Role {Name: "VendorApprover", Description: "Vendor Approver", Rules: "Approves Vendors"}),
+       (r)-[:HAS]->(:Role {Name: "Level1Approver", ApprovalBase: 0, ApprovalLimit: 200000, Description: "Level 1 Approver", Rules: "Approves Tenders with a Budget < 200000"}),
+       (r)-[:HAS]->(:Role {Name: "Level2Approver", ApprovalBase: 200001, ApprovalLimit: 300000, Description: "Level 2 Approver", Rules: "Approves Tenders with a Budget < 300000"}),
+       (r)-[:HAS]->(:Role {Name: "Level3Approver", ApprovalBase: 300001, ApprovalLimit: 2000000, Description: "Level 3 Approver", Rules: "Approves Tenders with a Budget < 2000000"}),
+       (r)-[:HAS]->(:Role {Name: "Publisher", Description: "Publisher", Rules: "Publishes Tenders"});
 
 // So here we have a superset Collection Node (:RoleS) that contains all the subset Role Collection Node as well.
 // This allows us to have a single point of reference for all Roles in the system, and we can easily add or remove Roles as needed.
