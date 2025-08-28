@@ -19,6 +19,16 @@
 //       There is room for improvement, enhancements, and optimization, and there are probably some errors/bugs/typos, but the core idea holds. 
 //       I will keep enhancing it, so by the time you read this, there might be an improved version. 
 
+// This model was built using a "mathematical set ontology", where:
+// -  Super-Collections (e.g. TenderS, VendorS, etc.) = universal sets,
+// -  Collections (States) (e.g. NewTenderS, ApprovedVendorS, etc.) = subsets,
+// -  Entities (e.g. Tender {…}, Vendor {…}, etc.) = elements of these sets,
+// -  Edges with name "HAS" = membership operator (∈).
+// -  Therefore: Entity ∈ Collection ⊆ Super-Collection
+// -  Edges with name <> "HAS" folow normal ontology
+//
+//    This is an elegant way to makes lifecycle management explicit in graph structure rather than hidden in properties.
+//    Providing mathematical clarity, LLM interpretation/reasoning and optimized for UI Component reusabilty ("HAS" = ∈ for all UI components that handle Collections)
 
 // Key Principles (Design Goals):
 // 1)	Proper Noun Nodes:
@@ -56,7 +66,7 @@
 // 4.	AI-Ready by Design:
 //      The Graph naturally captures both information and context from the outset, making it immediately usable and comprehensible by AI agents. No additional data wrangling or restructuring needed.
 
-// 5.    Built-in real-time Knowledge Graph
+// 5.   Built-in real-time Knowledge Graph
 //      Built on a Graph for business insights and all the amazing things Knowledge Graphs provide (No need to ingest data) 
 //
 
@@ -112,6 +122,7 @@ DROP CONSTRAINT unique_Bid IF EXISTS;
 // (Yes, Collections could technically be replaced by direct relationships or adding Labels, but this design improves model clarity and usability besides other considerations - Principle #5.)
 
 // In this approach, Collections are nodes like any other node in the Graph, but instead of representing individual Things, they represent Sets of Things.
+// This is what I called "mathematical set ontology" in the script intro.
 
 // Collections can serve two key purposes:
 // 1) State Representation:
@@ -206,8 +217,8 @@ CREATE (r:RoleS {Name: "RoleS"})-[:HAS]->(:Role {Name: "Requester", Description:
        (r)-[:HAS]->(:Role {Name: "VendorApprover", Description: "Vendor Approver", Rules: "Approves Vendors"}),
        (r)-[:HAS]->(:Role {Name: "Level1Approver", ApprovalBase: 0, ApprovalLimit: 200000, Description: "Level 1 Approver", Rules: "Approves Tenders with a Budget < 200000"}),
        (r)-[:HAS]->(:Role {Name: "Level2Approver", ApprovalBase: 200001, ApprovalLimit: 300000, Description: "Level 2 Approver", Rules: "Approves Tenders with a Budget < 300000"}),
-       (r)-[:HAS]->(:Role {Name: "Level3Approver", ApprovalBase: 300001, ApprovalLimit: 2000000, Description: "Level 3 Approver", Rules: "Approves Tenders with a Budget < 2000000"}),
-       (r)-[:HAS]->(:Role {Name: "Publisher", Description: "Publisher", Rules: "Publishes Tenders"});
+       (r)-[:HAS]->(:Role {Name: "Level3Approver", ApprovalBase: 300001,ApprovalLimit: 2000000, Description: "Level 3 Approver", Rules: "Approves Tenders with a Budget < 2000000"}),
+       (r)-[:HAS]->(:Role {Name: "Publisher" , Description: "Publisher", Rules: "Publishes Tenders"});
 
 // So here we have a superset Collection Node (:RoleS) that contains all the subset Role Collection Node as well.
 // This allows us to have a single point of reference for all Roles in the system, and we can easily add or remove Roles as needed.
@@ -562,11 +573,14 @@ CREATE (t1:Tender {TenderCode: "T"+left(randomUUID(),8)+right(randomUUID(),4), T
 
 
 
-//UI Query - Lets have the Tender Approver Level 1 (Gloria) query the NewTenderS Collection to see the Tenders available that have not been approved yet.
-MATCH (nt:NewTenderS {Name: "NewTenderS"})-[:HAS]->(t:Tender) 
-WHERE NOT (t)-[:HAS_L1_APPROVAL]->(:Employee)
-RETURN t.Title, t.TenderCode, t.Description, t.SubmissionDate, t.EndBidingDate, t.Budget;
-
+// UI Query - Lets have the Tender Approver Level 1 (Gloria) query the NewTenderS Collection to see the Tenders available for vetting that have not been vetted yet. 
+// The I will pass the Emplyee Name to the query as a parameter.
+MATCH (e:Employee {Name: "Gloria"})<-[]-(o:Role)
+MATCH (nt:NewTenderS {Name: "NewTenderS"})-[:HAS]->(t:Tender)-[:HAS_REQUESTER]-(r) 
+WHERE NOT (t)-[]->(e) AND  t.Budget >= o.ApprovalBase 
+RETURN r.Name as Requester, t.Title as Title, t.TenderCode as TenderCode, t.Description as TenderDescription, 
+apoc.temporal.format(t.SubmissionDate,'dd/MM/YY HH:mm:ss')  as TenderStartDate,  
+apoc.temporal.format(t.EndBidingDate,'dd/MM/YY HH:mm:ss') as TenderEndDate, t.Budget as TenderBudget;
 
 //----- AI Agent opportunity 
 // In the same way we used AI to assess Vendors, we can use AI agents to pre-assess the Tenders, rate them, and create summaries for the approvers.
@@ -601,10 +615,26 @@ CREATE (t)-[:HAS_L1_APPROVAL {Date: localdatetime.transaction(), Comment: "This 
 
 
 // If Sara (L2) has a question, she uses the Chat to ask, or if she has no questions, she can approve the Tender 1
+
 // Let's have the Tender Approver Level 2 (Sara) query the NewTenderS Collection to see the Tenders available with a Budget >= 200000 and already Approved by L1 but not yet Approved by L2.
 MATCH (nt:NewTenderS {Name: "NewTenderS"})-[:HAS]->(t:Tender) 
-WHERE NOT (t)-[:HAS_L2_APPROVAL]->(:Employee) AND t.Budget >= 200000 AND (t)-[:HAS_L1_APPROVAL]->(:Employee {Name: "Gloria"})       
+WHERE NOT (t)-[:HAS_L2_APPROVAL]->(:Employee) AND t.Budget >= 200001 AND (t)-[:HAS_L1_APPROVAL]->()       
 RETURN t.Title, t.TenderCode, t.Description, t.SubmissionDate, t.EndBidingDate, t.Budget;
+
+// or (a more costly query fust for testing purposes)
+
+MATCH ()<-[:HAS_L1_APPROVAL]-(t:Tender)-[:!HAS_L2_APPROVAL]->(e:Employee), (:NewTenderS)-[]->(t)  
+WHERE t.Budget >= 200001
+RETURN t.Title, t.TenderCode, t.Description, t.SubmissionDate, t.EndBidingDate, t.Budget;
+
+// or use the same query we used for L1, but specifying the L2 approver (Sara). The UI will pass this as a parameter. 
+
+MATCH (e:Employee {Name: "Sara"})<-[]-(o:Role)
+MATCH (nt:NewTenderS {Name: "NewTenderS"})-[:HAS]->(t:Tender)-[:HAS_REQUESTER]-(r) 
+WHERE NOT (t)-[]->(e)<-[]-(o) AND  t.Budget >= o.ApprovalBase AND (t)-[:HAS_L1_APPROVAL]->()  
+RETURN r.Name as Requester, t.Title as Title, t.TenderCode as TenderCode, t.Description as TenderDescription, 
+apoc.temporal.format(t.SubmissionDate,'dd/MM/YY HH:mm:ss')  as TenderStartDate,  
+apoc.temporal.format(t.EndBidingDate,'dd/MM/YY HH:mm:ss') as TenderEndDate, t.Budget as TenderBudget;
 
 
 // Let’s have the L2 approver (Sara) approve the Tender 1
@@ -615,7 +645,7 @@ CREATE (t)-[:HAS_L2_APPROVAL {Date: localdatetime.transaction(), Comment: "This 
 // If Christine (L3) has questions, she uses the Chat to ask, or if no questions, she can approve the Tender 1
 // Let the Tender Approver Level 3 (Christine) query the NewTenderS Collection to see the Tenders available with a Budget >= 300000 and already approved by L2.
 MATCH (nt:NewTenderS {Name: "NewTenderS"})-[:HAS]->(t:Tender) 
-WHERE NOT (t)-[:HAS_L3_APPROVAL]->(:Employee) AND t.Budget >= 300000 AND (t)-[:HAS_L2_APPROVAL]->(:Employee {Name: "Sara"})
+WHERE NOT (t)-[:HAS_L3_APPROVAL]->(:Employee) AND t.Budget >= 300000 AND (t)-[:HAS_L2_APPROVAL]->()
 AND NOT (t)-[:HAS_L3_APPROVAL]->(:Employee)              
 RETURN t.Title, t.TenderCode, t.Description, t.SubmissionDate, t.EndBidingDate, t.Budget;
 
@@ -749,13 +779,14 @@ CREATE (t1:Tender {TenderCode: "T"+left(randomUUID(),8)+right(randomUUID(),4), T
 
 // UI Query -Let's have the Publisher (Cloe) query the Approved Tenders to audit the approvals before Publishing.
 MATCH (at:ApprovedTenderS {Name: "ApprovedTenderS"})-[:HAS]->(t:Tender)-[HAS_REQUESTER]->(r:Employee), (t)-[:HAS_L1_APPROVAL]->(l1) WHERE t.Budget < 200000
-RETURN "Up to $200000 (L1 Only)" as TenderApprovalLevel, t.Title, t.TenderCode, t.Description, t.SubmissionDate, t.EndBidingDate, t.Budget, r.Name AS Requester, l1.Name AS L1_Approver, "N/A" AS L2_Approver, "N/A" AS L3_Approver
+RETURN "Up to $200000 (L1 Only)" as TenderApprovalLevel, t.Title as Title, t.TenderCode as TenderCode, t.Description as Description, apoc.temporal.format(t.SubmissionDate,'dd/MM/YY HH:mm:ss')  as TenderStartDate,  apoc.temporal.format(t.EndBidingDate,'dd/MM/YY HH:mm:ss') as TenderEndDate, t.Budget as Budget, r.Name AS Requester, l1.Name AS L1_Approver, "N/A" AS L2_Approver, "N/A" AS L3_Approver
 UNION
 MATCH (at:ApprovedTenderS {Name: "ApprovedTenderS"})-[:HAS]->(t:Tender)-[HAS_REQUESTER]->(r:Employee), (t)-[:HAS_L1_APPROVAL]->(l1), (t)-[:HAS_L2_APPROVAL]->(l2) WHERE t.Budget >= 200000 AND t.Budget < 300000
-RETURN "Up to $300000 (L1 and L2)" as TenderApprovalLevel, t.Title, t.TenderCode, t.Description, t.SubmissionDate, t.EndBidingDate, t.Budget, r.Name AS Requester, l1.Name AS L1_Approver, l2.Name AS L2_Approver, "N/A" AS L3_Approver
+RETURN "Up to $300000 (L1 and L2)" as TenderApprovalLevel, t.Title as Title, t.TenderCode as TenderCode, t.Description as Description, apoc.temporal.format(t.SubmissionDate,'dd/MM/YY HH:mm:ss')  as TenderStartDate,  apoc.temporal.format(t.EndBidingDate,'dd/MM/YY HH:mm:ss') as TenderEndDate, t.Budget as Budget,  r.Name AS Requester, l1.Name AS L1_Approver, l2.Name AS L2_Approver, "N/A" AS L3_Approver
 UNION
 MATCH (at:ApprovedTenderS {Name: "ApprovedTenderS"})-[:HAS]->(t:Tender)-[HAS_REQUESTER]->(r:Employee), (t)-[:HAS_L1_APPROVAL]->(l1), (t)-[:HAS_L2_APPROVAL]->(l2), (t)-[:HAS_L3_APPROVAL]->(l3) WHERE t.Budget >= 300000
-RETURN "Above $300000 (L1, L2 and L3)" as TenderApprovalLevel,t.Title, t.TenderCode, t.Description, t.SubmissionDate, t.EndBidingDate, t.Budget, r.Name AS Requester, l1.Name AS L1_Approver, l2.Name AS L2_Approver, l3.Name AS L3_Approver;
+RETURN "Above $300000 (L1, L2 and L3)" as TenderApprovalLevel,t.Title as Title, t.TenderCode as TenderCode, t.Description as Description, apoc.temporal.format(t.SubmissionDate,'dd/MM/YY HH:mm:ss')  as TenderStartDate,  apoc.temporal.format(t.EndBidingDate,'dd/MM/YY HH:mm:ss') as TenderEndDate, t.Budget as Budget,  r.Name AS Requester, l1.Name AS L1_Approver, l2.Name AS L2_Approver, l3.Name AS L3_Approver;
+
 
 // If the Publisher (Cloe) has questions, she can use the Chat of each Tender to ask, or if she has no questions, she can publish Tenders 1 and 4 that are approved and ready for Publishing.
 
@@ -860,7 +891,7 @@ CREATE (c)-[:HAS {Date: localdatetime.transaction()}]->(m:Message {Text: "You ha
 MATCH (v:Vendor {ShortName: "Vendor 7"})<-[:HAS]-(:InvitedVendorS)<-[:HAS_INVITEES]-(t:Tender)<-[:HAS]-(:PublishedTenderS), (t)-[:HAS_TYPE]-(ty:TenderType) RETURN t.TenderCode, t.Title, t.Description, t.SubmissionDate, t.Budget, ty.Name;
 
 
-// Now, Vendor 7 will accept the Tender Invitations for Tender 1 (Open) and Tender 3 and connect the selected tender to its Tender Invitation Collection (AcceptedInvitationS).
+// Now, Vendor 7 will accept the Tender Invitations for Tender 1 (Open) and connect the selected tender to its Tender Invitation Collection (AcceptedInvitationS).
 MATCH (ti:AcceptedInvitationS {Name: "AcceptedInvitationS"})<-[:HAS_ACCEPTED_INVITATONS]-(v:Vendor {ShortName: "Vendor 7"})<-[:HAS]-(:InvitedVendorS)<-[:HAS_INVITEES]-(t:Tender {Title: "Tender 1"})
 CREATE (ti)-[:HAS {Date: localdatetime.transaction()}]->(t);
 
@@ -1041,7 +1072,7 @@ MATCH (:PublishedTenderS)-[:HAS]->(t)-[:HAS_BIDS]->()-[:HAS]->(b)-[:HAS_CHAT]->(
 // The AI Agent will then assess the Documents and conversations and create an output node for each Vendor.
 
 
-// For demo purposes, we will simulate the AI Agent response and create random ratings for each Vendor and some Lorem ipsum assessments.
+// For demo purposes, we will simulate the AI Agent response and create random ratings for each Vendor Bid and some Lorem ipsum assessments.
 MATCH (:PublishedTenderS)-[:HAS]->(t)-[:HAS_BIDS]->()-[:HAS]->(b)
 WITH b 
 CREATE (b)-[:HAS_AI_AGENT_ASSESMENT {Date: localdatetime.transaction()}]->(:AIBidAssesment {Rating: rand(), 
@@ -1057,7 +1088,7 @@ Disadvantages: "Lorem ipsum dolor sit amet, consectetur adipiscing elit. Nulla b
 // First, we will get the Bid Requester (Albert) and the Bid Approvers (Gloria, Sara, and Christine) for Bid 1 of Tender 1  
 // Once all the approvals have been granted, the Tender will be moved to the AwardedTenderS Collection and the Bid will be moved to the AwarderBidS Collection of the Vendor.  
 
-// Albert (the Tender 1 Requester) will approve Bid 1 of Tender 1. The Requester is the person who created the Tender and is responsible for the Tender and the first approver of the Bid.
+// Albert (the Tender 1 Requester) will approve Bid 1 from Vendor 7 for Tender 1. The Requester is the person who created the Tender and is responsible for the Tender and the first approver of the Bid.
 MATCH (:PublishedTenderS)-[:HAS]->(t:Tender {Title: "Tender 1"})<-[:HAS_TENDER]-(b:Bid {BidCode: "B79c69d9843ff"}), (t)-[:HAS_REQUESTER]->(e)<-[:HAS]-(:Role {Name: "Requester"})
 CREATE (b)-[:HAS_BID_REQUESTER_APPROVAL {Date: localdatetime.transaction(), Comment: "This bid is approved"}]->(e);
 
@@ -1070,16 +1101,16 @@ MATCH (:PublishedTenderS)-[:HAS]->(t:Tender {Title: "Tender 4"})<-[:HAS_TENDER]-
 CREATE (b)-[:HAS_L1_REJECTION {Date: localdatetime.transaction(), Comment: "This bid is rejected by L1"}]->(l1);
  
 
-// Gloria (the L1 Approver) will approve Bid 1 of Tender 1 
+// Gloria (the L1 Approver) will approve the Bid 1 from Vendor 7 for Tender 1 
 MATCH (:PublishedTenderS)-[:HAS]->(t:Tender {Title: "Tender 1"})<-[:HAS_TENDER]-(b:Bid {BidCode: "B79c69d9843ff"}), (l1:Employee {Name: "Gloria"})<-[:HAS]-(:Role {Name: "Level1Approver"})
 CREATE (b)-[:HAS_L1_APPROVAL {Date: localdatetime.transaction(), Comment: "This bid is approved"}]->(l1);
 
-// Sara (the L2 Approver) will approve the Bid 1 of Tender 1  
+// Sara (the L2 Approver) will approve the Bid 1 from Vendor 7 for Tender 1  
 MATCH (:PublishedTenderS)-[:HAS]->(t:Tender {Title: "Tender 1"})<-[:HAS_TENDER]-(b:Bid {BidCode: "B79c69d9843ff"}), (l2:Employee {Name: "Sara"})<-[:HAS]-(:Role {Name: "Level2Approver"})     
 CREATE (b)-[:HAS_L2_APPROVAL {Date: localdatetime.transaction(), Comment: "This bid is approved"}]->(l2);
 
 
-// Christine (the L3 Approver) will approve Bid 1 of Tender 1, and as the L3 is the final approver, let’s move the Tender to the AwardedTenders Collection and remove it from the PublishedTenderS Collection 
+// Christine (the L3 Approver) will approve the Bid 1 from Vendor 7 for Tender 1, and as the L3 is the final approver, let’s move the Tender to the AwardedTenders Collection and remove it from the PublishedTenderS Collection 
 MATCH (:PublishedTenderS)-[r1:HAS]->(t:Tender {Title: "Tender 1"})<-[:HAS_TENDER]-(b:Bid {BidCode: "B79c69d9843ff"})-[:HAS_VENDOR]->(v), (l3:Employee {Name: "Christine"})<-[:HAS]-(:Role {Name: "Level3Approver"}), (aw:AwardedTenderS {Name: "AwardedTenderS"})
 CREATE  (b)-[:HAS_L3_APPROVAL {Date: localdatetime.transaction(), Comment: "This bid is approved"}]->(l3),
         (aw)-[:HAS]->(t),
