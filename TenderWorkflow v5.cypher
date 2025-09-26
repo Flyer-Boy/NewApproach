@@ -32,19 +32,19 @@
 
 // Key Principles (Design Goals):
 // 1)	Proper Noun Nodes:
-//      Nodes should only store properties that are immutable — those that define the uniqueness of the entity (the "Thing") and should never change.
-//      Any property that represents a state or relevance to another entity should be modelled as a relationship, not a node property.
+//      Nodes should only store properties that define the uniqueness of the entity (the "Thing") they represent
+//      Any property that represents a state or an entity’s relevance to another entity should be modelled as a relationship, not a property.
 
 // 2)	Read-Only Nodes:
-//      Once created, node properties remain unchanged. (The SET command is reserved strictly for value corrections).
-//      This approach significantly simplifies transaction concurrency and consistency management, which is a major differentiator from traditional RDBMS models where updates are common and often introduce complexity (concurrency & consistency).
+//      Once created, node properties should remain unchanged. (The SET command is reserved strictly for value corrections.)
+//      This approach significantly simplifies transaction concurrency and consistency management, which is a major differentiator from traditional RDBMS models, where updates are common and often introduce complexity.
 
 // 3)	Never Delete Nodes:
 //      Nodes are never deleted, ensuring full traceability of all entities over time. 
 //      (Time flows in one direction. What is done cannot be undone. If the model is a faithful representation of the real world, this principle should be respected.)
 
 // 4)	Relationships Drive the System (workflow):
-//      The system relies on creating new nodes and relationships, and deleting relationships as per the workflow rules/state.
+//      The system relies on creating new nodes and creating/deleting relationships according to the workflow rules/state.
 
 // 5)	Lean Nodes:
 //      Outgoing relationships are minimized. For one-to-many connections, we use Collections.
@@ -143,6 +143,12 @@ DROP CONSTRAINT unique_Bid IF EXISTS;
 // This design choice allows us to create reusable UI components that can handle any Collection, regardless of its type or content.
 // It also enables us to create generic Cypher queries that can retrieve any Collection and its items, regardless of the specific domain or context.
 // I’d be happy to discuss this design choice further if you’re interested. It is not compulsory, but it is a good practice to follow. There are pros and cons, but I believe the pros outweigh the cons in this case.
+
+// relType property
+// We can add a property to these :HAS relationships to add the ontology/semantic, for instance we can add a {relType: "HAS_XXX or IS_XXX"} property to the :HAS relationship. 
+// In this way an LLM can undestand and reason on the Graph
+// I will implement this in Version 6 of this script
+
 
 // There is only one occurrence of Domain Collections in the entire Graph. 
 // (When including them in the MATCH clause, you will often get a warning that this might create a Cartesian product. It won't, as there is only one occurrence of these Node Labels in the Graph.)

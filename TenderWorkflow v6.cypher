@@ -145,9 +145,8 @@ DROP CONSTRAINT unique_Bid IF EXISTS;
 // I’d be happy to discuss this design choice further if you’re interested. It is not compulsory, but it is a good practice to follow. There are pros and cons, but I believe the pros outweigh the cons in this case.
 
 // relType property
-// We can add a property to these :HAS  relationships to add the ontology/semantic, for instane we can add a {relType: "HAS_XXX or IS_XXX"} property to the :HAS relationship. 
+// We can add a property to these :HAS relationships to add the ontology/semantic, for instance we can add a {relType: "HAS_XXX or IS_XXX"} property to the :HAS relationship. 
 // In this way an LLM can undestand and reason on the Graph
-// I will implement this in this version 6 of the script
 
 // There is only one occurrence of Domain Collections in the entire Graph. 
 // (When including them in the MATCH clause, you will often get a warning that this might create a Cartesian product. It won't, as there is only one occurrence of these Node Labels in the Graph.)
