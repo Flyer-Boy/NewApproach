@@ -6,7 +6,7 @@ import { useEffect, useState } from "react";
 import { useWriteCypher } from "use-neo4j";
 
 const IdealState = () => {
-const query = `PROFILE MATCH (p:Passenger)-[:HAS_ACTIVE_BOOKING]->(b:Booking)<-[:HAS]-(w:WaitinG), 
+const query = `OPTIONAL MATCH (p:Passenger)-[:HAS_ACTIVE_BOOKING]->(b:Booking)<-[:HAS]-(w:WaitinG), 
 (pickUp:Address)<-[:HAS_ORIGIN]-(b)-[:HAS_DESTINATION]->(dropOff:Address) 
 RETURN p.Name, p.Phone, p.Photo, b.BookingID, b.Fare, 
 pickUp.StreetNum + " " + pickUp.StreetName + ", " + pickUp.City + ", " + pickUp.State + ", " + pickUp.ZIP  as pickUpName, 
@@ -87,3 +87,4 @@ ORDER BY b.Date
 };
 
 export default IdealState;
+
