@@ -6,12 +6,16 @@ import { useEffect, useState } from "react";
 import { useWriteCypher } from "use-neo4j";
 
 const IdealState = () => {
-const query = `OPTIONAL MATCH (p:Passenger)-[:HAS_ACTIVE_BOOKING]->(b:Booking)<-[:HAS]-(w:WaitinG), 
-(pickUp:Address)<-[:HAS_ORIGIN]-(b)-[:HAS_DESTINATION]->(dropOff:Address) 
-RETURN p.Name, p.Phone, p.Photo, b.BookingID, b.Fare, 
-pickUp.StreetNum + " " + pickUp.StreetName + ", " + pickUp.City + ", " + pickUp.State + ", " + pickUp.ZIP  as pickUpName, 
-dropOff.StreetNum + " " + dropOff.StreetName + ", " + dropOff.City + ", " + dropOff.State + ", " + dropOff.ZIP  as dropOffName,
-apoc.temporal.format(duration.between(b.Date,datetime()),'HH:mm:ss') as Date 
+const query = `MATCH (p:Passenger)-[:HAS_ACTIVE_BOOKING]->(b:Booking)<-[:HAS]-(w:WaitinG),
+(pickUp:Address)<-[:HAS_ORIGIN]-(b)-[:HAS_DESTINATION]->(dropOff:Address)
+RETURN p.Name, p.Phone, p.Photo, b.BookingID, b.Fare,
+pickUp.StreetNum + " " + pickUp.StreetName + ", " + pickUp.City + ", " + pickUp.State + ", " + pickUp.ZIP as pickUpName,
+dropOff.StreetNum + " " + dropOff.StreetName + ", " + dropOff.City + ", " + dropOff.State + ", " + dropOff.ZIP as dropOffName,
+CASE 
+  WHEN b.Date IS NOT NULL 
+  THEN apoc.temporal.format(duration.between(b.Date, datetime()), 'HH:mm:ss') 
+  ELSE null 
+END as Date
 ORDER BY b.Date
 `;
 
@@ -87,4 +91,5 @@ ORDER BY b.Date
 };
 
 export default IdealState;
+
 
