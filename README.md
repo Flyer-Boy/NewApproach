@@ -14,7 +14,7 @@ It comprises a few Cypher scripts that I used to demonstrate concepts applied to
 
 The files are:
 
- 1. **RideHailing.cypher** — This script can be executed in full to create the initial nodes (Passengers, Drivers, Cars, and Bookings) in different states so you can familiarize yourself with the Model.
+ 1. **RideHailing.cypher** — This script can be executed in full to create the initial nodes (Passengers, Drivers, Cars, and Bookings) in different states so that you can familiarize yourself with the Model.
  2. **neo4j-RideHailingDB.backup** — Alternatively, instead of creating the initial nodes from scratch (script), you can use this Neo4j backup to restore a database with all the initial nodes and some bookings already made. 
  3. **RideHailing_Queries.cypher** — This script contains a few Cypher queries that you can execute against the Database. I will add more queries over time.
  4. **RideHailing_Templates.cypher** — This script contains Cypher commands you can use to build a mockup application as they appear in the Article. You must parse the script by replacing it with the proper variable.
@@ -22,7 +22,7 @@ The files are:
  6. **The RideHailingGraphModel.png** - The Ride Hailing Graph database model for your reference.
  7. **TenderWorkflow v5.cypher** - A Tendering System Proof of Concept (POC) simulation script. This script simulates a Tender system running on a Graph, where the Graph acts as both the Data and Logic layer. (Neo4j Compatible)
  8. **TenderWorkflow v6.cypher** - The Tendering System Proof of Concept (POC) simulation script with the RelType property on the ":HAS" collection relationships. (Neo4j Compatible)
- 9. **TenderWorkflow v6 - MemGraph.cypher - ** - The Tendering System Proof of Concept (POC) simulation script adapted to work on MemGraph (MemGraph Compatible)
+ 9. **TenderWorkflow v6 - MemGraph.cypher** - The Tendering System Proof of Concept (POC) simulation script adapted to work on MemGraph (MemGraph Compatible)
  10. **TenderWorkflow Graph Model.png** - The Tender Workflow model for you to have a look at.
 
 You can try it with Neo4j Aura or Neo4j Desktop. If you don't have an Aura account yet, get one here: https://neo4j.com/cloud/aura-free/. If you are new to Cypher, you can get started at Neo4j's GraphAcademy: https://graphacademy.neo4j.com/
