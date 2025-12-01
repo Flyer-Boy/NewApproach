@@ -32,6 +32,7 @@ CREATE CONSTRAINT Territories_TerritoryID IF NOT EXISTS FOR (t:Territories) REQU
 CREATE CONSTRAINT Regions_RegionID IF NOT EXISTS FOR (r:Regions) REQUIRE (r.RegionID) IS UNIQUE;
 CREATE CONSTRAINT Shipper_ShipperID IF NOT EXISTS FOR (s:Shipper) REQUIRE (s.ShipperID) IS UNIQUE;
 
+// https://github.com/Flyer-Boy/NewApproach/blob/main/NorthWind/Import/categories.csv
 
 LOAD CSV WITH HEADERS FROM "file:///categories.csv" AS row
 MERGE (n:CategorY {CategoryID:row.CategoryID, CategoryName:row.CategoryName, Description:row.Description}); 
@@ -256,7 +257,85 @@ MATCH (p:Product)-[:CURRENT_STOCK]->(s:InventoryLevel), (o:Order)-[details:HAS_P
 RETURN p.ProductID, p.ProductName, SUM(details.Quantity) AS TotalOrdered, s.UnitsInStock AS StockAvailable
 ORDER BY TotalOrdered DESC;
 
+// Top 5 Products by Number of Orders
+MATCH (c:Customer)<-[:HAS_CUSTOMER]-(o:Order)-[:HAS_PRODUCT]->(p:Product)
+RETURN c.CompanyName, p.ProductName, count(o) AS orders
+ORDER BY orders DESC
+LIMIT 5;
+
+// Product recomendaton for Customers based on most ordered Products by another Customers
+MATCH (c:Customer)<-[:HAS_CUSTOMER]-(o:Order)-[:HAS_PRODUCT]->(p:Product)
+<-[:HAS_PRODUCT]-(o2:Order)-[:HAS_PRODUCT]->(p2:Product)<-[:HAS]-(:CategorY)-[:HAS]->(p)
+WHERE c.CustomerID = 'ANTON' and NOT( (c)<-[:HAS_CUSTOMER]-(:Order)-[:HAS_PRODUCT]->(p2) )
+RETURN c.CompanyName, p.ProductName AS has_purchased, p2.ProductName AS has_also_purchased, count(DISTINCT o2) AS occurrences
+ORDER BY occurrences DESC
+LIMIT 5;
+
+
 //  End of Query Examples  //
 
+
+//Extra Examples:  
+
+// Recommendation Engine as per: https://neo4j.com/graphgists/northwind-recommendation-engine/ adapted for NorthWind Application Graph Data Model (and Cypher Version 5)
+
+// Collaborative Filtering - Product Rating by Customers 
+// Collaborative Filtering is a technique used by recommendation engines to recommend content based on the feedback from other Customers. 
+// To do this, we can use the k-NN (k-nearest neighbors) Algorithm. k-N works by grouping items into classifications based on their similarity to each other. 
+// In our case, this could be ratings between two Customers for a Product. 
+// To give a real-world example, this is how sites like Netflix make recommendations based on the ratings given to shows you’ve already watched.
+
+// The first thing we need to do to make this model work is create some "ratings relationships". 
+// For now, let’s create a score somewhere between 0 and 1 for each product based on the number of times a customer has purchased a product.
+
+MATCH (c:Customer)-[:PURCHASED]->(o:Order)-[:PRODUCT]->(p:Product)
+WITH c, count(p) AS total
+MATCH (c)-[:PURCHASED]->(o:Order)-[:PRODUCT]->(p:Product)
+WITH c, total,p, count(o)*1.0 AS orders
+MERGE (c)-[rated:RATED]->(p)
+ON CREATE SET rated.rating = orders/total
+ON MATCH SET rated.rating = orders/total
+WITH c.companyName AS company, p.productName AS product, orders, total, rated.rating AS rating
+ORDER BY rating DESC
+RETURN company, product, orders, total, rating LIMIT 10; 
+
+// Now that we have ratings between Customers and Products, we can start to find similarities between Customers based on their ratings.
+
+// See Customer's Ratings
+MATCH (me:Customer)-[r:RATED]->(p:Product)
+WHERE me.CustomerID = 'ANTON'
+RETURN p.ProductName, r.Rating limit 10;
+
+// See Customer's Similar Ratings to Others
+MATCH (c1:Customer {CustomerID:'ANTON'})-[r1:RATED]->(p:Product)<-[r2:RATED]-(c2:Customer)
+RETURN c1.CustomerID, c2.CustomerID, p.ProductName, r1.Rating, r2.Rating,
+CASE WHEN r1.Rating-r2.Rating < 0 THEN -(r1.Rating-r2.Rating) ELSE r1.Rating-r2.Rating END as difference
+ORDER BY difference ASC
+LIMIT 15; 
+
+// Now we can calculate the similarity between Customers based on their ratings using Cosine Similarity.
+// We can create a similarity score between two Customers using Cosine Similarity  
+MATCH (c1:Customer)-[r1:RATED]->(p:Product)<-[r2:RATED]-(c2:Customer)
+WITH
+	SUM(r1.rating*r2.rating) as dot_product,
+	SQRT( REDUCE(x=0.0, a IN COLLECT(r1.Rating) | x + a^2) ) as r1_length,
+	SQRT( REDUCE(y=0.0, b IN COLLECT(r2.Rating) | y + b^2) ) as r2_length,
+	c1,c2
+MERGE (c1)-[s:SIMILARITY]-(c2)
+SET s.Similarity = dot_product / (r1_length * r2_length); 
+
+// Now we can use the similarity scores to recommend Products to Customers based on what similar Customers have rated highly.
+MATCH (me:Customer)-[r:SIMILARITY]->(them)
+WHERE me.CustomerID='ANTON'
+RETURN me.CompanyName, them.CompanyName, r.Similarity
+ORDER BY r.Similarity DESC limit 10;
+
+// Finally, we can use the similarity scores to recommend Products to a Customer based on what similar Customers have rated highly.
+MATCH (me:Customer)-[:SIMILARITY]->(c:Customer)-[r:RATED]->(p:Product)
+WHERE me.CustomerID = 'ANTON' and NOT ( (me)-[:RATED*1..2]->(p:Product) )
+WITH p, COLLECT(r.Rating)[0..1] as ratings, collect(c.CompanyName)[0..1] as customers
+WITH p, customers, round(REDUCE(s=0,i in ratings | s+i) / size(ratings), 5)  as recommendation
+ORDER BY recommendation DESC
+RETURN p.ProductName, customers, recommendation LIMIT 25;
 
 
