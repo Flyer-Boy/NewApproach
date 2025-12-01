@@ -1,8 +1,10 @@
 // -- NorthWind Graph Data Model Import --//
 
 // This script will create the NorthWind Graph Data Model in Neo4j
-// It will load data from CSV files and create Nodes, Relationships, Indexes and Constraints    
-// Use the csv provied in the import folder as they have been fixed. 
+// It will load data from CSV files and create Nodes, Relationships, Indexes, and Constraints    
+// Use the CSV provided in the import folder, as it has been fixed. 
+// The original CSV files from NorthWind have some issues with commas in the data fields. Mainly in the Address (for Brazil, France, and Belgium) and some Description fields (Notes).
+// This causes problems when importing the data, leading to misplaced fields and compromising data integrity.
 
 // Lets Clear all Nodes and Relationships before we start 
 MATCH (n) DETACH DELETE n;
