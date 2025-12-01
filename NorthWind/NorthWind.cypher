@@ -250,7 +250,7 @@ RETURN e.EmployeeID, e.FirstName, e.LastName, SUM( (details.Quantity * details.U
 ORDER BY TotalSales DESC;
 
 // Total Product Orders and Stock available
-MATCH (p:Product)-[:HAS_STOCK]->(s:UnitsInStock), (o:Order)-[details:HAS_PRODUCT]->(p)
+MATCH (p:Product)-[:CURRENT_STOCK]->(s:InventoryLevel), (o:Order)-[details:HAS_PRODUCT]->(p)
 RETURN p.ProductID, p.ProductName, SUM(details.Quantity) AS TotalOrdered, s.UnitsInStock AS StockAvailable
 ORDER BY TotalOrdered DESC;
 
