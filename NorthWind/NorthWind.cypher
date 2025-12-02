@@ -201,7 +201,7 @@ CREATE (o)-[:HAS {RelType: "IS_OPEN"}]->(n);
 //  -------------------------------------------------------------------   //
 
 
-// Queries Examples
+// Queries Examples to run against the NorthWind Graph Data Model 
 
 
 // Total Amount of OrderID 10461
@@ -274,16 +274,15 @@ LIMIT 5;
 
 //  End of Query Examples  //
 
+//  -------------------------------------------------------------------   //
 
-//Extra Examples:  
-
-// Recommendation Engine as per: https://neo4j.com/graphgists/northwind-recommendation-engine/ adapted for NorthWind Application Graph Data Model (and Cypher Version 5)
+// Recommendation Engine as per: https://neo4j.com/graphgists/northwind-recommendation-engine/ adaped for NorthWind Application Graph Data Model (and Cypher Version 5)
 
 // Collaborative Filtering - Product Rating by Customers 
 // Collaborative Filtering is a technique used by recommendation engines to recommend content based on the feedback from other Customers. 
-// To do this, we can use the k-NN (k-nearest neighbors) Algorithm. k-N works by grouping items into classifications based on their similarity to each other. 
+// To do this, we can use the k-NN (k-nearest neighbors) Algorithm. k-N works by grouping items into classifications based on their similarity to eachother. 
 // In our case, this could be ratings between two Customers for a Product. 
-// To give a real-world example, this is how sites like Netflix make recommendations based on the ratings given to shows you’ve already watched.
+// To give a real world example, this is how sites like Netflix make recommendations based on the ratings given to shows you’ve already watched.
 
 // The first thing we need to do to make this model work is create some "ratings relationships". 
 // For now, let’s create a score somewhere between 0 and 1 for each product based on the number of times a customer has purchased a product.
@@ -338,4 +337,42 @@ WITH p, customers, round(REDUCE(s=0,i in ratings | s+i) / size(ratings), 5)  as 
 ORDER BY recommendation DESC
 RETURN p.ProductName, customers, recommendation LIMIT 25;
 
+
+// -------------------------------------------------------------------   //
+
+// Application Query Examples
+// These are examples of queries that could be used in an Application built on top of the NorthWind Graph Data Model.
+// These queries demonstrate how to create a new Order, check inventory levels, fulfill an Order, and update inventory levels accordingly.
+// We will add an "N" prefix to new OrderIDs to differentiate them from imported Orders, so we can test the Application Queries without interfering with the imported data.
+
+// Creating a New Order:
+
+MATCH (c:Customer {CustomerID:"ALFKI"}), (e:Employee {EmployeeID:"5"}), (p1:Product {ProductID:"1"}), (p2:Product {ProductID:"2"}), (p:OrderStatus_OpeN {Status: "Open"})
+CREATE (o:Order {OrderID:"N10000", OrderDate:date(), RequireDate:date()+duration("P7D")})<-[:HAS {RelType: "IS_OPEN"}]-(p)
+CREATE (o)-[:HAS_CUSTOMER]->(c) 
+CREATE (o)-[:SOLD_BY]->(e)
+CREATE (o)-[:HAS_PRODUCT {Quantity:10, UnitPrice:p1.UnitPrice, Discount:0.0}]->(p1)
+CREATE (o)-[:HAS_PRODUCT {Quantity:5, UnitPrice:p2.UnitPrice, Discount:0.1}]->(p2)
+RETURN o;
+
+// Checking Inventory before Fulfilling an Order:
+MATCH (o:Order {OrderID:"N10000"})-[r:HAS_PRODUCT]->(p:Product)-[:CURRENT_STOCK]->(s:InventoryLevel)
+RETURN p.ProductName, r.Quantity AS QuantityOrdered, s.UnitsInStock AS CurrentStock;
+
+// Fulfilling an Order:
+MATCH (o:Order {OrderID:"N10000"})<-[r:HAS]-(p:OrderStatus_OpeN {Status: "Open"}), (s:Shipper {ShipperID:"1"}), (f:OrderStatus_FulfilleD {Status: "Fulfilled"})
+CREATE (i:ShipInfo {ShippmentID:apoc.create.uuid(), ShippedDate:date()})
+CREATE (o)-[:HAS_SHIPMENT]->(i)
+CREATE (i)-[:HAS_SHIPPER]->(s)
+CREATE (f)-[:HAS {RelType: "IS_FULFILLED"}]->(o)
+DELETE r
+RETURN o, i, s;
+
+// Checking Inventory before Updating it after Order Fulfillment:
+MATCH n=(o:Order {OrderID: "N10000"})-[]->()-[:CURRENT_STOCK]->() RETURN n;
+
+// Updating Inventory after Order Fulfillment:
+MATCH (o:Order {OrderID:"N10000"})-[r:HAS_PRODUCT]->(p:Product)-[:CURRENT_STOCK]->(s:InventoryLevel)
+SET s.UnitsInStock = s.UnitsInStock - r.Quantity
+RETURN p.ProductName, s.UnitsInStock;
 
