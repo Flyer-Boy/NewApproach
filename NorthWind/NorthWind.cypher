@@ -359,7 +359,7 @@ RETURN o;
 MATCH (o:Order {OrderID:"N10000"})-[r:HAS_PRODUCT]->(p:Product)-[:CURRENT_STOCK]->(s:InventoryLevel)
 RETURN p.ProductName, r.Quantity AS QuantityOrdered, s.UnitsInStock AS CurrentStock;
 
-// Fulfilling an Order:
+// Fulfilling an Order (with the assumption that the Shippment Address is the same as the Customer Address, as in the original NorthWind Data Model import files):
 MATCH (o:Order {OrderID:"N10000"})<-[r:HAS]-(p:OrderStatus_OpeN {Status: "Open"}), (o)-[:HAS_CUSTOMER]-()-[:HAS_ADDRESS]-(a), (s:Shipper {ShipperID:"1"}), (f:OrderStatus_FulfilleD {Status: "Fulfilled"})
 CREATE (i:ShipInfo {ShippmentID:apoc.create.uuid(), ShippedDate:date()})
 CREATE (o)-[:HAS_SHIPMENT]->(i)
