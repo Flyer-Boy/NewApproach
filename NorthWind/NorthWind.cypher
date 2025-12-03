@@ -28,7 +28,7 @@ CREATE CONSTRAINT Supplier_SupplierID IF NOT EXISTS FOR (s:Supplier) REQUIRE (s.
 CREATE CONSTRAINT Customer_CustomerID IF NOT EXISTS FOR (c:Customer) REQUIRE (c.CustomerID) IS UNIQUE;
 CREATE CONSTRAINT Order_OrderID IF NOT EXISTS FOR (o:Order) REQUIRE (o.OrderID) IS UNIQUE;
 CREATE CONSTRAINT Employee_EmployeeID IF NOT EXISTS FOR (e:Employee) REQUIRE (e.EmployeeID) IS UNIQUE;
-CREATE CONSTRAINT Territories_TerritoryID IF NOT EXISTS FOR (t:Territories) REQUIRE (t.TerritoryID) IS UNIQUE;
+CREATE CONSTRAINT Territories_TerritoryID IF NOT EXISTS FOR (t:Territory) REQUIRE (t.TerritoryID) IS UNIQUE;
 CREATE CONSTRAINT Regions_RegionID IF NOT EXISTS FOR (r:Regions) REQUIRE (r.RegionID) IS UNIQUE;
 CREATE CONSTRAINT Shipper_ShipperID IF NOT EXISTS FOR (s:Shipper) REQUIRE (s.ShipperID) IS UNIQUE;
 
@@ -124,7 +124,7 @@ MATCH (n:Employee)
 REMOVE n.FirstName, n.LastName, n.TitleOfCourtesy,n.BithdDate, n.Address, n.City, n.Region, n.PostalCode, n.Country, n.HomePhone, n.Fax, n.Notes, n.Photo, n.ReportsTo, n.Title; 
 
 LOAD CSV WITH HEADERS FROM "file:///territories.csv" AS row
-MERGE (n:Territories {TerritoryID:row.TerritoryID})
+MERGE (n:Territory {TerritoryID:row.TerritoryID})
 SET n += row;
 
 LOAD CSV WITH HEADERS FROM "file:///regions.csv" AS row
@@ -132,15 +132,15 @@ MERGE (n:Regions {RegionID:row.RegionID})
 SET n += row;
 
 LOAD CSV WITH HEADERS FROM "file:///employee-territories.csv" AS row
-MATCH (e:Employee), (t:Territories)
+MATCH (e:Employee), (t:Territory)
 WHERE e.EmployeeID = row.EmployeeID AND t.TerritoryID = row.TerritoryID
 MERGE (t)-[:HAS {RelType: "HAS_EMPLOYEE"}]->(e);
 
-MATCH (t:Territories), (r:Regions)
+MATCH (t:Territory), (r:Regions)
 WHERE t.RegionID = r.RegionID
 MERGE (r)-[:HAS {RelType: "HAS_TERRITORY"}]->(t);
 
-MATCH (t:Territories) REMOVE t.RegionID;
+MATCH (t:Territory) REMOVE t.RegionID;
 
 LOAD CSV WITH HEADERS FROM "file:///shippers.csv" AS row
 MERGE (n:Shipper {ShipperID:row.ShipperID, CompanyName:row.CompanyName, Phone:row.Phone});
@@ -157,14 +157,14 @@ MERGE (o)-[:HAS_CUSTOMER]->(c);
 MATCH (n:Order), (s:Shipper)
 WHERE n.ShipVia = s.ShipperID 
 CREATE (n)-[:HAS_SHIPMENT]->(i:ShipInfo {ShipName:n.ShipName, ShippedDate:n.ShippedDate, Freight:n.Freight })
-CREATE (i)-[:HAS_SHIPPER]->(s)
+CREATE (i)-[:HAS_SHIPPMENT_ADDRESS]->(s)
 WITH n, i
 MATCH (a:Address) WHERE a.Address = n.ShipAddress AND a.City = n.ShipCity AND a.Region = n.ShipRegion AND a.PostalCode = n.ShipPostalCode AND a.Country = n.ShipCountry
-MERGE (i)-[:HAS_ADDRESS]->(a)
+MERGE (i)-[:HAS_SHIPPMENT_ADDRESS]->(a)
 WITH n, i
 WHERE NOT EXISTS( (i)-[:HAS_ADDRESS]->(:Address {Address:n.ShipAddress, City:n.ShipCity, Region:n.ShipRegion, PostalCode:n.ShipPostalCode, Country:n.ShipCountry}) ) 
 CREATE (a:Address {Address:n.ShipAddress, City:n.ShipCity, Region:n.ShipRegion, PostalCode:n.ShipPostalCode, Country:n.ShipCountry})
-CREATE (i)-[:HAS_ADDRESS]->(a);
+CREATE (i)-[:HAS_SHIPPMENT_ADDRESS]->(a);
 
 MATCH (e:Employee), (o:Order)
 WHERE e.EmployeeID = o.EmployeeID 
@@ -233,12 +233,12 @@ ORDER BY NumberOfOrdersSold DESC
 LIMIT 10;
 
 // Total Sales by Region
-MATCH (r:Regions)-[:HAS]->(t:Territories)-[:HAS]->(e:Employee)<-[:SOLD_BY]-(o:Order)-[details:HAS_PRODUCT]->(p:Product)
+MATCH (r:Regions)-[:HAS]->(t:Territory)-[:HAS]->(e:Employee)<-[:SOLD_BY]-(o:Order)-[details:HAS_PRODUCT]->(p:Product)
 RETURN r.RegionID, r.RegionDescription, SUM( (details.Quantity * details.UnitPrice) ) AS TotalSales
 ORDER BY TotalSales DESC;
 
 // Total Sales by Region and Territory
-MATCH (r:Regions)-[:HAS]->(t:Territories)-[:HAS]->(e:Employee)<-[:SOLD_BY]-(o:Order)-[details:HAS_PRODUCT]->(p:Product)
+MATCH (r:Regions)-[:HAS]->(t:Territory)-[:HAS]->(e:Employee)<-[:SOLD_BY]-(o:Order)-[details:HAS_PRODUCT]->(p:Product)
 RETURN r.RegionID, r.RegionDescription, t.TerritoryDescription, SUM( (details.Quantity * details.UnitPrice) ) AS TotalSales
 ORDER BY TotalSales DESC;
 
@@ -347,7 +347,6 @@ RETURN p.ProductName, customers, recommendation LIMIT 25;
 // We will add an "N" prefix to new OrderIDs to differentiate them from imported Orders, so we can test the Application Queries without interfering with the imported data.
 
 // Creating a New Order:
-
 MATCH (c:Customer {CustomerID:"ALFKI"}), (e:Employee {EmployeeID:"5"}), (p1:Product {ProductID:"1"}), (p2:Product {ProductID:"2"}), (p:OrderStatus_OpeN {Status: "Open"})
 CREATE (o:Order {OrderID:"N10000", OrderDate:date(), RequireDate:date()+duration("P7D")})<-[:HAS {RelType: "IS_OPEN"}]-(p)
 CREATE (o)-[:HAS_CUSTOMER]->(c) 
@@ -361,11 +360,12 @@ MATCH (o:Order {OrderID:"N10000"})-[r:HAS_PRODUCT]->(p:Product)-[:CURRENT_STOCK]
 RETURN p.ProductName, r.Quantity AS QuantityOrdered, s.UnitsInStock AS CurrentStock;
 
 // Fulfilling an Order:
-MATCH (o:Order {OrderID:"N10000"})<-[r:HAS]-(p:OrderStatus_OpeN {Status: "Open"}), (s:Shipper {ShipperID:"1"}), (f:OrderStatus_FulfilleD {Status: "Fulfilled"})
+MATCH (o:Order {OrderID:"N10000"})<-[r:HAS]-(p:OrderStatus_OpeN {Status: "Open"}), (o)-[:HAS_CUSTOMER]-()-[:HAS_ADDRESS]-(a), (s:Shipper {ShipperID:"1"}), (f:OrderStatus_FulfilleD {Status: "Fulfilled"})
 CREATE (i:ShipInfo {ShippmentID:apoc.create.uuid(), ShippedDate:date()})
 CREATE (o)-[:HAS_SHIPMENT]->(i)
 CREATE (i)-[:HAS_SHIPPER]->(s)
 CREATE (f)-[:HAS {RelType: "IS_FULFILLED"}]->(o)
+CREATE (i)-[:HAS_SHIPPMENT_ADDRESS]->(a)
 DELETE r
 RETURN o, i, s;
 
