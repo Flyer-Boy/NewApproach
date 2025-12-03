@@ -202,6 +202,7 @@ CREATE (o)-[:HAS {RelType: "IS_OPEN"}]->(n);
 
 
 // Queries Examples to run against the NorthWind Graph Data Model 
+// These are examples of queries that could be used to extract insights from the NorthWind Graph Data Model.
 
 
 // Total Amount of OrderID 10461
@@ -376,3 +377,21 @@ MATCH (o:Order {OrderID:"N10000"})-[r:HAS_PRODUCT]->(p:Product)-[:CURRENT_STOCK]
 SET s.UnitsInStock = s.UnitsInStock - r.Quantity
 RETURN p.ProductName, s.UnitsInStock;
 
+// Add a new Customer with Address and Contact details:
+CREATE (c:Customer {CustomerID:"NEWC1", CompanyName:"New Customer Inc.", ContactName:"John Doe", ContactTitle:"Purchasing Manager"})
+CREATE (a:Address {Address:"123 New St", City:"New City", Region:"NC", PostalCode:"12345", Country:"USA"})
+CREATE (contact:Contact {ContactName:"John Doe", ContactTitle:"Purchasing Manager", Phone:"555-1234", Email:"John.Doe@NewCustomer.com"})
+CREATE (c)-[:HAS_ADDRESS]->(a)
+CREATE (c)-[:HAS_CONTACT]->(contact)
+RETURN c, a, contact;
+
+// Add a new Product, link it to a Category and Supplier, set its initial Inventory Level, and mark it as Available:
+MATCH (cat:CategorY {CategoryID:"7"}), (sup:Supplier {SupplierID:"6"}), (avail:ProductStatus_AvailablE {Status: "Available"})
+CREATE (p:Product {ProductID:"999", ProductName:"New Product", QuantityPerUnit:"1 box", UnitPrice:19.99, ReorderLevel:30})
+CREATE (i:InventoryLevel {UnitsInStock:100})
+CREATE (p)-[:CURRENT_STOCK]->(i)
+CREATE (cat)-[:HAS {RelType: "HAS_PRODUCT"}]->(p)
+CREATE (p)-[:HAS_SUPPLIER]->(sup)
+CREATE (sup)-[:SUPPLIES]->(p)
+CREATE (avail)-[:HAS {RelType: "IS_AVAILABLE"}]->(p)
+RETURN p, i;
