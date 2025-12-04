@@ -52,7 +52,9 @@ CREATE (:ProductStatus_AvailablE {Status: "Available"});
 
 LOAD CSV WITH HEADERS FROM "file:///products.csv" AS row
 MERGE (n:Product {ProductID:row.ProductID, ProductName:row.ProductName, UnitPrice:toFloat(row.UnitPrice), ReorderLevel:toInteger(row.ReorderLevel), QuantityPerUnit:row.QuantityPerUnit, Discontinued:toInteger(row.Discontinued), SupplierID:row.SupplierID})
-CREATE (i:InventoryLevel {UnitsInStock:toInteger(row.UnitsInStock)})
+CREATE (i:InventoryLevel {UnitsInStock:toInteger(row.UnitsInStock), LastUpdate: datetime()})
+CREATE (onorder:OrderLevel {UnitsOnOrder:toInteger(row.UnitsOnOrder), LastUpdate: datetime()})
+CREATE (n)-[:HAS_SUPPLY_ORDER]->(onorder)
 CREATE (n)-[:CURRENT_STOCK]->(i)
 WITH n, row
 MATCH (c:CategorY) WHERE c.CategoryID = row.CategoryID
@@ -86,7 +88,7 @@ SET n += row;
 
 MATCH (n:Customer)
 CREATE (a:Address {Address:n.Address, City:n.City, Region:n.Region, PostalCode:n.PostalCode, Country:n.Country})
-CREATE (c:Contact {ContactName:n.ContactName, ContactTitle:n.ContactTitle, Phone:n.Phone, Fax:n.Fax, Email:" "})
+CREATE (c:Contact {ContactName:n.ContactName, ContactTitle:n.ContactTitle, Phone:n.Phone, Fax:n.Fax, Email: replace(n.ContactName, " ", ".") +"@" + replace(replace(replace(n.CompanyName," ",""),"'",""),".","") + ".com"})
 CREATE (n)-[:HAS_ADDRESS]->(a) 
 CREATE (n)-[:HAS_CONTACT]->(c);
 
@@ -184,10 +186,11 @@ SET details.Quantity = toInteger(row.Quantity), details.UnitPrice = toFloat(row.
 
 CREATE (:OrderStatus_OpeN {Status: "Open"});
 CREATE (:OrderStatus_FulfilleD {Status: "Fulfilled"});
+CREATE (:OrderStatus_CanceleD {Status: "Canceled"});
 
 MATCH (f:OrderStatus_FulfilleD {Status: "Fulfilled"}), (n:Order)-[:HAS_SHIPMENT]->(s:ShipInfo)
 WHERE s.ShippedDate IS NOT NULL
-CREATE (f)-[:HAS {RelType: "IS_FULFILLED"}]->(n); 
+CREATE (f)-[:HAS {RelType: "IS_FULFILLED", FulfillDate: datetime() }]->(n); 
 
 MATCH (o:OrderStatus_OpeN {Status: "Open"}), (n:Order)-[:HAS_SHIPMENT]->(s:ShipInfo)
 WHERE s.ShippedDate IS NULL 
@@ -253,9 +256,9 @@ MATCH (e:Employee)<-[:SOLD_BY]-(o:Order)-[details:HAS_PRODUCT]->(p:Product)
 RETURN e.EmployeeID, e.FirstName, e.LastName, SUM( (details.Quantity * details.UnitPrice) ) AS TotalSales
 ORDER BY TotalSales DESC;
 
-// Total Product Orders and Stock available
-MATCH (p:Product)-[:CURRENT_STOCK]->(s:InventoryLevel), (o:Order)-[details:HAS_PRODUCT]->(p)
-RETURN p.ProductID, p.ProductName, SUM(details.Quantity) AS TotalOrdered, s.UnitsInStock AS StockAvailable
+// Total Product Orders and Stock available and Supply Orders 
+MATCH (u)<-[:HAS_SUPPLY_ORDER]-(p:Product)-[:CURRENT_STOCK]->(s:InventoryLevel), (o:Order)-[details:HAS_PRODUCT]->(p)
+RETURN p.ProductID, p.ProductName, SUM(details.Quantity) AS TotalOrdered, s.UnitsInStock AS StockAvailable, u.UnitsOnOrder AS SupplyOrders
 ORDER BY TotalOrdered DESC;
 
 // Top 5 Products by Number of Orders
