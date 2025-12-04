@@ -223,13 +223,13 @@ RETURN o.OrderID, SUM(r.Quantity * r.UnitPrice) AS TotalAmmountOrder
 ORDER BY TotalAmmountOrder DESC
 LIMIT 25;
 
-// Top 5 Customers by Number of Orders
+// Top 10 Customers by Number of Orders
 MATCH (c:Customer)<-[:HAS_CUSTOMER]-(o:Order)
 RETURN c.CustomerID, COUNT(o) AS NumberOfOrders
 ORDER BY NumberOfOrders DESC
 LIMIT 10;
 
-// Top 5 Employees by Number of Orders Sold
+// Top 10 Employees by Number of Orders Sold
 MATCH (e:Employee)<-[:SOLD_BY]-(o:Order)
 RETURN e.EmployeeID, e.FirstName, e.LastName, COUNT(o) AS NumberOfOrdersSold
 ORDER BY NumberOfOrdersSold DESC
@@ -244,7 +244,6 @@ ORDER BY TotalSales DESC;
 MATCH (r:Regions)-[:HAS]->(t:Territory)-[:HAS]->(e:Employee)<-[:SOLD_BY]-(o:Order)-[details:HAS_PRODUCT]->(p:Product)
 RETURN r.RegionID, r.RegionDescription, t.TerritoryDescription, SUM( (details.Quantity * details.UnitPrice) ) AS TotalSales
 ORDER BY TotalSales DESC;
-
 
 // Total Sales by Category
 MATCH (cat:CategorY)-[:HAS {RelType: "HAS_PRODUCT"}]->(p:Product)<- [details:HAS_PRODUCT]-(o:Order)
@@ -367,7 +366,7 @@ MATCH (o:Order {OrderID:"N10000"})<-[r:HAS]-(p:OrderStatus_OpeN {Status: "Open"}
 CREATE (i:ShipInfo {ShippmentID:apoc.create.uuid(), ShippedDate:date()})
 CREATE (o)-[:HAS_SHIPMENT]->(i)
 CREATE (i)-[:HAS_SHIPPER]->(s)
-CREATE (f)-[:HAS {RelType: "IS_FULFILLED"}]->(o)
+CREATE (f)-[:HAS {RelType: "IS_FULFILLED", FulfillDate: datetime()}]->(o)
 CREATE (i)-[:HAS_SHIPPMENT_ADDRESS]->(a)
 DELETE r
 RETURN o, i, s;
@@ -378,6 +377,7 @@ MATCH n=(o:Order {OrderID: "N10000"})-[]->()-[:CURRENT_STOCK]->() RETURN n;
 // Updating Inventory after Order Fulfillment:
 MATCH (o:Order {OrderID:"N10000"})-[r:HAS_PRODUCT]->(p:Product)-[:CURRENT_STOCK]->(s:InventoryLevel)
 SET s.UnitsInStock = s.UnitsInStock - r.Quantity
+SET s.LastUpdate = datetime()
 RETURN p.ProductName, s.UnitsInStock;
 
 // Add a new Customer with Address and Contact details:
