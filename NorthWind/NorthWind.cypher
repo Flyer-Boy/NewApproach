@@ -229,8 +229,8 @@ ORDER BY NumberOfOrders DESC
 LIMIT 10;
 
 // Top 10 Employees by Number of Orders Sold
-MATCH (e:Employee)<-[:SOLD_BY]-(o:Order)
-RETURN e.EmployeeID, e.FirstName, e.LastName, COUNT(o) AS NumberOfOrdersSold
+MATCH (p:Person)<-[]-(e:Employee)<-[:SOLD_BY]-(o:Order)
+RETURN e.EmployeeID, p.FirstName, p.LastName, COUNT(o) AS NumberOfOrdersSold
 ORDER BY NumberOfOrdersSold DESC
 LIMIT 10;
 
@@ -250,8 +250,8 @@ RETURN cat.CategoryName, SUM( (details.Quantity * details.UnitPrice) ) AS TotalS
 ORDER BY TotalSales DESC;
 
 // Total Sales by Employee
-MATCH (e:Employee)<-[:SOLD_BY]-(o:Order)-[details:HAS_PRODUCT]->(p:Product)
-RETURN e.EmployeeID, e.FirstName, e.LastName, SUM( (details.Quantity * details.UnitPrice) ) AS TotalSales
+MATCH (s:Person)<-[]-(e:Employee)<-[:SOLD_BY]-(o:Order)-[details:HAS_PRODUCT]->(p:Product)
+RETURN e.EmployeeID, s.FirstName, s.LastName, SUM( (details.Quantity * details.UnitPrice) ) AS TotalSales
 ORDER BY TotalSales DESC;
 
 // Total Product Orders and Stock available and Supply Orders 
