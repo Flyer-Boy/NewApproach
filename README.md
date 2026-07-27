@@ -10,7 +10,7 @@ This repository is part of my Articles on developing applications using a Graph 
  4. **A video presentation of the Concepts + Demo:** https://youtu.be/ExupBmmH1Rs 
 
 
-It comprises a few Cypher scripts that I used to demonstrate concepts applied to a Ride-Hailing scenario, along with the Prototype (POC) Application code. It also includes the Tender Workflow script, illustrating how a Workflow application can be developed using Graphs. If I build a UI for the Tender Workflow in the future, I will place it in this repo as well.
+It includes a few Cypher scripts I used to demonstrate concepts applied to a Ride-Hailing scenario, along with the Prototype (POC) Application code. It also includes the Tender Workflow script, illustrating how a Workflow application can be developed using Graphs. If I build a UI for the Tender Workflow in the future, I will place it in this repo as well.
 
 The files are:
 
@@ -24,10 +24,12 @@ The files are:
  8. **TenderWorkflow v6.cypher** - The Tendering System Proof of Concept (POC) simulation script with the RelType property on the ":HAS" collection relationships. (Neo4j Compatible)
  9. **TenderWorkflow v6 - MemGraph.cypher** - The Tendering System Proof of Concept (POC) simulation script adapted to work on MemGraph (MemGraph Compatible)
  10. **TenderWorkflow Graph Model.png** - The Tender Workflow model for you to have a look at.
+ 11. The new **TenderWorkflow v7.1.cypher** - Now with full ontology implementation
+ 12. The **TenderGraphType v1.cypher ** - TenderWorkflow v7.1 companion script that implements Cypher 25/Neo4j 2026.02 GRAPH TYPE, adding an extra layer of ontology compliance to the Tender Workflow. (requires Neo4j Aura with Cypher 25) 
 
 You can try it with Neo4j Aura or Neo4j Desktop. If you don't have an Aura account yet, get one here: https://neo4j.com/cloud/aura-free/. If you are new to Cypher, you can get started at Neo4j's GraphAcademy: https://graphacademy.neo4j.com/
 
-I used Neo4j Cypher on my scripts and the code above. With the standardization of GQL and the widespread adoption of OpenCypher, the portability of Cypher-based scripts across various graph databases is becoming increasingly feasible. However, it is always subject to nuances in graph implementation.  
+I used Neo4j Cypher in my scripts and the code above. With the standardization of GQL and the widespread adoption of OpenCypher, the portability of Cypher-based scripts across various graph databases is becoming increasingly feasible. However, it is always subject to nuances in graph implementation.  
 
 "Alea iacta est"—crossing the Rubicon of Graph adoption! 🚀
 
