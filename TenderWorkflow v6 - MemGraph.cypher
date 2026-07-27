@@ -606,9 +606,13 @@ MATCH (nt:NewTenderS {Name: "NewTenderS"})-[:HAS]->(t:Tender)
 WHERE NOT (t)-[:HAS_L2_APPROVAL]->(:Employee) AND t.Budget >= 200001 AND (t)-[:HAS_L1_APPROVAL]->()       
 RETURN t.Title, t.TenderCode, t.Description, t.SubmissionDate, t.EndBidingDate, t.Budget;
 
-// or (a more costly query fust for testing purposes)
+// or (a more costly query just for testing purposes)
 
+<<<<<<< HEAD
 // MATCH ()<-[:HAS_L1_APPROVAL]-(t:Tender)-[:!HAS_L2_APPROVAL]->(e:Employee), (:NewTenderS)-[]->(t)  // [!HAS_L2_APPROVAL] is not supperted in MemGraph
+=======
+// MATCH ()<-[:HAS_L1_APPROVAL]-(t:Tender)-[:!HAS_L2_APPROVAL]->(e:Employee), (:NewTenderS)-[]->(t)  // [!HAS_L2_APPROVAL] is not supported in MemGraph
+>>>>>>> 89ffdb33c5c5493d732f53eddacb52f82fcd6d51
 // WHERE t.Budget >= 200001
 // RETURN t.Title, t.TenderCode, t.Description, t.SubmissionDate, t.EndBidingDate, t.Budget;
 

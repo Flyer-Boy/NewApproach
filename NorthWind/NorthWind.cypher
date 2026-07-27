@@ -32,8 +32,7 @@ CREATE CONSTRAINT Territories_TerritoryID IF NOT EXISTS FOR (t:Territory) REQUIR
 CREATE CONSTRAINT Regions_RegionID IF NOT EXISTS FOR (r:Regions) REQUIRE (r.RegionID) IS UNIQUE;
 CREATE CONSTRAINT Shipper_ShipperID IF NOT EXISTS FOR (s:Shipper) REQUIRE (s.ShipperID) IS UNIQUE;
 
-// https://github.com/Flyer-Boy/NewApproach/blob/main/NorthWind/Import/categories.csv
-
+//-- Loading Data from CSV files --//
 LOAD CSV WITH HEADERS FROM "file:///categories.csv" AS row
 MERGE (n:CategorY {CategoryID:row.CategoryID, CategoryName:row.CategoryName, Description:row.Description}); 
 
@@ -43,8 +42,8 @@ MERGE (n:Supplier {SupplierID:row.SupplierID, CompanyName:row.CompanyName, Conta
 MATCH (n:Supplier)
 CREATE (a:Address {Address:n.Address, City:n.City, Region:n.Region, PostalCode:n.PostalCode, Country:n.Country})
 CREATE (c:Contact {ContactName:n.ContactName, ContactTitle:n.ContactTitle, Phone:n.Phone, Fax:n.Fax, Email: replace(n.ContactName, " ", ".") +"@" + replace(replace(replace(n.CompanyName," ",""),"'",""),".","") + ".com"})
-CREATE (n)-[:HAS_ADDRESS]->(a)
-CREATE (n)-[:HAS_CONTACT]->(c);
+CREATE (n)-[:HAS_SUPPLIER_ADDRESS]->(a)
+CREATE (n)-[:HAS_SUPPLIER_CONTACT]->(c);
 
 CREATE (:CategorieS {Name: "CategorieS"});
 CREATE (:ProductStatus_DiscontinueD {Status: "Discontinued"}); 
@@ -89,8 +88,8 @@ SET n += row;
 MATCH (n:Customer)
 CREATE (a:Address {Address:n.Address, City:n.City, Region:n.Region, PostalCode:n.PostalCode, Country:n.Country})
 CREATE (c:Contact {ContactName:n.ContactName, ContactTitle:n.ContactTitle, Phone:n.Phone, Fax:n.Fax, Email: replace(n.ContactName, " ", ".") +"@" + replace(replace(replace(n.CompanyName," ",""),"'",""),".","") + ".com"})
-CREATE (n)-[:HAS_ADDRESS]->(a) 
-CREATE (n)-[:HAS_CONTACT]->(c);
+CREATE (n)-[:HAS_CUSTOMER_ADDRESS]->(a) 
+CREATE (n)-[:HAS_CUSTOMER_CONTACT]->(c);
 
 MATCH (n:Customer)
 REMOVE n.Address, n.City, n.Region, n.PostalCode, n.Country, n.ContactName, n.ContactTitle, n.Phone, n.Fax; 
@@ -112,8 +111,8 @@ CREATE (a:Address {Address:n.Address, City:n.City, Region:n.Region, PostalCode:n
 CREATE (c:Person {FirstName:row.FirstName, LastName: row.LastName, TitleOfCourtesy: row.TitleOfCourtesy, BirthDate: row.BirthDate, PersonalPhone:n.HomePhone, PersonalEmail: row.FirstName + "." + row.LastName + "@outlook.com"})
 CREATE (o:Notes {Notes:n.Notes})
 MERGE (l)-[:HAS {RelType: "IS_ROLE"}]->(n)
-CREATE (n)-[:HAS_ADDRESS]->(a)
 CREATE (n)-[:HAS_PERSON]->(c)
+CREATE (c)-[:HAS_HOME_ADDRESS]->(a)
 CREATE (n)-[:HAS_NOTES]->(o);
 
 MATCH (n:Employee)
@@ -123,7 +122,7 @@ WHERE n.ReportsTo = m.EmployeeID
 MERGE (n)-[:REPORTS_TO]->(m);
 
 MATCH (n:Employee)
-REMOVE n.FirstName, n.LastName, n.TitleOfCourtesy,n.BithdDate, n.Address, n.City, n.Region, n.PostalCode, n.Country, n.HomePhone, n.Fax, n.Notes, n.Photo, n.ReportsTo, n.Title; 
+REMOVE n.FirstName, n.LastName, n.TitleOfCourtesy, n.BirthDate, n.Address, n.City, n.Region, n.PostalCode, n.Country, n.HomePhone, n.Fax, n.Notes, n.Photo, n.ReportsTo, n.Title; 
 
 LOAD CSV WITH HEADERS FROM "file:///territories.csv" AS row
 MERGE (n:Territory {TerritoryID:row.TerritoryID})
@@ -230,8 +229,8 @@ ORDER BY NumberOfOrders DESC
 LIMIT 10;
 
 // Top 10 Employees by Number of Orders Sold
-MATCH (e:Employee)<-[:SOLD_BY]-(o:Order)
-RETURN e.EmployeeID, e.FirstName, e.LastName, COUNT(o) AS NumberOfOrdersSold
+MATCH (p:Person)<-[]-(e:Employee)<-[:SOLD_BY]-(o:Order)
+RETURN e.EmployeeID, p.FirstName, p.LastName, COUNT(o) AS NumberOfOrdersSold
 ORDER BY NumberOfOrdersSold DESC
 LIMIT 10;
 
@@ -251,8 +250,8 @@ RETURN cat.CategoryName, SUM( (details.Quantity * details.UnitPrice) ) AS TotalS
 ORDER BY TotalSales DESC;
 
 // Total Sales by Employee
-MATCH (e:Employee)<-[:SOLD_BY]-(o:Order)-[details:HAS_PRODUCT]->(p:Product)
-RETURN e.EmployeeID, e.FirstName, e.LastName, SUM( (details.Quantity * details.UnitPrice) ) AS TotalSales
+MATCH (s:Person)<-[]-(e:Employee)<-[:SOLD_BY]-(o:Order)-[details:HAS_PRODUCT]->(p:Product)
+RETURN e.EmployeeID, s.FirstName, s.LastName, SUM( (details.Quantity * details.UnitPrice) ) AS TotalSales
 ORDER BY TotalSales DESC;
 
 // Total Product Orders and Stock available and Supply Orders 
@@ -363,7 +362,7 @@ RETURN p.ProductName, r.Quantity AS QuantityOrdered, s.UnitsInStock AS CurrentSt
 
 // Fulfilling an Order (with the assumption that the Shippment Address is the same as the Customer Address, as in the original NorthWind Data Model import files):
 MATCH (o:Order {OrderID:"N10000"})<-[r:HAS]-(p:OrderStatus_OpeN {Status: "Open"}), (o)-[:HAS_CUSTOMER]-()-[:HAS_ADDRESS]-(a), (s:Shipper {ShipperID:"1"}), (f:OrderStatus_FulfilleD {Status: "Fulfilled"})
-CREATE (i:ShipInfo {ShippmentID:apoc.create.uuid(), ShippedDate:date()})
+CREATE (i:ShipInfo {ShippmentID:randomUUID(), ShippedDate:date()})
 CREATE (o)-[:HAS_SHIPMENT]->(i)
 CREATE (i)-[:HAS_SHIPPER]->(s)
 CREATE (f)-[:HAS {RelType: "IS_FULFILLED", FulfillDate: datetime()}]->(o)
