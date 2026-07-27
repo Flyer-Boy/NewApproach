@@ -25,7 +25,7 @@ The files are:
  9. **TenderWorkflow v6 - MemGraph.cypher** - The Tendering System Proof of Concept (POC) simulation script adapted to work on MemGraph (MemGraph Compatible)
  10. **TenderWorkflow Graph Model.png** - The Tender Workflow model for you to have a look at.
  11. The new **TenderWorkflow v7.1.cypher** - Now with full ontology implementation
- 12. The **TenderGraphType v1.cypher ** - TenderWorkflow v7.1 companion script that implements Cypher 25/Neo4j 2026.02 GRAPH TYPE, adding an extra layer of ontology compliance to the Tender Workflow. (requires Neo4j Aura with Cypher 25) 
+ 12. The **TenderGraphType v1.cypher** - TenderWorkflow v7.1 companion script that implements Cypher 25/Neo4j 2026.02 GRAPH TYPE, adding an extra layer of ontology compliance to the Tender Workflow. (requires Neo4j Aura with Cypher 25) 
 
 You can try it with Neo4j Aura or Neo4j Desktop. If you don't have an Aura account yet, get one here: https://neo4j.com/cloud/aura-free/. If you are new to Cypher, you can get started at Neo4j's GraphAcademy: https://graphacademy.neo4j.com/
 
