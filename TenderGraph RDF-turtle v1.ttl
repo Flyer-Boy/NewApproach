@@ -1,0 +1,310 @@
+@prefix :     <http://example.org/tenderworkflow#> .
+@prefix owl:  <http://www.w3.org/2002/07/owl#> .
+@prefix rdf:  <http://www.w3.org/1999/02/22-rdf-syntax-ns#> .
+@prefix rdfs: <http://www.w3.org/2000/01/rdf-schema#> .
+@prefix xsd:  <http://www.w3.org/2001/XMLSchema#> .
+
+#################################################################
+# Tender Workflow Ontology (RDF/OWL equivalent of the Neo4j
+# GRAPH TYPE schema).
+#
+# This version tracks the schema after it was validated directly
+# against Neo4j 25 and restructured so that almost every
+# relationship type has exactly one domain and one range class
+# (e.g. HAS_L1_VENDOR_APPROVAL / HAS_L1_TENDER_APPROVAL /
+# HAS_L1_BID_APPROVAL instead of one shared HAS_L1_APPROVAL type
+# used from three different node types). That restructuring
+# removes the need for most of the owl:unionOf domain/range
+# workarounds this file previously required.
+#
+# Remaining translation notes:
+#
+# 1. Edge (relationship) properties -- Date, StartDate, EndDate,
+#    Comment -- attach to a specific edge instance in the property
+#    graph (e.g. "the Date this particular approval happened").
+#    Plain RDF triples have no slot for that. The datatype
+#    properties below (:date, :startDate, :endDate, :comment) are
+#    declared for completeness, but a fully faithful RDF version
+#    would need reification or an n-ary relation pattern (a small
+#    intermediate node standing in for each approval/invitation/
+#    membership event) to attach them correctly.
+# 2. Class hierarchy: the script's own comments describe a
+#    "mathematical set ontology" (Super-Collections / Collections
+#    (States) / Entities). This file makes that explicit with two
+#    top-level classes, :Entity and :Collection, that every
+#    concrete class specializes.
+#################################################################
+
+<http://example.org/tenderworkflow>
+    a owl:Ontology ;
+    rdfs:label "Tender Workflow Ontology" ;
+    rdfs:comment "RDF/OWL translation of the Neo4j GRAPH TYPE schema for the Tender Workflow Graph-Native POC." .
+
+#################################################################
+# Top-level classes (from the script's "mathematical set ontology")
+#################################################################
+
+:Entity a owl:Class ;
+    rdfs:comment "A 'proper noun' node: an individual real-world thing with identity-defining properties." .
+
+:Collection a owl:Class ;
+    rdfs:comment "A hub/collection node representing a superset or a state-based subset. Membership is expressed via the HAS_*_STATE / IS_*_STATE and equivalent object properties, not via OWL class membership." .
+
+#################################################################
+# Entity classes
+#################################################################
+
+:Bid a owl:Class ; rdfs:subClassOf :Entity .
+:Employee a owl:Class ; rdfs:subClassOf :Entity .
+:Message a owl:Class ; rdfs:subClassOf :Entity .
+:Tender a owl:Class ; rdfs:subClassOf :Entity .
+:TenderType a owl:Class ; rdfs:subClassOf :Entity .
+:Vendor a owl:Class ; rdfs:subClassOf :Entity .
+:VendorContact a owl:Class ; rdfs:subClassOf :Entity .
+:ConversatioN a owl:Class ; rdfs:subClassOf :Entity ;
+    rdfs:comment "One conversation thread; shared by Tender, Bid, and Vendor chats." .
+:AIBidAssessment a owl:Class ; rdfs:subClassOf :Entity .
+:AIVendorAssessment a owl:Class ; rdfs:subClassOf :Entity .
+:BidDoc a owl:Class ; rdfs:subClassOf :Entity .
+:TenderDoc a owl:Class ; rdfs:subClassOf :Entity .
+:VendorDoc a owl:Class ; rdfs:subClassOf :Entity .
+
+#################################################################
+# Collection classes
+#################################################################
+
+:EmployeeDirectorY a owl:Class ; rdfs:subClassOf :Collection .
+:RoleS a owl:Class ; rdfs:subClassOf :Collection .
+:RolE a owl:Class ; rdfs:subClassOf :Collection ;
+    rdfs:comment "An individual role type; a member of RoleS, and itself a hub of Employees holding that role." .
+:VendorS a owl:Class ; rdfs:subClassOf :Collection .
+:PendingVendorS a owl:Class ; rdfs:subClassOf :Collection .
+:ApprovedVendorS a owl:Class ; rdfs:subClassOf :Collection .
+:RejectedVendorS a owl:Class ; rdfs:subClassOf :Collection .
+:VendorDocS a owl:Class ; rdfs:subClassOf :Collection .
+:InvitedVendorS a owl:Class ; rdfs:subClassOf :Collection .
+:AcceptedInvitationS a owl:Class ; rdfs:subClassOf :Collection .
+:ActiveBidS a owl:Class ; rdfs:subClassOf :Collection .
+:PastBidS a owl:Class ; rdfs:subClassOf :Collection .
+:AwardedBidS a owl:Class ; rdfs:subClassOf :Collection .
+:TenderTypeS a owl:Class ; rdfs:subClassOf :Collection .
+:TenderS a owl:Class ; rdfs:subClassOf :Collection .
+:NewTenderS a owl:Class ; rdfs:subClassOf :Collection .
+:ApprovedTenderS a owl:Class ; rdfs:subClassOf :Collection .
+:RejectedTenderS a owl:Class ; rdfs:subClassOf :Collection .
+:PublishedTenderS a owl:Class ; rdfs:subClassOf :Collection .
+:AwardedTenderS a owl:Class ; rdfs:subClassOf :Collection .
+:ClosedTenderS a owl:Class ; rdfs:subClassOf :Collection .
+:TenderBidS a owl:Class ; rdfs:subClassOf :Collection .
+:TenderDocS a owl:Class ; rdfs:subClassOf :Collection .
+:BidDocS a owl:Class ; rdfs:subClassOf :Collection .
+
+#################################################################
+# Datatype properties (node properties)
+#################################################################
+
+:name a owl:DatatypeProperty ; rdfs:range xsd:string ;
+    rdfs:domain [ a owl:Class ; owl:unionOf ( :EmployeeDirectorY :RoleS :RolE :VendorS
+        :PendingVendorS :ApprovedVendorS :RejectedVendorS :VendorDocS :InvitedVendorS
+        :AcceptedInvitationS :ActiveBidS :PastBidS :AwardedBidS :TenderTypeS :TenderType
+        :TenderS :NewTenderS :ApprovedTenderS :RejectedTenderS :PublishedTenderS
+        :AwardedTenderS :ClosedTenderS :TenderBidS :TenderDocS :BidDocS
+        :ConversatioN :Employee :VendorContact ) ] ;
+    rdfs:comment "The single identifying/hub property for every Collection class, plus the Name property shared by RolE, TenderType, Employee, VendorContact, and ConversatioN." .
+
+:bidCode a owl:DatatypeProperty ; rdfs:domain :Bid ; rdfs:range xsd:string .
+:tenderCode a owl:DatatypeProperty ; rdfs:domain :Tender ; rdfs:range xsd:string .
+:vendorCode a owl:DatatypeProperty ; rdfs:domain :Vendor ; rdfs:range xsd:string .
+:employeeID a owl:DatatypeProperty ; rdfs:domain :Employee ; rdfs:range xsd:string .
+
+:title a owl:DatatypeProperty ; rdfs:range xsd:string ;
+    rdfs:domain [ a owl:Class ; owl:unionOf ( :Bid :Tender ) ] .
+:description a owl:DatatypeProperty ; rdfs:range xsd:string ;
+    rdfs:domain [ a owl:Class ; owl:unionOf ( :Bid :Tender :BidDoc :TenderDoc :VendorDoc ) ] .
+:scope a owl:DatatypeProperty ; rdfs:domain :Bid ; rdfs:range xsd:string .
+:deliverables a owl:DatatypeProperty ; rdfs:domain :Bid ; rdfs:range xsd:string .
+:conditions a owl:DatatypeProperty ; rdfs:domain :Bid ; rdfs:range xsd:string .
+:qualifications a owl:DatatypeProperty ; rdfs:domain :Bid ; rdfs:range xsd:string .
+:price a owl:DatatypeProperty ; rdfs:domain :Bid ; rdfs:range xsd:float .
+:completionDate a owl:DatatypeProperty ; rdfs:domain :Bid ; rdfs:range xsd:dateTime .
+
+:submissionDate a owl:DatatypeProperty ; rdfs:domain :Tender ; rdfs:range xsd:dateTime .
+:endBidingDate a owl:DatatypeProperty ; rdfs:domain :Tender ; rdfs:range xsd:dateTime .
+:budget a owl:DatatypeProperty ; rdfs:domain :Tender ; rdfs:range xsd:float .
+
+:phone a owl:DatatypeProperty ; rdfs:range xsd:string ;
+    rdfs:domain [ a owl:Class ; owl:unionOf ( :Employee :VendorContact ) ] .
+:email a owl:DatatypeProperty ; rdfs:range xsd:string ;
+    rdfs:domain [ a owl:Class ; owl:unionOf ( :Employee :VendorContact ) ] .
+:photo a owl:DatatypeProperty ; rdfs:range xsd:string ;
+    rdfs:domain [ a owl:Class ; owl:unionOf ( :Employee :VendorContact ) ] .
+
+:shortName a owl:DatatypeProperty ; rdfs:domain :Vendor ; rdfs:range xsd:string .
+:legalName a owl:DatatypeProperty ; rdfs:domain :Vendor ; rdfs:range xsd:string .
+:registrationNumber a owl:DatatypeProperty ; rdfs:domain :Vendor ; rdfs:range xsd:string .
+:logo a owl:DatatypeProperty ; rdfs:domain :Vendor ; rdfs:range xsd:string .
+
+:docName a owl:DatatypeProperty ; rdfs:range xsd:string ;
+    rdfs:domain [ a owl:Class ; owl:unionOf ( :BidDoc :TenderDoc :VendorDoc ) ] .
+:docType a owl:DatatypeProperty ; rdfs:range xsd:string ;
+    rdfs:domain [ a owl:Class ; owl:unionOf ( :BidDoc :TenderDoc :VendorDoc ) ] .
+:docDate a owl:DatatypeProperty ; rdfs:range xsd:dateTime ;
+    rdfs:domain [ a owl:Class ; owl:unionOf ( :BidDoc :TenderDoc :VendorDoc ) ] .
+:url a owl:DatatypeProperty ; rdfs:range xsd:string ;
+    rdfs:domain [ a owl:Class ; owl:unionOf ( :BidDoc :TenderDoc :VendorDoc ) ] .
+
+:text a owl:DatatypeProperty ; rdfs:domain :Message ; rdfs:range xsd:string .
+
+:advantages a owl:DatatypeProperty ; rdfs:range xsd:string ;
+    rdfs:domain [ a owl:Class ; owl:unionOf ( :AIBidAssessment :AIVendorAssessment ) ] .
+:disadvantages a owl:DatatypeProperty ; rdfs:range xsd:string ;
+    rdfs:domain [ a owl:Class ; owl:unionOf ( :AIBidAssessment :AIVendorAssessment ) ] .
+:assessmentSummary a owl:DatatypeProperty ; rdfs:range xsd:string ;
+    rdfs:domain [ a owl:Class ; owl:unionOf ( :AIBidAssessment :AIVendorAssessment ) ] .
+:rating a owl:DatatypeProperty ; rdfs:range xsd:float ;
+    rdfs:domain [ a owl:Class ; owl:unionOf ( :AIBidAssessment :AIVendorAssessment ) ] .
+
+# Edge-property (relationship-attached) datatype properties.
+# In RDF these attach to a reified statement / n-ary relation node
+# rather than directly to a resource; declared here for completeness.
+:date a owl:DatatypeProperty ; rdfs:range xsd:dateTime ;
+    rdfs:comment "Corresponds to the {Date :: LocalDateTime} property attached to many relationship types (HAS_MESSAGE, HAS_L1_APPROVAL, HAS_INVITATION, etc.). Requires reification or an n-ary relation pattern to express faithfully in RDF." .
+:startDate a owl:DatatypeProperty ; rdfs:domain :Employee ; rdfs:range xsd:dateTime ;
+    rdfs:comment "From IS_ACTIVE_ROLE {StartDate}." .
+:endDate a owl:DatatypeProperty ; rdfs:domain :Employee ; rdfs:range xsd:dateTime ;
+    rdfs:comment "From IS_ACTIVE_ROLE {EndDate}." .
+:comment a owl:DatatypeProperty ; rdfs:range xsd:string ;
+    rdfs:comment "Corresponds to the {Comment} property on approval/rejection relationships." .
+
+#################################################################
+# Object properties (relationships)
+#################################################################
+
+:hasActiveEmployee a owl:ObjectProperty ; rdfs:domain :EmployeeDirectorY ; rdfs:range :Employee .
+:hasRoleType a owl:ObjectProperty ; rdfs:domain :RoleS ; rdfs:range :RolE .
+:isActiveRole a owl:ObjectProperty ; rdfs:domain :RolE ; rdfs:range :Employee .
+
+:hasVendorPendingState a owl:ObjectProperty ; rdfs:domain :VendorS ; rdfs:range :PendingVendorS .
+:hasVendorApprovedState a owl:ObjectProperty ; rdfs:domain :VendorS ; rdfs:range :ApprovedVendorS .
+:hasVendorRejectedState a owl:ObjectProperty ; rdfs:domain :VendorS ; rdfs:range :RejectedVendorS .
+:isVendorPendingState a owl:ObjectProperty ; rdfs:domain :PendingVendorS ; rdfs:range :Vendor .
+:isVendorApprovedState a owl:ObjectProperty ; rdfs:domain :ApprovedVendorS ; rdfs:range :Vendor .
+:isVendorRejectedState a owl:ObjectProperty ; rdfs:domain :RejectedVendorS ; rdfs:range :Vendor .
+
+:hasMessage a owl:ObjectProperty ; rdfs:domain :ConversatioN ; rdfs:range :Message .
+:sentBy a owl:ObjectProperty ; rdfs:domain :Message ;
+    rdfs:range [ a owl:Class ; owl:unionOf ( :Employee :VendorContact ) ] .
+
+:hasContact a owl:ObjectProperty ; rdfs:domain :Vendor ; rdfs:range :VendorContact .
+:hasVendorChat a owl:ObjectProperty ; rdfs:domain :Vendor ; rdfs:range :ConversatioN .
+:hasVendorDocs a owl:ObjectProperty ; rdfs:domain :Vendor ; rdfs:range :VendorDocS .
+:hasVendorDocument a owl:ObjectProperty ; rdfs:domain :VendorDocS ; rdfs:range :VendorDoc .
+:hasInvitation a owl:ObjectProperty ; rdfs:domain :InvitedVendorS ; rdfs:range :Vendor .
+:hasActiveBids a owl:ObjectProperty ; rdfs:domain :Vendor ; rdfs:range :ActiveBidS .
+:hasActiveBid a owl:ObjectProperty ; rdfs:domain :ActiveBidS ; rdfs:range :Bid .
+:hasPastBids a owl:ObjectProperty ; rdfs:domain :Vendor ; rdfs:range :PastBidS .
+:hasPastBid a owl:ObjectProperty ; rdfs:domain :PastBidS ; rdfs:range :Bid .
+:hasAwardedBids a owl:ObjectProperty ; rdfs:domain :Vendor ; rdfs:range :AwardedBidS .
+:hasAwardedTenderBid a owl:ObjectProperty ; rdfs:domain :AwardedBidS ; rdfs:range :Bid .
+:hasAcceptedInvitations a owl:ObjectProperty ; rdfs:domain :Vendor ; rdfs:range :AcceptedInvitationS .
+:hasAcceptedTenderInvitation a owl:ObjectProperty ; rdfs:domain :AcceptedInvitationS ; rdfs:range :Tender .
+:hasL1VendorApproval a owl:ObjectProperty ; rdfs:domain :Vendor ; rdfs:range :Employee .
+:hasL1VendorRejection a owl:ObjectProperty ; rdfs:domain :Vendor ; rdfs:range :Employee .
+:hasAIAgentVendorAssessment a owl:ObjectProperty ; rdfs:domain :Vendor ; rdfs:range :AIVendorAssessment .
+
+:hasTenderType a owl:ObjectProperty ; rdfs:domain :TenderTypeS ; rdfs:range :TenderType .
+
+:hasNewTenderState a owl:ObjectProperty ; rdfs:domain :TenderS ; rdfs:range :NewTenderS .
+:hasApprovedTenderState a owl:ObjectProperty ; rdfs:domain :TenderS ; rdfs:range :ApprovedTenderS .
+:hasRejectedTenderState a owl:ObjectProperty ; rdfs:domain :TenderS ; rdfs:range :RejectedTenderS .
+:hasPublishedTenderState a owl:ObjectProperty ; rdfs:domain :TenderS ; rdfs:range :PublishedTenderS .
+:hasClosedTenderState a owl:ObjectProperty ; rdfs:domain :TenderS ; rdfs:range :ClosedTenderS .
+:hasAwardedTenderState a owl:ObjectProperty ; rdfs:domain :TenderS ; rdfs:range :AwardedTenderS .
+
+:isNewTenderState a owl:ObjectProperty ; rdfs:domain :NewTenderS ; rdfs:range :Tender .
+:isApprovedTenderState a owl:ObjectProperty ; rdfs:domain :ApprovedTenderS ; rdfs:range :Tender .
+:isRejectedTenderState a owl:ObjectProperty ; rdfs:domain :RejectedTenderS ; rdfs:range :Tender .
+:isPublishedTenderState a owl:ObjectProperty ; rdfs:domain :PublishedTenderS ; rdfs:range :Tender .
+:isClosedTenderState a owl:ObjectProperty ; rdfs:domain :ClosedTenderS ; rdfs:range :Tender .
+:isAwardedTenderState a owl:ObjectProperty ; rdfs:domain :AwardedTenderS ; rdfs:range :Tender .
+
+:isTenderType a owl:ObjectProperty ; rdfs:domain :Tender ; rdfs:range :TenderType .
+:hasPreviousVersion a owl:ObjectProperty ; rdfs:domain :Tender ; rdfs:range :Tender .
+:hasRequester a owl:ObjectProperty ; rdfs:domain :Tender ; rdfs:range :Employee .
+:hasTenderChat a owl:ObjectProperty ; rdfs:domain :Tender ; rdfs:range :ConversatioN .
+:hasTenderBids a owl:ObjectProperty ; rdfs:domain :Tender ; rdfs:range :TenderBidS .
+:hasTenderBid a owl:ObjectProperty ; rdfs:domain :TenderBidS ; rdfs:range :Bid .
+:hasAwardedBid a owl:ObjectProperty ; rdfs:domain :Tender ; rdfs:range :Bid .
+:hasAwardedVendor a owl:ObjectProperty ; rdfs:domain :Tender ; rdfs:range :Vendor .
+:hasInvitees a owl:ObjectProperty ; rdfs:domain :Tender ; rdfs:range :InvitedVendorS .
+:hasTenderDocs a owl:ObjectProperty ; rdfs:domain :Tender ; rdfs:range :TenderDocS .
+:hasTenderDocument a owl:ObjectProperty ; rdfs:domain :TenderDocS ; rdfs:range :TenderDoc .
+
+:hasBidDocs a owl:ObjectProperty ; rdfs:domain :Bid ; rdfs:range :BidDocS .
+:hasBidDocument a owl:ObjectProperty ; rdfs:domain :BidDocS ; rdfs:range :BidDoc .
+:hasBidChat a owl:ObjectProperty ; rdfs:domain :Bid ; rdfs:range :ConversatioN .
+:hasVendor a owl:ObjectProperty ; rdfs:domain :Bid ; rdfs:range :Vendor .
+:hasTender a owl:ObjectProperty ; rdfs:domain :Bid ; rdfs:range :Tender .
+:hasAIAgentBidAssessment a owl:ObjectProperty ; rdfs:domain :Bid ; rdfs:range :AIBidAssessment .
+:hasTenderRequesterApproval a owl:ObjectProperty ; rdfs:domain :Bid ; rdfs:range :Employee .
+
+# Approval / rejection object properties, one per entity type
+# (Vendor / Tender / Bid), matching the restructured schema.
+:hasL1TenderApproval a owl:ObjectProperty ; rdfs:domain :Tender ; rdfs:range :Employee .
+:hasL2TenderApproval a owl:ObjectProperty ; rdfs:domain :Tender ; rdfs:range :Employee .
+:hasL3TenderApproval a owl:ObjectProperty ; rdfs:domain :Tender ; rdfs:range :Employee .
+:hasPublisherTenderApproval a owl:ObjectProperty ; rdfs:domain :Tender ; rdfs:range :Employee .
+:hasL1TenderRejection a owl:ObjectProperty ; rdfs:domain :Tender ; rdfs:range :Employee .
+:hasL2TenderRejection a owl:ObjectProperty ; rdfs:domain :Tender ; rdfs:range :Employee .
+:hasL3TenderRejection a owl:ObjectProperty ; rdfs:domain :Tender ; rdfs:range :Employee .
+:hasPublisherTenderRejection a owl:ObjectProperty ; rdfs:domain :Tender ; rdfs:range :Employee .
+
+:hasL1BidApproval a owl:ObjectProperty ; rdfs:domain :Bid ; rdfs:range :Employee .
+:hasL2BidApproval a owl:ObjectProperty ; rdfs:domain :Bid ; rdfs:range :Employee .
+:hasL3BidApproval a owl:ObjectProperty ; rdfs:domain :Bid ; rdfs:range :Employee .
+:hasPublisherBidApproval a owl:ObjectProperty ; rdfs:domain :Bid ; rdfs:range :Employee .
+:hasL1BidRejection a owl:ObjectProperty ; rdfs:domain :Bid ; rdfs:range :Employee .
+:hasL2BidRejection a owl:ObjectProperty ; rdfs:domain :Bid ; rdfs:range :Employee .
+:hasL3BidRejection a owl:ObjectProperty ; rdfs:domain :Bid ; rdfs:range :Employee .
+
+#################################################################
+# Identity constraints (closest OWL analog to Neo4j KEY / UNIQUE)
+#
+# owl:hasKey asserts that no two individuals of the class can share
+# the same value for the listed property; it does NOT by itself
+# enforce that the property must be present (that needs a separate
+# owl:Restriction with owl:someValuesFrom / minCardinality 1).
+# Both are included below for the properties the schema marks IS KEY
+# (existence + uniqueness); properties marked only IS UNIQUE get
+# hasKey without the accompanying existence restriction.
+#################################################################
+
+:Tender owl:hasKey ( :tenderCode ) .
+:Bid owl:hasKey ( :bidCode ) .
+:Vendor owl:hasKey ( :vendorCode ) .
+:Employee owl:hasKey ( :employeeID ) .
+:VendorContact owl:hasKey ( :email ) .
+
+:Tender rdfs:subClassOf [ a owl:Restriction ; owl:onProperty :tenderCode ; owl:someValuesFrom xsd:string ] .
+:Bid rdfs:subClassOf [ a owl:Restriction ; owl:onProperty :bidCode ; owl:someValuesFrom xsd:string ] .
+:Vendor rdfs:subClassOf [ a owl:Restriction ; owl:onProperty :vendorCode ; owl:someValuesFrom xsd:string ] .
+:Employee rdfs:subClassOf [ a owl:Restriction ; owl:onProperty :employeeID ; owl:someValuesFrom xsd:string ] .
+
+# Every Collection class carries the same hasKey/existence pattern
+# on its :name property (the schema's "Name" uniqueness key).
+:EmployeeDirectorY owl:hasKey ( :name ) .
+:RoleS owl:hasKey ( :name ) .
+:RolE owl:hasKey ( :name ) .
+:VendorS owl:hasKey ( :name ) .
+:PendingVendorS owl:hasKey ( :name ) .
+:ApprovedVendorS owl:hasKey ( :name ) .
+:RejectedVendorS owl:hasKey ( :name ) .
+:TenderTypeS owl:hasKey ( :name ) .
+:TenderType owl:hasKey ( :name ) .
+:TenderS owl:hasKey ( :name ) .
+:NewTenderS owl:hasKey ( :name ) .
+:ApprovedTenderS owl:hasKey ( :name ) .
+:RejectedTenderS owl:hasKey ( :name ) .
+:PublishedTenderS owl:hasKey ( :name ) .
+:AwardedTenderS owl:hasKey ( :name ) .
+:ClosedTenderS owl:hasKey ( :name ) .

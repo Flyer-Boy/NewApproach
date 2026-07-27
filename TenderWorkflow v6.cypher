@@ -217,8 +217,8 @@ REQUIRE e.Name IS UNIQUE;
 
 // For Roles I will use a Common Label (:RolE) and different Property ({Name})
 // Create the Employee Roles Domain Collection Nodes
-CREATE (r:RoleS {Name: "RoleS"})-[:HAS {relType:"HAS_ROLE_TYPE"}]->(:RolE {Name: "Requester", Description: "Requester", Rules: "Requests Tenders"}),
-       (r)-[:HAS {relType:"HAS_ROLE_TYPE"}]->(:RolE {Name: "VendorApprover", Description: "Vendor Approver", Rules: "Approves Vendors"}),
+CREATE (r:RoleS {Name: "RoleS"})-[:HAS {relType:"HAS_ROLE_TYPE"}]->(:RolE {Name: "Requester", Description: "Tender Requester", Rules: "Requests Tenders"}),
+       (r)-[:HAS {relType:"HAS_ROLE_TYPE"}]->(:RolE {Name: "VendorApprover", Description: "Vendor Approver", Rules: "Approves Vendors in the System"}),
        (r)-[:HAS {relType:"HAS_ROLE_TYPE"}]->(:RolE {Name: "Level1Approver", ApprovalBase: 0, ApprovalLimit: 200000, Description: "Level 1 Approver", Rules: "Approves Tenders with a Budget < 200000"}),
        (r)-[:HAS {relType:"HAS_ROLE_TYPE"}]->(:RolE {Name: "Level2Approver", ApprovalBase: 200001, ApprovalLimit: 300000, Description: "Level 2 Approver", Rules: "Approves Tenders with a Budget < 300000"}),
        (r)-[:HAS {relType:"HAS_ROLE_TYPE"}]->(:RolE {Name: "Level3Approver", ApprovalBase: 300001,ApprovalLimit: 2000000, Description: "Level 3 Approver", Rules: "Approves Tenders with a Budget < 2000000"}),
@@ -578,7 +578,7 @@ CREATE (t1:Tender {TenderCode: "T"+left(randomUUID(),8)+right(randomUUID(),4), T
 
 
 // UI Query - Lets have the Tender Approver Level 1 (Gloria) query the NewTenderS Collection to see the Tenders available for vetting that have not been vetted yet. 
-// The I will pass the Emplyee Name to the query as a parameter.
+// Then I will pass the Emplyee Name to the query as a parameter.
 MATCH (e:Employee {Name: "Gloria"})<-[]-(o:RolE)
 MATCH (nt:NewTenderS {Name: "NewTenderS"})-[:HAS]->(t:Tender)-[:HAS_REQUESTER]-(r) 
 WHERE NOT (t)-[]->(e) AND  t.Budget >= o.ApprovalBase 

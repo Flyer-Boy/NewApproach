@@ -608,9 +608,9 @@ RETURN t.Title, t.TenderCode, t.Description, t.SubmissionDate, t.EndBidingDate, 
 
 // or (a more costly query fust for testing purposes)
 
-MATCH ()<-[:HAS_L1_APPROVAL]-(t:Tender)-[:!HAS_L2_APPROVAL]->(e:Employee), (:NewTenderS)-[]->(t)  // [!HAS_L2_APPROVAL] is not supperted in MemGraph
-WHERE t.Budget >= 200001
-RETURN t.Title, t.TenderCode, t.Description, t.SubmissionDate, t.EndBidingDate, t.Budget;
+// MATCH ()<-[:HAS_L1_APPROVAL]-(t:Tender)-[:!HAS_L2_APPROVAL]->(e:Employee), (:NewTenderS)-[]->(t)  // [!HAS_L2_APPROVAL] is not supperted in MemGraph
+// WHERE t.Budget >= 200001
+// RETURN t.Title, t.TenderCode, t.Description, t.SubmissionDate, t.EndBidingDate, t.Budget;
 
 // or use the same query we used for L1, but specifying the L2 approver (Sara). The UI will pass this as a parameter. 
 
