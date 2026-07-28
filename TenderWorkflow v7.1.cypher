@@ -1010,22 +1010,21 @@ Disadvantages:"Lorem ipsum dolor sit amet, consectetur adipiscing elit. Nulla bi
 
 
 // Bid Approval Workflow for Bid 1 of Tender 1 - The Bid Requester and the Approvers will approve the Bid in sequence
-// First, we will get the Bid Requester (Albert) and the Bid Approvers (Gloria, Sara, and Christine) for Bid 1 of Tender 1  
+// First, we will get the Tender Requester (Albert) and the Bid Approvers (Gloria, Sara, and Christine) for Bid 1 of Tender 1  
 // Once all the approvals have been granted, the Tender will be moved to the AwardedTenderS Collection and the Bid will be moved to the AwarderBidS Collection of the Vendor.  
 
 // Albert (the Tender 1 Requester) will approve Bid 1 from Vendor 7 for Tender 1. The Requester is the person who created the Tender and is responsible for the Tender and the first approver of the Bid.
 MATCH (:PublishedTenderS)-[:IS_PUBLISHED_TENDER_STATE]->(t:Tender {Title:"Tender 1"})<-[:HAS_TENDER]-(b:Bid {BidCode:"B79c69d9843ff"}), (t)-[:HAS_REQUESTER]->(e)<-[:IS_ACTIVE_ROLE]-(:RolE {Name:"Requester"})
-CREATE (b)-[:HAS_BID_REQUESTER_APPROVAL {Date:datetime(), Comment:"This bid is approved"}]->(e);
+CREATE (b)-[:HAS_TENDER_REQUESTER_APPROVAL {Date:datetime(), Comment:"This bid complies with the requirements of the Tender and is approved"}]->(e);
 
 // Donald (the Tender 4 Requester) will approve Bid from Vendor 8 of Tender 4. The Requester is the person who created the Tendrr and is responsible for the Tender and the first approver of the Bid.
 MATCH (:PublishedTenderS)-[:IS_PUBLISHED_TENDER_STATE]->(t:Tender {Title:"Tender 4"})<-[:HAS_TENDER]-(b:Bid {BidCode:"B784981c5b0cc"}), (t)-[:HAS_REQUESTER]->(e)<-[:IS_ACTIVE_ROLE]-(:RolE {Name:"Requester"})
-CREATE (b)-[:HAS_TENDER_REQUESTER_APPROVAL {Date:datetime(), Comment:"This bid is approved"}]->(e);
+CREATE (b)-[:HAS_TENDER_REQUESTER_APPROVAL {Date:datetime(), Comment:"This bid complies with the requirements of the Tender and is approved"}]->(e);
 
 //However, Gloria (the L1 Approver) will reject the Bid from Bid from Vendor 8 of Tender 4.
 MATCH (:PublishedTenderS)-[:IS_PUBLISHED_TENDER_STATE]->(t:Tender {Title:"Tender 4"})<-[:HAS_TENDER]-(b:Bid {BidCode:"B784981c5b0cc"}), (l1:Employee {Name:"Gloria"})<-[:IS_ACTIVE_ROLE]-(:RolE {Name:"Level1Approver"})
 CREATE (b)-[:HAS_L1_BID_REJECTION {Date:datetime(), Comment:"This bid is rejected by L1"}]->(l1);
  
-
 // Gloria (the L1 Approver) will approve the Bid 1 from Vendor 7 for Tender 1 
 MATCH (:PublishedTenderS)-[:IS_PUBLISHED_TENDER_STATE]->(t:Tender {Title:"Tender 1"})<-[:HAS_TENDER]-(b:Bid {BidCode:"B79c69d9843ff"}), (l1:Employee {Name:"Gloria"})<-[:IS_ACTIVE_ROLE]-(:RolE {Name:"Level1Approver"})
 CREATE (b)-[:HAS_L1_BID_APPROVAL {Date:datetime(), Comment:"This bid is approved"}]->(l1);
@@ -1033,7 +1032,6 @@ CREATE (b)-[:HAS_L1_BID_APPROVAL {Date:datetime(), Comment:"This bid is approved
 // Sara (the L2 Approver) will approve the Bid 1 from Vendor 7 for Tender 1  
 MATCH (:PublishedTenderS)-[:IS_PUBLISHED_TENDER_STATE]->(t:Tender {Title:"Tender 1"})<-[:HAS_TENDER]-(b:Bid {BidCode:"B79c69d9843ff"}), (l2:Employee {Name:"Sara"})<-[:IS_ACTIVE_ROLE]-(:RolE {Name:"Level2Approver"})     
 CREATE (b)-[:HAS_L2_BID_APPROVAL {Date:datetime(), Comment:"This bid is approved"}]->(l2);
-
 
 // Christine (the L3 Approver) will approve the Bid 1 from Vendor 7 for Tender 1, and as the L3 is the final approver, let’s move the Tender to the AwardedTenders Collection and remove it from the PublishedTenderS Collection 
 MATCH (:PublishedTenderS)-[r1:IS_PUBLISHED_TENDER_STATE]->(t:Tender {Title:"Tender 1"})<-[:HAS_TENDER]-(b:Bid {BidCode:"B79c69d9843ff"})-[:HAS_VENDOR]->(v), 
@@ -1046,7 +1044,6 @@ CREATE  (b)-[:HAS_L3_BID_APPROVAL {Date:datetime(), Comment:"This bid is approve
 
 // Note that as we remove the Awarded Tender from the PublishedTenderS Domain Collection, it will not be available for further processing in the Tender Approval Workflow.
 // That is, Tender 1 will not be available for further Tender Approvals, as it is now in the AwardedTenderS Domain Collection.
-
 
 // Finally, let’s move Tender 1 to the AwardedTenders Domain Collection so that it can be used for further processing, like creating a contract or invoicing, and perhaps the start of a new Supply Chain Workflow (Graph). 
 // We will also remove Bid 1 from the ActiveBids Collection of Vendor 7 and move it to the AwardedBids Collection of Vendor 7
