@@ -293,7 +293,15 @@ def publish_and_invite(driver: Driver, tender_code: str, tender_type: str,
             """,
             code=tender_code, publisher=publisher, invitees=invitees,
         )
+        session.run(
+            """
+            MATCH (e:Employee {Name:"System"}), (t:Tender {TenderCode: $code})-[:HAS_INVITEES]->()-[:HAS_INVITATION]->(v)-[:HAS_VENDOR_CHAT]->(c:ConversatioN)  
+            CREATE (c)-[:HAS_MESSAGE { Date:datetime()}]->(m:Message {Text:"Good News!! You have been Invited to participate on a tender (""" + tender_code +"""). Check your Tender Invitations folder."})-[:SENT_BY]->(e)
+            """,
+            code=tender_code
+        )        
     print(f"  [+] Published {tender_code} by {publisher} | invited {len(invitees)} vendor(s)")
+    print(f"  Sent a message to the invited vendor(s)")
     return invitees
 
 
