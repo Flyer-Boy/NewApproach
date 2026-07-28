@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """
-Tender Workflow Random Test Generator
+Tender Workflow Random Test Generator (BETA)
 ======================================
 
 Randomly exercises the Tender Workflow graph (v7.1) built by the
@@ -396,21 +396,35 @@ def assess_bids_with_ai_agent(driver: Driver, tender_code: str) -> None:
 # ---------------------------------------------------------------------------
 
 def vet_bid(driver: Driver, tender_code: str, bid_code: str, price: float,
-            requester: str, approver_levels: ApproverLevels) -> bool:
+            approver_levels: ApproverLevels) -> bool:
     """Runs one Bid through requester + level approvals. Returns True if
     the bid ends fully approved (i.e. eligible for award)."""
     levels = required_levels_for(price, approver_levels)
 
     with driver.session() as session:
+        if random.random() < REJECTION_CHANCE:
+          session.run(
+            """
+            MATCH (:PublishedTenderS)-[:IS_PUBLISHED_TENDER_STATE]->(t:Tender {TenderCode: $code})
+                  <-[:HAS_TENDER]-(b:Bid {BidCode: $bid_code}),
+                  (t)-[:HAS_REQUESTER]->(e:Employee)
+            CREATE (b)-[:HAS_TENDER_REQUESTER_BID_REJECTION {Date: datetime(), Comment: "Auto-generated test rejection - This Bid does NOT comply with the requirements of the Tender and is rejected by the Tender Requester"}]->(e)
+            """,
+            code=tender_code, bid_code=bid_code, 
+          )
+          print(f"      Tender requester REJECTED Bid {bid_code}")
+          return False  # rejected by Tender Requester    
+    
         session.run(
             """
-            MATCH (:PublishedTenderS)-[:IS_PUBLISHED_TENDER_STATE]->(:Tender {TenderCode: $code})
+            MATCH (:PublishedTenderS)-[:IS_PUBLISHED_TENDER_STATE]->(t:Tender {TenderCode: $code})
                   <-[:HAS_TENDER]-(b:Bid {BidCode: $bid_code}),
-                  (e:Employee {Name: $requester})<-[:IS_ACTIVE_ROLE]-(:RolE {Name: "Requester"})
-            CREATE (b)-[:HAS_TENDER_REQUESTER_APPROVAL {Date: datetime(), Comment: "Auto-generated test approval"}]->(e)
+                  (t)-[:HAS_REQUESTER]->(e:Employee)
+            CREATE (b)-[:HAS_TENDER_REQUESTER_BID_APPROVAL {Date: datetime(), Comment: "Auto-generated test approval - This Bid complies with the requirements of the Tender and is approved by the Tender Requester"}]->(e)
             """,
-            code=tender_code, bid_code=bid_code, requester=requester,
+            code=tender_code, bid_code=bid_code, 
         )
+        print(f"      Tender requester approved Bid {bid_code}")
 
         for level in levels:
             approver = random.choice(approver_levels.approvers[level])
@@ -424,7 +438,7 @@ def vet_bid(driver: Driver, tender_code: str, bid_code: str, price: float,
                     bid_code=bid_code, approver=approver, role=f"Level{level}Approver",
                 )
                 print(f"      L{level} approver {approver} REJECTED Bid {bid_code}")
-                return False
+                return False # rejected by Approver
 
             session.run(
                 """
@@ -466,6 +480,22 @@ def award_bid(driver: Driver, tender_code: str, winning_bid_code: str, all_bid_c
             """,
             code=tender_code, bid_code=winning_bid_code,
         )
+        session.run(
+            """
+            MATCH  (e:Employee {Name:"System"}), (aw:AwardedTenderS {Name:"AwardedTenderS"})-[:IS_AWARDED_TENDER_STATE]->(t)<-[:HAS_TENDER]-(b:Bid {BidCode: $bid_code})-[:HAS_VENDOR]->(v)-[:HAS_VENDOR_CHAT]->(c:ConversatioN)
+            CREATE (c)-[:HAS_MESSAGE { Date:datetime()}]->(m:Message {Text:"Congratulations! Yor Bid """ + winning_bid_code +  """ for Tender """ + tender_code  + """ has been awarded to you! We look forward for to starting the Project as soon as possible."})-[:SENT_BY]->(e)
+            """,
+            code=tender_code, bid_code=winning_bid_code,
+        ) 
+        print(f"      Message the awarded Vendor that it has been awarded for Bid {winning_bid_code} of Tender {tender_code} ") 
+        session.run(
+            """
+            MATCH (e:Employee {Name:"System"}), (t:Tender {TenderCode: $code})-[:HAS_TENDER_BIDS]->(:TenderBidS)-[:HAS_TENDER_BID]->(b)-[:HAS_VENDOR]->(v)-[:HAS_VENDOR_CHAT]->(c:ConversatioN) WHERE NOT (t)-[:HAS_AWARDED_BID]->(b)
+            CREATE (c)-[:HAS_MESSAGE { Date:datetime()}]->(m:Message {Text:"We regret to inform that yor Bid for Tender """ + tender_code  + """ has not been awarded to you. We thank you for your participation and look forward to working with you in the future."})-[:SENT_BY]->(e)
+            """,
+            code=tender_code, bid_code=winning_bid_code,
+        )
+        print(f"      Message the Vendors that submitted Bids for Tender {tender_code} and were not awarded")        
 
         losing_codes = [c for c in all_bid_codes if c != winning_bid_code]
         for losing_code in losing_codes:
@@ -508,10 +538,9 @@ def run_one_tender_lifecycle(driver: Driver, requesters: list[str], publishers: 
 
     assess_bids_with_ai_agent(driver, tender_code)
 
-    requester = requesters[0]  # the Tender's own requester approves first, as in the original script
     approved_bids = []
     for bid_code, price in bids:
-        if vet_bid(driver, tender_code, bid_code, price, requester, approver_levels):
+        if vet_bid(driver, tender_code, bid_code, price, approver_levels):
             approved_bids.append((bid_code, price))
 
     if not approved_bids:

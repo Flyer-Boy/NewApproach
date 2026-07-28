@@ -246,7 +246,6 @@
 :hasVendor a owl:ObjectProperty ; rdfs:domain :Bid ; rdfs:range :Vendor .
 :hasTender a owl:ObjectProperty ; rdfs:domain :Bid ; rdfs:range :Tender .
 :hasAIAgentBidAssessment a owl:ObjectProperty ; rdfs:domain :Bid ; rdfs:range :AIBidAssessment .
-:hasTenderRequesterApproval a owl:ObjectProperty ; rdfs:domain :Bid ; rdfs:range :Employee .
 
 # Approval / rejection object properties, one per entity type
 # (Vendor / Tender / Bid), matching the restructured schema.
@@ -259,6 +258,8 @@
 :hasL3TenderRejection a owl:ObjectProperty ; rdfs:domain :Tender ; rdfs:range :Employee .
 :hasPublisherTenderRejection a owl:ObjectProperty ; rdfs:domain :Tender ; rdfs:range :Employee .
 
+:hasTenderRequesterBidApproval a owl:ObjectProperty ; rdfs:domain :Bid ; rdfs:range :Employee .
+:hasTenderRequesterBidRejection a owl:ObjectProperty ; rdfs:domain :Bid ; rdfs:range :Employee .
 :hasL1BidApproval a owl:ObjectProperty ; rdfs:domain :Bid ; rdfs:range :Employee .
 :hasL2BidApproval a owl:ObjectProperty ; rdfs:domain :Bid ; rdfs:range :Employee .
 :hasL3BidApproval a owl:ObjectProperty ; rdfs:domain :Bid ; rdfs:range :Employee .

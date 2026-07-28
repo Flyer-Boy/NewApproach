@@ -805,13 +805,7 @@ MATCH (e:Employee {Name:"System"}), (t:Tender {Title:"Tender 5"})-[:HAS_INVITEES
 CREATE (c)-[:HAS_MESSAGE { Date:datetime()}]->(m:Message {Text:"You have been Invited to participate on a tender (Tender 5)."})-[:SENT_BY]->(e);
 
 
-
-
-
 // The Publisher (Cloe) will not publish the Tender 8 for now. It will remain on ApprovedTenderS so we can query it in the Demo. 
-
-
-
 
 // -------------- Vendor's Tender Acceptance Workflow --------------------
 
@@ -1015,11 +1009,11 @@ Disadvantages:"Lorem ipsum dolor sit amet, consectetur adipiscing elit. Nulla bi
 
 // Albert (the Tender 1 Requester) will approve Bid 1 from Vendor 7 for Tender 1. The Requester is the person who created the Tender and is responsible for the Tender and the first approver of the Bid.
 MATCH (:PublishedTenderS)-[:IS_PUBLISHED_TENDER_STATE]->(t:Tender {Title:"Tender 1"})<-[:HAS_TENDER]-(b:Bid {BidCode:"B79c69d9843ff"}), (t)-[:HAS_REQUESTER]->(e)<-[:IS_ACTIVE_ROLE]-(:RolE {Name:"Requester"})
-CREATE (b)-[:HAS_TENDER_REQUESTER_APPROVAL {Date:datetime(), Comment:"This bid complies with the requirements of the Tender and is approved"}]->(e);
+CREATE (b)-[:HAS_TENDER_REQUESTER_BID_APPROVAL {Date:datetime(), Comment:"This bid complies with the requirements of the Tender and is approved"}]->(e);
 
 // Donald (the Tender 4 Requester) will approve Bid from Vendor 8 of Tender 4. The Requester is the person who created the Tendrr and is responsible for the Tender and the first approver of the Bid.
 MATCH (:PublishedTenderS)-[:IS_PUBLISHED_TENDER_STATE]->(t:Tender {Title:"Tender 4"})<-[:HAS_TENDER]-(b:Bid {BidCode:"B784981c5b0cc"}), (t)-[:HAS_REQUESTER]->(e)<-[:IS_ACTIVE_ROLE]-(:RolE {Name:"Requester"})
-CREATE (b)-[:HAS_TENDER_REQUESTER_APPROVAL {Date:datetime(), Comment:"This bid complies with the requirements of the Tender and is approved"}]->(e);
+CREATE (b)-[:HAS_TENDER_REQUESTER_BID_APPROVAL {Date:datetime(), Comment:"This bid complies with the requirements of the Tender and is approved"}]->(e);
 
 //However, Gloria (the L1 Approver) will reject the Bid from Bid from Vendor 8 of Tender 4.
 MATCH (:PublishedTenderS)-[:IS_PUBLISHED_TENDER_STATE]->(t:Tender {Title:"Tender 4"})<-[:HAS_TENDER]-(b:Bid {BidCode:"B784981c5b0cc"}), (l1:Employee {Name:"Gloria"})<-[:IS_ACTIVE_ROLE]-(:RolE {Name:"Level1Approver"})
