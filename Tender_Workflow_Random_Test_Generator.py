@@ -491,7 +491,7 @@ def award_bid(driver: Driver, tender_code: str, winning_bid_code: str, all_bid_c
         session.run(
             """
             MATCH  (e:Employee {Name:"System"}), (aw:AwardedTenderS {Name:"AwardedTenderS"})-[:IS_AWARDED_TENDER_STATE]->(t)<-[:HAS_TENDER]-(b:Bid {BidCode: $bid_code})-[:HAS_VENDOR]->(v)-[:HAS_VENDOR_CHAT]->(c:ConversatioN)
-            CREATE (c)-[:HAS_MESSAGE { Date:datetime()}]->(m:Message {Text:"Congratulations! Yor Bid """ + winning_bid_code +  """ for Tender """ + tender_code  + """ has been awarded to you! We look forward for to starting the Project as soon as possible."})-[:SENT_BY]->(e)
+            CREATE (c)-[:HAS_MESSAGE { Date:datetime()}]->(m:Message {Text:"Congratulations! Yor Bid "  + $bid_code +  " for Tender " + $code  + " has been awarded to you! We look forward for to starting the Project as soon as possible."})-[:SENT_BY]->(e)
             """,
             code=tender_code, bid_code=winning_bid_code,
         ) 
@@ -499,7 +499,7 @@ def award_bid(driver: Driver, tender_code: str, winning_bid_code: str, all_bid_c
         session.run(
             """
             MATCH (e:Employee {Name:"System"}), (t:Tender {TenderCode: $code})-[:HAS_TENDER_BIDS]->(:TenderBidS)-[:HAS_TENDER_BID]->(b)-[:HAS_VENDOR]->(v)-[:HAS_VENDOR_CHAT]->(c:ConversatioN) WHERE NOT (t)-[:HAS_AWARDED_BID]->(b)
-            CREATE (c)-[:HAS_MESSAGE { Date:datetime()}]->(m:Message {Text:"We regret to inform that yor Bid for Tender """ + tender_code  + """ has not been awarded to you. We thank you for your participation and look forward to working with you in the future."})-[:SENT_BY]->(e)
+            CREATE (c)-[:HAS_MESSAGE { Date:datetime()}]->(m:Message {Text:"We regret to inform that yor Bid for Tender "  + $code  + " has not been awarded to you. We thank you for your participation and look forward to working with you in the future."})-[:SENT_BY]->(e)
             """,
             code=tender_code, bid_code=winning_bid_code,
         )
