@@ -1,0 +1,332 @@
+>>python Tender_Workflow_Random_Test_Generator.py --tenders 20 --seed 42
+
+Loaded 10 requester(s), 1 publisher(s), 6 approved vendor(s), 5 tender type(s)
+
+--- Tender lifecycle 1/20 ---
+  [+] Created Tender Tc545d8e8cb5c | Facility Maintenance Contract | Selective | budget $126,288.06
+      L1 approver Gloria approved Tender Tc545d8e8cb5c
+  [✓] Tender Tc545d8e8cb5c fully APPROVED
+  [+] Published Tc545d8e8cb5c by Cloe | invited 2 vendor(s)
+  Sent a message to the invited vendor(s)
+  [+] 1/2 invited vendor(s) accepted for Tc545d8e8cb5c
+      Vendor Va435200c5b5f submitted Bid B1b2e93164651 ($99,879.22)
+  [+] AI Agent bid assessments created for Tender Tc545d8e8cb5c
+      Tender requester approved Bid B1b2e93164651
+      L1 approver Juliet approved Bid B1b2e93164651
+      Message the awarded Vendor that it has been awarded for Bid B1b2e93164651 of Tender Tc545d8e8cb5c
+      Message the Vendors that submitted Bids for Tender Tc545d8e8cb5c and were not awarded
+  [✓] Bid B1b2e93164651 AWARDED for Tender Tc545d8e8cb5c (0 losing bid(s) archived)
+  Cypher commands in this cycle: 13 | elapsed: 2.261s
+
+--- Tender lifecycle 2/20 ---
+  [+] Created Tender Tb14c581af778 | Network Hardware Refresh | Framework | budget $32,519.86
+      L1 approver Gloria approved Tender Tb14c581af778
+  [✓] Tender Tb14c581af778 fully APPROVED
+  [+] Published Tb14c581af778 by Cloe | invited 1 vendor(s)
+  Sent a message to the invited vendor(s)
+  [+] 1/1 invited vendor(s) accepted for Tb14c581af778
+      Vendor V4248becefe4d submitted Bid B14358f1c0f8d ($32,313.44)
+  [+] AI Agent bid assessments created for Tender Tb14c581af778
+      Tender requester approved Bid B14358f1c0f8d
+      L1 approver Juliet approved Bid B14358f1c0f8d
+      Message the awarded Vendor that it has been awarded for Bid B14358f1c0f8d of Tender Tb14c581af778
+      Message the Vendors that submitted Bids for Tender Tb14c581af778 and were not awarded
+  [✓] Bid B14358f1c0f8d AWARDED for Tender Tb14c581af778 (0 losing bid(s) archived)
+  Cypher commands in this cycle: 13 | elapsed: 2.143s
+
+--- Tender lifecycle 3/20 ---
+  [+] Created Tender Ta6db1716c246 | Cloud Migration Services | DirectAward | budget $184,363.59
+      L1 approver Gloria REJECTED Tender Ta6db1716c246
+  Cypher commands in this cycle: 2 | elapsed: 0.366s
+
+--- Tender lifecycle 4/20 ---
+  [+] Created Tender T608c780e2d80 | Marketing Campaign Production | Selective | budget $258,458.43
+      L1 approver Juliet approved Tender T608c780e2d80
+      L2 approver Keneth approved Tender T608c780e2d80
+  [✓] Tender T608c780e2d80 fully APPROVED
+  [+] Published T608c780e2d80 by Cloe | invited 4 vendor(s)
+  Sent a message to the invited vendor(s)
+  [+] 2/4 invited vendor(s) accepted for T608c780e2d80
+      Vendor V2c86b0b2afad submitted Bid B9a46e0423cca ($273,304.15)
+      Vendor Vc0ff53cf6396 submitted Bid Bccf34799427c ($224,186.86)
+  [+] AI Agent bid assessments created for Tender T608c780e2d80
+      Tender requester approved Bid B9a46e0423cca
+      L1 approver Juliet approved Bid B9a46e0423cca
+      L2 approver Sara approved Bid B9a46e0423cca
+      Tender requester approved Bid Bccf34799427c
+      L1 approver Juliet approved Bid Bccf34799427c
+      L2 approver Keneth REJECTED Bid Bccf34799427c
+      Message the awarded Vendor that it has been awarded for Bid B9a46e0423cca of Tender T608c780e2d80
+      Message the Vendors that submitted Bids for Tender T608c780e2d80 and were not awarded
+  [✓] Bid B9a46e0423cca AWARDED for Tender T608c780e2d80 (1 losing bid(s) archived)
+  Cypher commands in this cycle: 21 | elapsed: 3.522s
+
+--- Tender lifecycle 5/20 ---
+  [+] Created Tender T3a97539527bd | Data Center Cooling Upgrade | Open | budget $32,458.18
+      L1 approver Gloria approved Tender T3a97539527bd
+  [✓] Tender T3a97539527bd fully APPROVED
+  [+] Published T3a97539527bd by Cloe | invited 6 vendor(s)
+  Sent a message to the invited vendor(s)
+  [+] 5/6 invited vendor(s) accepted for T3a97539527bd
+      Vendor V2ffc578a767c submitted Bid Bf9e6a4cc9ff1 ($24,437.00)
+      Vendor Vc0ff53cf6396 submitted Bid B7c85dad7c743 ($25,218.71)
+      Vendor V4248becefe4d submitted Bid Bb73c621217f6 ($25,263.60)
+      Vendor V270c70e72746 submitted Bid B52ac48d841f7 ($33,029.16)
+      Vendor Va435200c5b5f submitted Bid B33ce864521cf ($33,735.12)
+  [+] AI Agent bid assessments created for Tender T3a97539527bd
+      Tender requester approved Bid Bf9e6a4cc9ff1
+      L1 approver Juliet REJECTED Bid Bf9e6a4cc9ff1
+      Tender requester approved Bid B7c85dad7c743
+      L1 approver Gloria approved Bid B7c85dad7c743
+      Tender requester approved Bid Bb73c621217f6
+      L1 approver Juliet approved Bid Bb73c621217f6
+      Tender requester approved Bid B52ac48d841f7
+      L1 approver Juliet approved Bid B52ac48d841f7
+      Tender requester REJECTED Bid B33ce864521cf
+      Message the awarded Vendor that it has been awarded for Bid B7c85dad7c743 of Tender T3a97539527bd
+      Message the Vendors that submitted Bids for Tender T3a97539527bd and were not awarded
+  [✓] Bid B7c85dad7c743 AWARDED for Tender T3a97539527bd (4 losing bid(s) archived)
+  Cypher commands in this cycle: 32 | elapsed: 5.387s
+
+--- Tender lifecycle 6/20 ---
+  [+] Created Tender Td8d4b27e6d0d | Office Fit-Out | Framework | budget $93,154.12
+      L1 approver Juliet approved Tender Td8d4b27e6d0d
+  [✓] Tender Td8d4b27e6d0d fully APPROVED
+  [+] Published Td8d4b27e6d0d by Cloe | invited 1 vendor(s)
+  Sent a message to the invited vendor(s)
+  [+] 1/1 invited vendor(s) accepted for Td8d4b27e6d0d
+      Vendor V4248becefe4d submitted Bid Bfca1f93043c0 ($77,977.48)
+  [+] AI Agent bid assessments created for Tender Td8d4b27e6d0d
+      Tender requester REJECTED Bid Bfca1f93043c0
+  [!] No bids approved for Td8d4b27e6d0d -- Tender remains unawarded
+  Cypher commands in this cycle: 8 | elapsed: 1.319s
+
+--- Tender lifecycle 7/20 ---
+  [+] Created Tender T85d75ba91074 | Office Fit-Out | Selective | budget $30,238.27
+      L1 approver Gloria REJECTED Tender T85d75ba91074
+  Cypher commands in this cycle: 2 | elapsed: 0.322s
+
+--- Tender lifecycle 8/20 ---
+  [+] Created Tender T292783cfa203 | IT Infrastructure Upgrade | Selective | budget $1,000,407.16
+      L1 approver Juliet approved Tender T292783cfa203
+      L2 approver Keneth approved Tender T292783cfa203
+      L3 approver Christine approved Tender T292783cfa203
+  [✓] Tender T292783cfa203 fully APPROVED
+  [+] Published T292783cfa203 by Cloe | invited 3 vendor(s)
+  Sent a message to the invited vendor(s)
+  [+] 3/3 invited vendor(s) accepted for T292783cfa203
+      Vendor V270c70e72746 submitted Bid B3c15459f4a13 ($864,346.74)
+      Vendor Va435200c5b5f submitted Bid Be0be2fc1d696 ($995,076.10)
+      Vendor V2ffc578a767c submitted Bid Bb130de7295c7 ($1,017,559.42)
+  [+] AI Agent bid assessments created for Tender T292783cfa203
+      Tender requester approved Bid B3c15459f4a13
+      L1 approver Gloria REJECTED Bid B3c15459f4a13
+      Tender requester approved Bid Be0be2fc1d696
+      L1 approver Gloria approved Bid Be0be2fc1d696
+      L2 approver Sara approved Bid Be0be2fc1d696
+      L3 approver Christine approved Bid Be0be2fc1d696
+      Tender requester REJECTED Bid Bb130de7295c7
+      Message the awarded Vendor that it has been awarded for Bid Be0be2fc1d696 of Tender T292783cfa203
+      Message the Vendors that submitted Bids for Tender T292783cfa203 and were not awarded
+  [✓] Bid Be0be2fc1d696 AWARDED for Tender T292783cfa203 (2 losing bid(s) archived)
+  Cypher commands in this cycle: 26 | elapsed: 5.046s
+
+--- Tender lifecycle 9/20 ---
+  [+] Created Tender Td7756c629ee7 | Marketing Campaign Production | Open | budget $434,249.54
+      L1 approver Gloria approved Tender Td7756c629ee7
+      L2 approver Sara REJECTED Tender Td7756c629ee7
+  Cypher commands in this cycle: 3 | elapsed: 0.546s
+
+--- Tender lifecycle 10/20 ---
+  [+] Created Tender T3b8078caa3f0 | Corporate Travel Management | DirectAward | budget $268,206.30
+      L1 approver Juliet approved Tender T3b8078caa3f0
+      L2 approver Sara REJECTED Tender T3b8078caa3f0
+  Cypher commands in this cycle: 3 | elapsed: 0.512s
+
+--- Tender lifecycle 11/20 ---
+  [+] Created Tender T394cf3e9d784 | Fleet Vehicle Leasing | Framework | budget $48,655.45
+      L1 approver Juliet approved Tender T394cf3e9d784
+  [✓] Tender T394cf3e9d784 fully APPROVED
+  [+] Published T394cf3e9d784 by Cloe | invited 1 vendor(s)
+  Sent a message to the invited vendor(s)
+  [+] 1/1 invited vendor(s) accepted for T394cf3e9d784
+      Vendor V4248becefe4d submitted Bid B27ca52604bea ($44,246.60)
+  [+] AI Agent bid assessments created for Tender T394cf3e9d784
+      Tender requester approved Bid B27ca52604bea
+      L1 approver Gloria approved Bid B27ca52604bea
+      Message the awarded Vendor that it has been awarded for Bid B27ca52604bea of Tender T394cf3e9d784
+      Message the Vendors that submitted Bids for Tender T394cf3e9d784 and were not awarded
+  [✓] Bid B27ca52604bea AWARDED for Tender T394cf3e9d784 (0 losing bid(s) archived)
+  Cypher commands in this cycle: 13 | elapsed: 2.130s
+
+--- Tender lifecycle 12/20 ---
+  [+] Created Tender Td78345cb10f2 | HR Software Implementation | Selective | budget $823,673.22
+      L1 approver Juliet approved Tender Td78345cb10f2
+      L2 approver Keneth approved Tender Td78345cb10f2
+      L3 approver Christine approved Tender Td78345cb10f2
+  [✓] Tender Td78345cb10f2 fully APPROVED
+  [+] Published Td78345cb10f2 by Cloe | invited 4 vendor(s)
+  Sent a message to the invited vendor(s)
+  [+] 4/4 invited vendor(s) accepted for Td78345cb10f2
+      Vendor V2ffc578a767c submitted Bid Bd4802a3c14b5 ($798,283.40)
+      Vendor V4248becefe4d submitted Bid Bb973609f2990 ($712,284.17)
+      Vendor V270c70e72746 submitted Bid B3b2c819263e7 ($770,954.24)
+      Vendor V2c86b0b2afad submitted Bid B321e3fbd6108 ($786,171.05)
+  [+] AI Agent bid assessments created for Tender Td78345cb10f2
+      Tender requester approved Bid Bd4802a3c14b5
+      L1 approver Juliet approved Bid Bd4802a3c14b5
+      L2 approver Sara approved Bid Bd4802a3c14b5
+      L3 approver Nelson REJECTED Bid Bd4802a3c14b5
+      Tender requester approved Bid Bb973609f2990
+      L1 approver Gloria approved Bid Bb973609f2990
+      L2 approver Sara approved Bid Bb973609f2990
+      L3 approver Nelson approved Bid Bb973609f2990
+      Tender requester approved Bid B3b2c819263e7
+      L1 approver Gloria approved Bid B3b2c819263e7
+      L2 approver Keneth approved Bid B3b2c819263e7
+      L3 approver Christine REJECTED Bid B3b2c819263e7
+      Tender requester approved Bid B321e3fbd6108
+      L1 approver Gloria approved Bid B321e3fbd6108
+      L2 approver Sara approved Bid B321e3fbd6108
+      L3 approver Christine approved Bid B321e3fbd6108
+      Message the awarded Vendor that it has been awarded for Bid Bb973609f2990 of Tender Td78345cb10f2
+      Message the Vendors that submitted Bids for Tender Td78345cb10f2 and were not awarded
+  [✓] Bid Bb973609f2990 AWARDED for Tender Td78345cb10f2 (3 losing bid(s) archived)
+  Cypher commands in this cycle: 38 | elapsed: 6.408s
+
+--- Tender lifecycle 13/20 ---
+  [+] Created Tender T44c0c2c75231 | Security Systems Installation | Negotiated | budget $77,547.40
+      L1 approver Juliet REJECTED Tender T44c0c2c75231
+  Cypher commands in this cycle: 2 | elapsed: 0.329s
+
+--- Tender lifecycle 14/20 ---
+  [+] Created Tender T55647b58ee8f | Catering Services Contract | Selective | budget $804,172.80
+      L1 approver Gloria REJECTED Tender T55647b58ee8f
+  Cypher commands in this cycle: 2 | elapsed: 0.328s
+
+--- Tender lifecycle 15/20 ---
+  [+] Created Tender T0563a9f7fa4c | Data Center Cooling Upgrade | Open | budget $945,865.14
+      L1 approver Juliet approved Tender T0563a9f7fa4c
+      L2 approver Keneth approved Tender T0563a9f7fa4c
+      L3 approver Nelson approved Tender T0563a9f7fa4c
+  [✓] Tender T0563a9f7fa4c fully APPROVED
+  [+] Published T0563a9f7fa4c by Cloe | invited 6 vendor(s)
+  Sent a message to the invited vendor(s)
+  [+] 5/6 invited vendor(s) accepted for T0563a9f7fa4c
+      Vendor V2ffc578a767c submitted Bid B5134addb8891 ($993,918.81)
+      Vendor Vc0ff53cf6396 submitted Bid Ba973f9d6c5d2 ($1,025,284.11)
+      Vendor V2c86b0b2afad submitted Bid B2f85a2e010ee ($992,789.23)
+      Vendor V270c70e72746 submitted Bid B3fe341fa8a41 ($794,232.43)
+      Vendor Va435200c5b5f submitted Bid Bcf1f499c022a ($994,760.01)
+  [+] AI Agent bid assessments created for Tender T0563a9f7fa4c
+      Tender requester approved Bid B5134addb8891
+      L1 approver Juliet approved Bid B5134addb8891
+      L2 approver Keneth approved Bid B5134addb8891
+      L3 approver Christine approved Bid B5134addb8891
+      Tender requester approved Bid Ba973f9d6c5d2
+      L1 approver Gloria REJECTED Bid Ba973f9d6c5d2
+      Tender requester approved Bid B2f85a2e010ee
+      L1 approver Gloria approved Bid B2f85a2e010ee
+      L2 approver Keneth approved Bid B2f85a2e010ee
+      L3 approver Nelson approved Bid B2f85a2e010ee
+      Tender requester approved Bid B3fe341fa8a41
+      L1 approver Juliet approved Bid B3fe341fa8a41
+      L2 approver Sara REJECTED Bid B3fe341fa8a41
+      Tender requester REJECTED Bid Bcf1f499c022a
+      Message the awarded Vendor that it has been awarded for Bid B2f85a2e010ee of Tender T0563a9f7fa4c
+      Message the Vendors that submitted Bids for Tender T0563a9f7fa4c and were not awarded
+  [✓] Bid B2f85a2e010ee AWARDED for Tender T0563a9f7fa4c (4 losing bid(s) archived)
+  Cypher commands in this cycle: 39 | elapsed: 6.349s
+
+--- Tender lifecycle 16/20 ---
+  [+] Created Tender T766db02b3271 | Warehouse Automation Equipment | Negotiated | budget $253,817.21
+      L1 approver Juliet approved Tender T766db02b3271
+      L2 approver Sara approved Tender T766db02b3271
+  [✓] Tender T766db02b3271 fully APPROVED
+  [+] Published T766db02b3271 by Cloe | invited 1 vendor(s)
+  Sent a message to the invited vendor(s)
+  [+] 1/1 invited vendor(s) accepted for T766db02b3271
+      Vendor V270c70e72746 submitted Bid B396de8608847 ($208,824.54)
+  [+] AI Agent bid assessments created for Tender T766db02b3271
+      Tender requester approved Bid B396de8608847
+      L1 approver Juliet approved Bid B396de8608847
+      L2 approver Keneth approved Bid B396de8608847
+      Message the awarded Vendor that it has been awarded for Bid B396de8608847 of Tender T766db02b3271
+      Message the Vendors that submitted Bids for Tender T766db02b3271 and were not awarded
+  [✓] Bid B396de8608847 AWARDED for Tender T766db02b3271 (0 losing bid(s) archived)
+  Cypher commands in this cycle: 15 | elapsed: 2.432s
+
+--- Tender lifecycle 17/20 ---
+  [+] Created Tender Ta00b48f45952 | Facility Maintenance Contract | DirectAward | budget $591,966.95
+      L1 approver Gloria approved Tender Ta00b48f45952
+      L2 approver Sara approved Tender Ta00b48f45952
+      L3 approver Christine approved Tender Ta00b48f45952
+  [✓] Tender Ta00b48f45952 fully APPROVED
+  [+] Published Ta00b48f45952 by Cloe | invited 1 vendor(s)
+  Sent a message to the invited vendor(s)
+  [+] 1/1 invited vendor(s) accepted for Ta00b48f45952
+      Vendor V4248becefe4d submitted Bid B2e6c04da093a ($509,446.67)
+  [+] AI Agent bid assessments created for Tender Ta00b48f45952
+      Tender requester approved Bid B2e6c04da093a
+      L1 approver Juliet approved Bid B2e6c04da093a
+      L2 approver Keneth approved Bid B2e6c04da093a
+      L3 approver Christine REJECTED Bid B2e6c04da093a
+  [!] No bids approved for Ta00b48f45952 -- Tender remains unawarded
+  Cypher commands in this cycle: 13 | elapsed: 2.302s
+
+--- Tender lifecycle 18/20 ---
+  [+] Created Tender T9623fb7ad0f9 | Network Hardware Refresh | Negotiated | budget $189,935.19
+      L1 approver Gloria approved Tender T9623fb7ad0f9
+  [✓] Tender T9623fb7ad0f9 fully APPROVED
+  [+] Published T9623fb7ad0f9 by Cloe | invited 1 vendor(s)
+  Sent a message to the invited vendor(s)
+  [+] 1/1 invited vendor(s) accepted for T9623fb7ad0f9
+      Vendor V2ffc578a767c submitted Bid Bbc78a4e9e8b8 ($172,894.77)
+  [+] AI Agent bid assessments created for Tender T9623fb7ad0f9
+      Tender requester REJECTED Bid Bbc78a4e9e8b8
+  [!] No bids approved for T9623fb7ad0f9 -- Tender remains unawarded
+  Cypher commands in this cycle: 8 | elapsed: 1.310s
+
+--- Tender lifecycle 19/20 ---
+  [+] Created Tender T588e8e34adc9 | Facility Maintenance Contract | Framework | budget $1,015,352.62
+      L1 approver Gloria approved Tender T588e8e34adc9
+      L2 approver Sara approved Tender T588e8e34adc9
+      L3 approver Nelson approved Tender T588e8e34adc9
+  [✓] Tender T588e8e34adc9 fully APPROVED
+  [+] Published T588e8e34adc9 by Cloe | invited 1 vendor(s)
+  Sent a message to the invited vendor(s)
+  [+] 1/1 invited vendor(s) accepted for T588e8e34adc9
+      Vendor V4248becefe4d submitted Bid B2fd2189ba3c7 ($825,088.79)
+  [+] AI Agent bid assessments created for Tender T588e8e34adc9
+      Tender requester approved Bid B2fd2189ba3c7
+      L1 approver Gloria approved Bid B2fd2189ba3c7
+      L2 approver Keneth approved Bid B2fd2189ba3c7
+      L3 approver Nelson approved Bid B2fd2189ba3c7
+      Message the awarded Vendor that it has been awarded for Bid B2fd2189ba3c7 of Tender T588e8e34adc9
+      Message the Vendors that submitted Bids for Tender T588e8e34adc9 and were not awarded
+  [✓] Bid B2fd2189ba3c7 AWARDED for Tender T588e8e34adc9 (0 losing bid(s) archived)
+  Cypher commands in this cycle: 17 | elapsed: 2.765s
+
+--- Tender lifecycle 20/20 ---
+  [+] Created Tender T1d012e183cf6 | Employee Training Program | Framework | budget $274,895.27
+      L1 approver Gloria approved Tender T1d012e183cf6
+      L2 approver Sara approved Tender T1d012e183cf6
+  [✓] Tender T1d012e183cf6 fully APPROVED
+  [+] Published T1d012e183cf6 by Cloe | invited 1 vendor(s)
+  Sent a message to the invited vendor(s)
+  [+] 1/1 invited vendor(s) accepted for T1d012e183cf6
+      Vendor V2ffc578a767c submitted Bid B974cc527e25e ($216,213.58)
+  [+] AI Agent bid assessments created for Tender T1d012e183cf6
+      Tender requester approved Bid B974cc527e25e
+      L1 approver Gloria approved Bid B974cc527e25e
+      L2 approver Sara approved Bid B974cc527e25e
+      Message the awarded Vendor that it has been awarded for Bid B974cc527e25e of Tender T1d012e183cf6
+      Message the Vendors that submitted Bids for Tender T1d012e183cf6 and were not awarded
+  [✓] Bid B974cc527e25e AWARDED for Tender T1d012e183cf6 (0 losing bid(s) archived)
+  Cypher commands in this cycle: 15 | elapsed: 2.470s
+
+=== Simulation summary ===
+Tender cycles run:            20
+Total Cypher commands issued: 285
+Total elapsed time:           48.268s
+Average time per cycle:       2.413s
