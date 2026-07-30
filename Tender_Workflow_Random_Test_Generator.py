@@ -30,9 +30,9 @@ Requirements:
 
 Usage:
     export NEO4J_URI="neo4j://localhost:7687"
-    export NEO4J_USER="neo4j"
+    export NEO4J_USERNAME="neo4j"
     export NEO4J_PASSWORD="your-password"
-    python tender_workflow_test_generator.py --tenders 20 --seed 42
+    python Tender_Workflow_Random_Test_Generator.py --tenders 20 --seed 42
 """
 
 from __future__ import annotations
@@ -569,7 +569,7 @@ def main() -> None:
         random.seed(args.seed)
 
     uri = os.environ.get("NEO4J_URI", "neo4j://localhost:7687")
-    user = os.environ.get("NEO4J_USER", "neo4j")
+    user = os.environ.get("NEO4J_USERNAME", "neo4j")
     password = os.environ.get("NEO4J_PASSWORD")
     if not password:
         raise SystemExit("Set the NEO4J_PASSWORD environment variable before running.")

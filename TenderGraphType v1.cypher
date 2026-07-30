@@ -278,7 +278,8 @@ ALTER CURRENT GRAPH TYPE SET {
   (:RoleS)-[:HAS_ROLE_TYPE => {}]->(:RolE),
 
 // Define the RolE relationship.
-  (:RolE)-[:IS_ACTIVE_ROLE => {StartDate :: TIMESTAMP WITH TIME ZONE NOT NULL, EndDate :: TIMESTAMP WITH TIME ZONE}]->(:Employee),
+  (:RolE)-[:IS_ACTIVE_ROLE => {StartDate :: TIMESTAMP WITH TIME ZONE NOT NULL}]->(:Employee),
+  (:RolE)-[:WAS_PAST_ROLE => {StartDate :: TIMESTAMP WITH TIME ZONE NOT NULL, EndDate :: TIMESTAMP WITH TIME ZONE NOT NULL}]->(:Employee),
 
 // Define the VendorS relationship.
   (:VendorS)-[:HAS_VENDOR_PENDING_STATE => {}]->(:PendingVendorS),
