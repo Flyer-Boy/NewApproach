@@ -649,7 +649,7 @@ def main() -> None:
                 print(f"  [ERROR] lifecycle {i} failed: {exc}")
             cycle_calls = driver.call_count - cycle_start_calls
             cycle_elapsed = time.perf_counter() - cycle_start_time
-            print(f"  Cypher commands in this cycle: {cycle_calls} | elapsed: {cycle_elapsed:.3f}s")
+            print(f"  Cypher commands this cycle: {cycle_calls} | elapsed: {cycle_elapsed:.3f}s")
             print()
 
         total_calls = driver.call_count - simulation_start_calls

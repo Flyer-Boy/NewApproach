@@ -183,6 +183,7 @@
 :hasActiveEmployee a owl:ObjectProperty ; rdfs:domain :EmployeeDirectorY ; rdfs:range :Employee .
 :hasRoleType a owl:ObjectProperty ; rdfs:domain :RoleS ; rdfs:range :RolE .
 :isActiveRole a owl:ObjectProperty ; rdfs:domain :RolE ; rdfs:range :Employee .
+:wasPastRole a owl:ObjectProperty ; rdfs:domain :RolE ; rdfs:range :Employee .
 
 :hasVendorPendingState a owl:ObjectProperty ; rdfs:domain :VendorS ; rdfs:range :PendingVendorS .
 :hasVendorApprovedState a owl:ObjectProperty ; rdfs:domain :VendorS ; rdfs:range :ApprovedVendorS .

@@ -1218,8 +1218,8 @@ CREATE (c)-[:HAS_MESSAGE { Date:datetime()}]->(m:Message {Text:"You have been In
 
 //------ Role Change excercise ----
 
-// If yor are running the "Tender Workflow Random Test Generator" Python script, you might like to test what happens when Emplyees change Roles. 
-// Run the Python script once and then Excute the below Role change commands. Then run the Python script again. See what happens. 
+// If yor are running the "Tender Workflow Random Test Generator" Python script, you might like to test what happens when Employees change Roles. 
+// Run the Python script once and then Excute the 3 below Role change commands. Then run the Python script again. See what happens. 
 
 // ***  I will comment out the commands below to make sure they don't get executed on your first run of this script. 
 
