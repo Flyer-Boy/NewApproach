@@ -1223,17 +1223,20 @@ CREATE (c)-[:HAS_MESSAGE { Date:datetime()}]->(m:Message {Text:"You have been In
 
 // ***  I will comment out the commands below to make sure they don't get executed on your first run of this script. 
 
-// HR has been aseked to promot Julit from Requester to L1 Approver
+// HR has been asked to promote Julit from Requester to L1 Approver
+
 // MATCH (e:Employee {Name: "Juliet"})<-[r:IS_ACTIVE_ROLE]-(o:RolE)<-[:HAS_ROLE_TYPE]-(:RoleS)-[:HAS_ROLE_TYPE]->(n:RolE {Name: "Level1Approver"}) 
 // CREATE (n)-[:IS_ACTIVE_ROLE {StartDate: datetime()}]->(e), (o)-[:WAS_PAST_ROLE {StartDate: r.StartDate, EndDate: datetime()}]->(e) 
 // DELETE r;
 
-// HR is promoting Keneth from Requester to L2 Approver
+// HHR has been asked to promote Keneth from Requester to L2 Approver
+
 // MATCH (e:Employee {Name: "Keneth"})<-[r:IS_ACTIVE_ROLE]-(o:RolE)<-[:HAS_ROLE_TYPE]-(:RoleS)-[:HAS_ROLE_TYPE]->(n:RolE {Name: "Level2Approver"}) 
 // CREATE (n)-[:IS_ACTIVE_ROLE {StartDate: datetime()}]->(e), (o)-[:WAS_PAST_ROLE {StartDate: r.StartDate, EndDate: datetime()}]->(e) 
 // DELETE r;
 
-// HR is promoting Nelson from Requester to L3 Approver
+// HR has been asked to promote Nelson from Requester to L3 Approver
+
 // MATCH (e:Employee {Name: "Nelson"})<-[r:IS_ACTIVE_ROLE]-(o:RolE)<-[:HAS_ROLE_TYPE]-(:RoleS)-[:HAS_ROLE_TYPE]->(n:RolE {Name: "Level3Approver"}) 
 // CREATE (n)-[:IS_ACTIVE_ROLE {StartDate: datetime()}]->(e), (o)-[:WAS_PAST_ROLE {StartDate: r.StartDate, EndDate: datetime()}]->(e) 
 // DELETE r;
