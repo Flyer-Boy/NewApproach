@@ -541,7 +541,7 @@ def award_bid(driver: Driver, tender_code: str, winning_bid_code: str, all_bid_c
             """,
             code=tender_code, bid_code=winning_bid_code,
         ) 
-        print(f"      Message the awarded Vendor that it has been awarded for Bid {winning_bid_code} of Tender {tender_code} ") 
+
         session.run(
             """
             MATCH (e:Employee {Name:"System"}), (t:Tender {TenderCode: $code})-[:HAS_TENDER_BIDS]->(:TenderBidS)-[:HAS_TENDER_BID]->(b)-[:HAS_VENDOR]->(v)-[:HAS_VENDOR_CHAT]->(c:ConversatioN) WHERE NOT (t)-[:HAS_AWARDED_BID]->(b)
@@ -549,7 +549,7 @@ def award_bid(driver: Driver, tender_code: str, winning_bid_code: str, all_bid_c
             """,
             code=tender_code, 
         )
-        print(f"      Message the Vendors that submitted Bids for Tender {tender_code} and were not awarded")        
+             
 
         losing_codes = [c for c in all_bid_codes if c != winning_bid_code]
         for losing_code in losing_codes:
@@ -568,6 +568,8 @@ def award_bid(driver: Driver, tender_code: str, winning_bid_code: str, all_bid_c
 
     print(f"  [\u2713] Bid {winning_bid_code} AWARDED for Tender {tender_code} "
           f"({len(losing_codes)} losing bid(s) archived)")
+    print(f"      Message the awarded Vendor that it has been awarded for Bid {winning_bid_code} of Tender {tender_code} ") 
+    print(f"      Message the Vendors that submitted Bids for Tender {tender_code} and were not awarded")  
 
 
 # ---------------------------------------------------------------------------
