@@ -1212,7 +1212,8 @@ CREATE (c)-[:HAS_MESSAGE { Date:datetime()}]->(m:Message {Text:"You have been In
 //------ Role Change excercise ----
 
 // If yor are running the "Tender Workflow Random Test Generator" Python script, you might like to test what happens when Employees change Roles. 
-// Run the Python script a few times and then Excute the 3 below Role change commands. Then run the Python script again for a few times.
+// Run the Python script a few times (~100 tenders cycles) and then Execute the 3 below Role change commands. 
+// Then run the Python script again for a few times (~50 tender cycles).
 // This will crate new Tender and Bid submission and approvals where some employees are in different roles
 
 // ***  I will comment out the commands below to make sure they don't get executed on your first run of this script. 
@@ -1236,13 +1237,25 @@ CREATE (c)-[:HAS_MESSAGE { Date:datetime()}]->(m:Message {Text:"You have been In
 // DELETE r;
 
 
-// You can now check in real-time if an Employee that was previously a REQUESTER and is now an APPROVER has common awarded Vendors 
-// and if this Employee was approver of any of those Bids that awarded the Tenders to that Vendor (you might have to run several simulations to find one)
+
+// You can now check in real time whether an Employee who was previously a REQUESTER is now acting as an APPROVER and has Vendors in common with previously awarded Tenders.
+//
+// You can also verify whether this Employee approved any of the winning Bids that resulted in contracts being awarded to those Vendors.
+// (You may need to run several simulations before finding such a scenario.)
+//
+// If an Employee previously acted as the Requester or Manager for multiple Tenders awarded to the same Vendor,
+// they may have developed a strong working relationship with that Vendor. If that Employee later becomes an APPROVER,
+// this could represent a potential conflict of interest or introduce bias into the evaluation and approval process.
 
 MATCH p1=(v1)<-[:HAS_AWARDED_VENDOR]-(t)-[:HAS_L1_TENDER_APPROVAL|HAS_L2_TENDER_APPROVAL|HAS_L3_TENDER_APPROVAL]->(e:Employee)<-[:HAS_REQUESTER]-(t2)-[:HAS_AWARDED_VENDOR]->(v1), 
 p2=(t)-[:HAS_AWARDED_BID]-(b)-[]-(e)-[]-(:RolE) 
 RETURN p1, p2;
 
-// The advantages of running a workflow like this one on a Property Graph is that you can be proactive not allowing Emplyees  
-// to parcticipate in the vetting of Bids by Vendors they have interacted multiple times in past Tenders when they played a different Role (Tender Requester/Manager). 
-// If you run your Workflows in RDBMSs as your have probably been doing, it would be impractical to do these type of assesments in real-time  
+// One of the key advantages of implementing workflows like this on a Property Graph is the ability to proactively prevent Employees
+// from participating in the evaluation of Bids submitted by Vendors with whom they have had significant prior interactions,
+// such as when they previously acted as the Tender Requester or Tender Manager for awarded Tenders involving those Vendors.
+//
+// In traditional RDBMS-based workflow systems, performing this type of relationship analysis in real time would be
+// impractical due to the complexity of the queries and the number of joins required. Property Graphs make these
+// contextual assessments both natural and efficient, enabling conflict-of-interest checks as part of the workflow itself.
+
