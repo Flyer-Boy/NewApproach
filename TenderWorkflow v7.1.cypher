@@ -1258,6 +1258,13 @@ MATCH p1=(v1)<-[:HAS_AWARDED_VENDOR]-(t)-[:HAS_L1_TENDER_APPROVAL|HAS_L2_TENDER_
 p2=(t)-[:HAS_AWARDED_BID]-(b)-[]-(e)-[]-(:RolE) 
 RETURN p1, p2;
 
+// You can dig even deeper to determine whether any of these potentially biased award decisions overlooked lower-priced alternatives during the bid evaluation process.
+// Here is the query:
+
+MATCH p1=(v1)<-[:HAS_AWARDED_VENDOR]-(t)-[:HAS_L1_TENDER_APPROVAL|HAS_L2_TENDER_APPROVAL|HAS_L3_TENDER_APPROVAL]->(e:Employee)<-[:HAS_REQUESTER]-(t2)-[:HAS_AWARDED_VENDOR]->(v1), 
+p2=(t)-[:HAS_AWARDED_BID]-(b)-[]-(e)-[]-(:RolE), p3=(t)-[:HAS_TENDER_BIDS]-()-[]->(b2) WHERE b2.Price < b.Price
+RETURN p1, p2, p3;
+
 // One of the key advantages of implementing workflows like this on a Property Graph is the ability to proactively prevent Employees
 // from participating in the evaluation of Bids submitted by Vendors with whom they have had significant prior interactions,
 // such as when they previously acted as the Tender Requester or Tender Manager for awarded Tenders involving those Vendors.
@@ -1265,4 +1272,3 @@ RETURN p1, p2;
 // In traditional RDBMS-based workflow systems, performing this type of relationship analysis in real time would be
 // impractical due to the complexity of the queries and the number of joins required. Property Graphs make these
 // contextual assessments both natural and efficient, enabling conflict-of-interest checks as part of the workflow itself.
-
