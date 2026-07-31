@@ -1248,8 +1248,8 @@ CREATE (c)-[:HAS_MESSAGE { Date:datetime()}]->(m:Message {Text:"You have been In
 // You can now check in real-time if an Employee that was previously a REQUESTER and is now an APPROVER has common awarded Vendors 
 // and if this Employee was approver of any of those Bids that awarded the Tenders to that Vendor (you might have to run several simulations to find one)
 
-MATCH p1=(v1)<-[:HAS_AWARDED_VENDOR]-(t)-[:HAS_L1_TENDER_APPROVAL|HAS_L2_TENDER_APPROVAL|HAS_L3_TENDER_APPROVER]->(e:Employee)<-[:HAS_REQUESTER]-(t2)-[:HAS_AWARDED_VENDOR]->(v1), 
-p2=(t)-[:HAS_AWARDED_BID]-(b)-[]-(e) 
+MATCH p1=(v1)<-[:HAS_AWARDED_VENDOR]-(t)-[:HAS_L1_TENDER_APPROVAL|HAS_L2_TENDER_APPROVAL|HAS_L3_TENDER_APPROVAL]->(e:Employee)<-[:HAS_REQUESTER]-(t2)-[:HAS_AWARDED_VENDOR]->(v1), 
+p2=(t)-[:HAS_AWARDED_BID]-(b)-[]-(e)-[]-(:RolE) 
 RETURN p1, p2;
 
 // The advantages of running a workflow like this one on a Property Graph is that you can be proactive not allowing Emplyees  
