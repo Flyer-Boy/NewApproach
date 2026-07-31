@@ -2,10 +2,6 @@
 
 // This v7.1 introduces changes of truly *ontological* proportions.
 
-// Thanks to Neo4j's 2026.02 introduction of GRAPH TYPE (https://neo4j.com/blog/developer/graph-type-schema-enforcement-made-easy-preview/) 
-// we can now define the Graph Type for our Tendering System, which will enforce the Graph structure and relationships, 
-// ensuring that the Graph remains consistent and valid according to the defined ontology.
-
 // Previously, I used a single generic relationship type [:HAS] for all elements
 // belonging to a collection (“Hub nodes” that aggregate nodes of a given Label
 // based on their State or Context), mainly to preserve UI reusability.
@@ -389,7 +385,7 @@ MATCH (TenderTypeS {Name:"TenderTypeS"})-[:HAS_TENDER_TYPE]->(ty) RETURN ty.Name
 // The Requester Employee will log in and the UI will gather all the information and execute the below Cypher command to create the Tender and supporting schema Nodes 
 // Create the Tender 1 + Schema and let the system generate the Tender Code 
 MATCH (em:Employee {Name:"Albert"}), (nt:NewTenderS {Name:"NewTenderS"}), (ty:TenderType {Name:"Open"}) 
-CREATE (t1:Tender {TenderCode:"T"+left(randomUUID(),8)+right(randomUUID(),4), Title:"Tender 1", Description:"This is the first tender for testing purposes", SubmissionDate:datetime(), EndBidingDate:datetime() + duration({days:30}) , Budget:400000.00 })<-[:IS_NEW_TENDER_STATE]-(nt),
+CREATE (t1:Tender {TenderCode:"T"+left(randomUUID(),8)+right(randomUUID(),4), Title:"Tender 1", Description:"This is the first tender for testing purposes", SubmissionDate:datetime(), EndBidingDate:datetime() + duration({day:30}) , Budget:400000.00 })<-[:IS_NEW_TENDER_STATE]-(nt),
          (t1)-[:HAS_TENDER_DOCS]->(d:TenderDocS {Name:"TenderDocS"})-[:HAS_TENDER_DOCUMENT]->(:TenderDoc {DocName:"Tender_1_RFP", Type:"PDF", URL:"https://company-my.sharepoint.com/personal/Albert/Tender1/RFPDocument_t1.pdf", Description:"This is the Tender 1 RFP Document", Date:datetime()}),
          (d)-[:HAS_TENDER_DOCUMENT]->(:TenderDoc {DocName:"Tender_1_RFP_ResponseTemplate", Type:"PDF", URL:"https://company-my.sharepoint.com/personal/Albert/Tender1/RFPResponseTemplate-t1.pdf", Description:"This is the Tender 1 RFP mandatory response template", Date:datetime()}),
          (d)-[:HAS_TENDER_DOCUMENT]->(:TenderDoc {DocName:"Tender_1_RFP_Presentation", Type:"PDF", URL:"https://company-my.sharepoint.com/personal/Albert/Tender1/RFPPresentation_t1.pdf", Description:"This is the Tender 1 RFP Presentation", Date:datetime()}),
@@ -402,7 +398,7 @@ CREATE (t1:Tender {TenderCode:"T"+left(randomUUID(),8)+right(randomUUID(),4), Ti
 
 // Create the Tender 2 + Schema and let the system generate the Tender Code
 MATCH (em:Employee {Name:"Brandon"}), (nt:NewTenderS {Name:"NewTenderS"}) , (ty:TenderType {Name:"Selective"}) 
-CREATE (t1:Tender {TenderCode:"T"+left(randomUUID(),8)+right(randomUUID(),4), Title:"Tender 2", Description:"This is the second tender for testing purposes", SubmissionDate:datetime(), EndBidingDate:datetime() + duration({days:30}) , Budget:200000.00 })<-[:IS_NEW_TENDER_STATE]-(nt),
+CREATE (t1:Tender {TenderCode:"T"+left(randomUUID(),8)+right(randomUUID(),4), Title:"Tender 2", Description:"This is the second tender for testing purposes", SubmissionDate:datetime(), EndBidingDate:datetime() + duration({day:30}) , Budget:200000.00 })<-[:IS_NEW_TENDER_STATE]-(nt),
          (t1)-[:HAS_TENDER_DOCS]->(d:TenderDocS {Name:"TenderDocS"})-[:HAS_TENDER_DOCUMENT]->(:TenderDoc {DocName:"Tender_2_RFP", Type:"PDF", URL:"https://company-my.sharepoint.com/personal/Brandon/Tender2/RFPDocument_t2.pdf", Description:"This is the Tender 2 RFP Document", Date:datetime()}),
          (d)-[:HAS_TENDER_DOCUMENT]->(:TenderDoc {DocName:"Tender_2_RFP_ResponseTemplate", Type:"PDF", URL:"https://company-my.sharepoint.com/personal/Brndon/Tender2/RFPResponseTemplate-t2.pdf", Description:"This is the Tender 2 RFP mandatory response template", Date:datetime()}),
          (t1)-[:HAS_REQUESTER]->(em),
@@ -414,7 +410,7 @@ CREATE (t1:Tender {TenderCode:"T"+left(randomUUID(),8)+right(randomUUID(),4), Ti
 
 // Create Tender 3 + Schema and let the system generate the Tender Code. This will be a "Negotiated" Tender Type, and we will only invite Vendor 7 to it.
 MATCH (em:Employee {Name:"Charles"}), (nt:NewTenderS {Name:"NewTenderS"}) , (ty:TenderType {Name:"Negotiated"}) 
-CREATE (t1:Tender {TenderCode:"T"+left(randomUUID(),8)+right(randomUUID(),4), Title:"Tender 3", Description:"This is the third tender for testing purposes", SubmissionDate:datetime(), EndBidingDate:datetime() + duration({days:30}) , Budget:300000.00 })<-[:IS_NEW_TENDER_STATE]-(nt),
+CREATE (t1:Tender {TenderCode:"T"+left(randomUUID(),8)+right(randomUUID(),4), Title:"Tender 3", Description:"This is the third tender for testing purposes", SubmissionDate:datetime(), EndBidingDate:datetime() + duration({day:30}) , Budget:300000.00 })<-[:IS_NEW_TENDER_STATE]-(nt),
          (t1)-[:HAS_TENDER_DOCS]->(d:TenderDocS {Name:"TenderDocS"})-[:HAS_TENDER_DOCUMENT]->(:TenderDoc {DocName:"Tender_3_RFP", Type:"PDF", URL:"https://company-my.sharepoint.com/personal/Charles/Tender3/RFPDocument_t3.pdf", Description:"This is the Tender 3 RFP Document", Date:datetime()}),
          (d)-[:HAS_TENDER_DOCUMENT]->(:TenderDoc {DocName:"Tender_3_RFP_ResponseTemplate", Type:"PDF", URL:"https://company-my.sharepoint.com/personal/Charles/Tender3/RFPResponseTemplate-t3.pdf", Description:"This is the Tender 3 RFP mandatory response template", Date:datetime()}),
          (d)-[:HAS_TENDER_DOCUMENT]->(:TenderDoc {DocName:"Tender_3_RFP_Presentation", Type:"PDF", URL:"https://company-my.sharepoint.com/personal/Charles/Tender3/RFPPresentation_t3.pdf", Description:"This is the Tender 3 RFP Presentation", Date:datetime()}),
@@ -427,7 +423,7 @@ CREATE (t1:Tender {TenderCode:"T"+left(randomUUID(),8)+right(randomUUID(),4), Ti
 
 // Create the Tender 4 + Schema and let the system generate the Tender Code  
 MATCH (em:Employee {Name:"Donald"}), (nt:NewTenderS {Name:"NewTenderS"}) , (ty:TenderType {Name:"Open"}) 
-CREATE (t1:Tender {TenderCode:"T"+left(randomUUID(),8)+right(randomUUID(),4), Title:"Tender 4", Description:"This is the third tender for testing purposes", SubmissionDate:datetime(), EndBidingDate:datetime() + duration({days:30}) , Budget:40000.00 })<-[:IS_NEW_TENDER_STATE]-(nt),
+CREATE (t1:Tender {TenderCode:"T"+left(randomUUID(),8)+right(randomUUID(),4), Title:"Tender 4", Description:"This is the third tender for testing purposes", SubmissionDate:datetime(), EndBidingDate:datetime() + duration({day:30}) , Budget:40000.00 })<-[:IS_NEW_TENDER_STATE]-(nt),
          (t1)-[:HAS_TENDER_DOCS]->(d:TenderDocS {Name:"TenderDocS"})-[:HAS_TENDER_DOCUMENT]->(:TenderDoc {DocName:"Tender_4_RFQ", Type:"PDF", URL:"https://company-my.sharepoint.com/personal/Donald/Tender4/RFQDocument_t4.pdf", Description:"This is the Tender 4 RFQ Document", Date:datetime()}),
          (d)-[:HAS_TENDER_DOCUMENT]->(:TenderDoc {DocName:"Tender_4_RFQ_ResponseTemplate", Type:"PDF", URL:"https://company-my.sharepoint.com/personal/Donald/Tender4/RFQResponseTemplate-t4.pdf", Description:"This is the Tender 4 RFQ mandatory response template", Date:datetime()}),
          (t1)-[:HAS_REQUESTER]->(em),
@@ -439,7 +435,7 @@ CREATE (t1:Tender {TenderCode:"T"+left(randomUUID(),8)+right(randomUUID(),4), Ti
 
 // Create the Tender 5 + Schema and let the system generate the Tender Code  
 MATCH (em:Employee {Name:"Eduard"}), (nt:NewTenderS {Name:"NewTenderS"}) , (ty:TenderType {Name:"Selective"}) 
-CREATE (t1:Tender {TenderCode:"T"+left(randomUUID(),8)+right(randomUUID(),4), Title:"Tender 5", Description:"This is the fifth tender for testing purposes", SubmissionDate:datetime(), EndBidingDate:datetime() + duration({days:30}) , Budget:200000.00 })<-[:IS_NEW_TENDER_STATE]-(nt),
+CREATE (t1:Tender {TenderCode:"T"+left(randomUUID(),8)+right(randomUUID(),4), Title:"Tender 5", Description:"This is the fifth tender for testing purposes", SubmissionDate:datetime(), EndBidingDate:datetime() + duration({day:30}) , Budget:200000.00 })<-[:IS_NEW_TENDER_STATE]-(nt),
          (t1)-[:HAS_TENDER_DOCS]->(d:TenderDocS {Name:"TenderDocS"})-[:HAS_TENDER_DOCUMENT]->(:TenderDoc {DocName:"Tender_5_RFP", Type:"PDF", URL:"https://company-my.sharepoint.com/personal/Eduard/Tender5/RFPDocument_t5.pdf", Description:"This is the Tender 5 RFP Document", Date:datetime()}),
          (d)-[:HAS_TENDER_DOCUMENT]->(:TenderDoc {DocName:"Tender_5_RFP_ResponseTemplate", Type:"PDF", URL:"https://company-my.sharepoint.com/personal/Eduard/Tender5/RFPResponseTemplate-t5.pdf", Description:"This is the Tender 5 RFP mandatory response template", Date:datetime()}),
          (t1)-[:HAS_REQUESTER]->(em),
@@ -451,7 +447,7 @@ CREATE (t1:Tender {TenderCode:"T"+left(randomUUID(),8)+right(randomUUID(),4), Ti
 
 // Create the Tender 6 + Schema and let the system generate the Tender Code  
 MATCH (em:Employee {Name:"Fred"}), (nt:NewTenderS {Name:"NewTenderS"}) , (ty:TenderType {Name:"Negotiated"})
-CREATE (t1:Tender {TenderCode:"T"+left(randomUUID(),8)+right(randomUUID(),4), Title:"Tender 6", Description:"This is the sixth tender for testing purposes", SubmissionDate:datetime(), EndBidingDate:datetime() + duration({days:30}) , Budget:300000.00 })<-[:IS_NEW_TENDER_STATE]-(nt),
+CREATE (t1:Tender {TenderCode:"T"+left(randomUUID(),8)+right(randomUUID(),4), Title:"Tender 6", Description:"This is the sixth tender for testing purposes", SubmissionDate:datetime(), EndBidingDate:datetime() + duration({day:30}) , Budget:300000.00 })<-[:IS_NEW_TENDER_STATE]-(nt),
          (t1)-[:HAS_TENDER_DOCS]->(d:TenderDocS {Name:"TenderDocS"})-[:HAS_TENDER_DOCUMENT]->(:TenderDoc {DocName:"Tender_6_RFP", Type:"PDF", URL:"https://company-my.sharepoint.com/personal/Fred/Tender6/RFPDocument_t6.pdf", Description:"This is the Tender 6 RFP Document", Date:datetime()}),
          (d)-[:HAS_TENDER_DOCUMENT]->(:TenderDoc {DocName:"Tender_6_RFP_ResponseTemplate", Type:"PDF", URL:"https://company-my.sharepoint.com/personal/Fred/Tender6/RFPResponseTemplate-t6.pdf", Description:"This is the Tender 6 RFP mandatory response template", Date:datetime()}),
          (t1)-[:HAS_REQUESTER]->(em),
@@ -463,7 +459,7 @@ CREATE (t1:Tender {TenderCode:"T"+left(randomUUID(),8)+right(randomUUID(),4), Ti
 
 // Create the Tender 7 + Schema and let the system generate the Tender Code  
 MATCH (em:Employee {Name:"Gilbert"}), (nt:NewTenderS {Name:"NewTenderS"}) , (ty:TenderType {Name:"Open"})
-CREATE (t1:Tender {TenderCode:"T"+left(randomUUID(),8)+right(randomUUID(),4), Title:"Tender 7", Description:"This is the seventh tender for testing purposes", SubmissionDate:datetime(), EndBidingDate:datetime() + duration({days:30}) , Budget:400000.00 })<-[:IS_NEW_TENDER_STATE]-(nt),
+CREATE (t1:Tender {TenderCode:"T"+left(randomUUID(),8)+right(randomUUID(),4), Title:"Tender 7", Description:"This is the seventh tender for testing purposes", SubmissionDate:datetime(), EndBidingDate:datetime() + duration({day:30}) , Budget:400000.00 })<-[:IS_NEW_TENDER_STATE]-(nt),
          (t1)-[:HAS_TENDER_DOCS]->(d:TenderDocS {Name:"TenderDocS"})-[:HAS_TENDER_DOCUMENT]->(:TenderDoc {DocName:"Tender_7_RFP", Type:"PDF", URL:"https://company-my.sharepoint.com/personal/Gilbert/Tender7/RFPDocument_t7.pdf", Description:"This is the Tender 7 RFP Document", Date:datetime()}),
          (d)-[:HAS_TENDER_DOCUMENT]->(:TenderDoc {DocName:"Tender_7_RFP_ResponseTemplate", Type:"PDF", URL:"https://company-my.sharepoint.com/personal/Gilbert/Tender7/RFPResponseTemplate-t7.pdf", Description:"This is the Tender 7 RFP mandatory response template", Date:datetime()}),
          (t1)-[:HAS_REQUESTER]->(em),
@@ -475,7 +471,7 @@ CREATE (t1:Tender {TenderCode:"T"+left(randomUUID(),8)+right(randomUUID(),4), Ti
 
 // Create the Tender 8 + Schema and let the system generate the Tender Code     
 MATCH (em:Employee {Name:"Harold"}), (nt:NewTenderS {Name:"NewTenderS"}) , (ty:TenderType {Name:"Selective"})                
-CREATE (t1:Tender {TenderCode:"T"+left(randomUUID(),8)+right(randomUUID(),4), Title:"Tender 8", Description:"This is the Tender 8 for testing purposes", SubmissionDate:datetime(), EndBidingDate:datetime() + duration({days:30}) , Budget:100000.00 })<-[:IS_NEW_TENDER_STATE]-(nt),
+CREATE (t1:Tender {TenderCode:"T"+left(randomUUID(),8)+right(randomUUID(),4), Title:"Tender 8", Description:"This is the Tender 8 for testing purposes", SubmissionDate:datetime(), EndBidingDate:datetime() + duration({day:30}) , Budget:100000.00 })<-[:IS_NEW_TENDER_STATE]-(nt),
          (t1)-[:HAS_TENDER_DOCS]->(d:TenderDocS {Name:"TenderDocS"})-[:HAS_TENDER_DOCUMENT]->(:TenderDoc {DocName:"Tender_8_RFQ", Type:"PDF", URL:"https://company-my.sharepoint.com/personal/Harold/Tender8/RFQDocument_t8.pdf", Description:"This is the Tender 8 RFQ Document", Date:datetime()}),
          (d)-[:HAS_TENDER_DOCUMENT]->(:TenderDoc {DocName:"Tender_8_RFQ_ResponseTemplate", Type:"PDF", URL:"https://company-my.sharepoint.com/personal/Harold/Tender8/RFQResponseTemplate-t8.pdf", Description:"This is the Tender 8 RFQ mandatory response template", Date:datetime()}),
          (t1)-[:HAS_REQUESTER]->(em),
@@ -487,7 +483,7 @@ CREATE (t1:Tender {TenderCode:"T"+left(randomUUID(),8)+right(randomUUID(),4), Ti
 
 // Create the ninth Tender + Schema and let the system generate the Tender Code  
 MATCH (em:Employee {Name:"Ingrid"}), (nt:NewTenderS {Name:"NewTenderS"}) , (ty:TenderType {Name:"Negotiated"})
-CREATE (t1:Tender {TenderCode:"T"+left(randomUUID(),8)+right(randomUUID(),4), Title:"Tender 9", Description:"This is the tenth tender for testing purposes", SubmissionDate:datetime(), EndBidingDate:datetime() + duration({days:30}) , Budget:180000.00 })<-[:IS_NEW_TENDER_STATE]-(nt),
+CREATE (t1:Tender {TenderCode:"T"+left(randomUUID(),8)+right(randomUUID(),4), Title:"Tender 9", Description:"This is the tenth tender for testing purposes", SubmissionDate:datetime(), EndBidingDate:datetime() + duration({day:30}) , Budget:180000.00 })<-[:IS_NEW_TENDER_STATE]-(nt),
          (t1)-[:HAS_TENDER_DOCS]->(d:TenderDocS {Name:"TenderDocS"})-[:HAS_TENDER_DOCUMENT]->(:TenderDoc {DocName:"Tender_9_RFQ", Type:"PDF", URL:"https://company-my.sharepoint.com/personal/Ingrid/Tender9/RFQDocument_t9.pdf", Description:"This is the Tender 9 RFQ Document", Date:datetime()}),
          (d)-[:HAS_TENDER_DOCUMENT]->(:TenderDoc {DocName:"Tender_9_RFQ_ResponseTemplate", Type:"PDF", URL:"https://company-my.sharepoint.com/personal/Ingrid/Tender9/RFQResponseTemplate-t9.pdf", Description:"This is the Tender 9 RFQ mandatory response template", Date:datetime()}),
          (t1)-[:HAS_REQUESTER]->(em),
@@ -508,8 +504,8 @@ MATCH (e:Employee {Name:"Gloria"})<-[]-(o:RolE)
 MATCH (nt:NewTenderS {Name:"NewTenderS"})-[:IS_NEW_TENDER_STATE]->(t:Tender)-[:HAS_REQUESTER]-(r) 
 WHERE NOT (t)-[]->(e) AND  t.Budget >= o.ApprovalBase 
 RETURN r.Name as Requester, t.Title as Title, t.TenderCode as TenderCode, t.Description as TenderDescription, 
-apoc.temporal.format(t.SubmissionDate,'dd/MM/YY HH:mm:ss')  as TenderStartDate,  
-apoc.temporal.format(t.EndBidingDate,'dd/MM/YY HH:mm:ss') as TenderEndDate, t.Budget as TenderBudget;
+t.SubmissionDate as TenderStartDate,  
+t.EndBidingDate as TenderEndDate, t.Budget as TenderBudget;
 
 //----- AI Agent opportunity 
 // In the same way we used AI to assess Vendors, we can use AI agents to pre-assess the Tenders, rate them, and create summaries for the approvers.
@@ -550,11 +546,6 @@ MATCH (nt:NewTenderS {Name:"NewTenderS"})-[:IS_NEW_TENDER_STATE]->(t:Tender)
 WHERE NOT (t)-[:HAS_L2_TENDER_APPROVAL]->(:Employee) AND t.Budget >= 200001 AND (t)-[:HAS_L1_TENDER_APPROVAL]->()       
 RETURN t.Title, t.TenderCode, t.Description, t.SubmissionDate, t.EndBidingDate, t.Budget;
 
-// or (a more costly query just for testing purposes)
-
-MATCH ()<-[:HAS_L1_TENDER_APPROVAL]-(t:Tender)-[:!HAS_L2_TENDER_APPROVAL]->(e:Employee), (:NewTenderS)-[]->(t)  
-WHERE t.Budget >= 200001
-RETURN t.Title, t.TenderCode, t.Description, t.SubmissionDate, t.EndBidingDate, t.Budget;
 
 // or use the same query we used for L1, but specifying the L2 approver (Sara). The UI will pass this as a parameter. 
 
@@ -562,8 +553,8 @@ MATCH (e:Employee {Name:"Sara"})<-[]-(o:RolE)
 MATCH (nt:NewTenderS {Name:"NewTenderS"})-[:IS_NEW_TENDER_STATE]->(t:Tender)-[:HAS_REQUESTER]-(r) 
 WHERE NOT (t)-[]->(e)<-[]-(o) AND  t.Budget >= o.ApprovalBase AND (t)-[:HAS_L1_TENDER_APPROVAL]->()  
 RETURN r.Name as Requester, t.Title as Title, t.TenderCode as TenderCode, t.Description as TenderDescription, 
-apoc.temporal.format(t.SubmissionDate,'dd/MM/YY HH:mm:ss')  as TenderStartDate,  
-apoc.temporal.format(t.EndBidingDate,'dd/MM/YY HH:mm:ss') as TenderEndDate, t.Budget as TenderBudget;
+t.SubmissionDate as TenderStartDate,  
+t.EndBidingDate as TenderEndDate, t.Budget as TenderBudget;
 
 
 // Let’s have the L2 approver (Sara) approve the Tender 1
@@ -690,7 +681,7 @@ DELETE r1;
 // Let's have Ingrid resubmit/create the ninth Tender + Schema and let the system generate a new Tender Code 
 // As this is a resubmission, we will create a relationship to the previous version that is in the RejectedTenderS Collection. In this way, we can keep track of the changes made to the Tender.    
 MATCH (em:Employee {Name:"Ingrid"}), (nt:NewTenderS {Name:"NewTenderS"}) , (ty:TenderType {Name:"Negotiated"}),  (rt:RejectedTenderS {Name:"RejectedTenderS"})-[r1:IS_REJECTED_TENDER_STATE]->(ot:Tender {Title:"Tender 9"})
-CREATE (t1:Tender {TenderCode:"T"+left(randomUUID(),8)+right(randomUUID(),4), Title:"Tender 9.1", Description:"This is the tenth tender for testing purposes", SubmissionDate:datetime(), EndBidingDate:datetime() + duration({days:30}) , Budget:180000.00 })<-[:IS_NEW_TENDER_STATE]-(nt),
+CREATE (t1:Tender {TenderCode:"T"+left(randomUUID(),8)+right(randomUUID(),4), Title:"Tender 9.1", Description:"This is the tenth tender for testing purposes", SubmissionDate:datetime(), EndBidingDate:datetime() + duration({day:30}) , Budget:180000.00 })<-[:IS_NEW_TENDER_STATE]-(nt),
          (t1)-[:HAS_TENDER_DOCS]->(d:TenderDocS {Name:"TenderDocS"})-[:HAS_TENDER_DOCUMENT]->(:TenderDoc {DocName:"Tender_9_1_RFQ", Type:"PDF", URL:"https://company-my.sharepoint.com/personal/Ingrid/Tender9_1/RFQDocument_t9_1.pdf", Description:"This is the Tender 9.1 RFQ Document", Date:datetime()}),
          (d)-[:HAS_TENDER_DOCUMENT]->(:TenderDoc {DocName:"Tender_9_1_RFQ_ResponseTemplate", Type:"PDF", URL:"https://company-my.sharepoint.com/personal/Ingrid/Tender9_1/RFQResponseTemplate-t9_1.pdf", Description:"This is the Tender 9.1 RFQ mandatory response template", Date:datetime()}),
          (t1)-[:HAS_REQUESTER]->(em),
@@ -708,13 +699,13 @@ CREATE (t1:Tender {TenderCode:"T"+left(randomUUID(),8)+right(randomUUID(),4), Ti
 
 // UI Query -Let's have the Publisher (Cloe) query the Approved Tenders to audit the approvals before Publishing.
 MATCH (at:ApprovedTenderS {Name:"ApprovedTenderS"})-[:IS_APPROVED_TENDER_STATE]->(t:Tender)-[HAS_REQUESTER]->(r:Employee), (t)-[:HAS_L1_TENDER_APPROVAL]->(l1) WHERE t.Budget < 200000
-RETURN "Up to $200000 (L1 Only)" as TenderApprovalLevel, t.Title as Title, t.TenderCode as TenderCode, t.Description as Description, apoc.temporal.format(t.SubmissionDate,'dd/MM/YY HH:mm:ss')  as TenderStartDate,  apoc.temporal.format(t.EndBidingDate,'dd/MM/YY HH:mm:ss') as TenderEndDate, t.Budget as Budget, r.Name AS Requester, l1.Name AS L1_Approver, "N/A" AS L2_Approver, "N/A" AS L3_Approver
+RETURN "Up to $200000 (L1 Only)" as TenderApprovalLevel, t.Title as Title, t.TenderCode as TenderCode, t.Description as Description, t.SubmissionDate as TenderStartDate,  t.EndBidingDate as TenderEndDate, t.Budget as Budget, r.Name AS Requester, l1.Name AS L1_Approver, "N/A" AS L2_Approver, "N/A" AS L3_Approver
 UNION
 MATCH (at:ApprovedTenderS {Name:"ApprovedTenderS"})-[:IS_APPROVED_TENDER_STATE]->(t:Tender)-[HAS_REQUESTER]->(r:Employee), (t)-[:HAS_L1_TENDER_APPROVAL]->(l1), (t)-[:HAS_L2_TENDER_APPROVAL]->(l2) WHERE t.Budget >= 200000 AND t.Budget < 300000
-RETURN "Up to $300000 (L1 and L2)" as TenderApprovalLevel, t.Title as Title, t.TenderCode as TenderCode, t.Description as Description, apoc.temporal.format(t.SubmissionDate,'dd/MM/YY HH:mm:ss')  as TenderStartDate,  apoc.temporal.format(t.EndBidingDate,'dd/MM/YY HH:mm:ss') as TenderEndDate, t.Budget as Budget,  r.Name AS Requester, l1.Name AS L1_Approver, l2.Name AS L2_Approver, "N/A" AS L3_Approver
+RETURN "Up to $300000 (L1 and L2)" as TenderApprovalLevel, t.Title as Title, t.TenderCode as TenderCode, t.Description as Description, t.SubmissionDate as TenderStartDate,  t.EndBidingDate as TenderEndDate, t.Budget as Budget,  r.Name AS Requester, l1.Name AS L1_Approver, l2.Name AS L2_Approver, "N/A" AS L3_Approver
 UNION
 MATCH (at:ApprovedTenderS {Name:"ApprovedTenderS"})-[:IS_APPROVED_TENDER_STATE]->(t:Tender)-[HAS_REQUESTER]->(r:Employee), (t)-[:HAS_L1_TENDER_APPROVAL]->(l1), (t)-[:HAS_L2_TENDER_APPROVAL]->(l2), (t)-[:HAS_L3_TENDER_APPROVAL]->(l3) WHERE t.Budget >= 300000
-RETURN "Above $300000 (L1, L2 and L3)" as TenderApprovalLevel,t.Title as Title, t.TenderCode as TenderCode, t.Description as Description, apoc.temporal.format(t.SubmissionDate,'dd/MM/YY HH:mm:ss')  as TenderStartDate,  apoc.temporal.format(t.EndBidingDate,'dd/MM/YY HH:mm:ss') as TenderEndDate, t.Budget as Budget,  r.Name AS Requester, l1.Name AS L1_Approver, l2.Name AS L2_Approver, l3.Name AS L3_Approver;
+RETURN "Above $300000 (L1, L2 and L3)" as TenderApprovalLevel,t.Title as Title, t.TenderCode as TenderCode, t.Description as Description, t.SubmissionDate as TenderStartDate,  t.EndBidingDate as TenderEndDate, t.Budget as Budget,  r.Name AS Requester, l1.Name AS L1_Approver, l2.Name AS L2_Approver, l3.Name AS L3_Approver;
 
 
 // If the Publisher (Cloe) has questions, she can use the Chat of each Tender to ask, or if she has no questions, she can publish Tenders 1 and 4 that are approved and ready for Publishing.
@@ -731,9 +722,9 @@ DELETE r1;
 
 // As Tender 1 is Type "Open", we can invite all the Approved Vendors to it. The UI will do this.
 // In a real scenario, there would be more criteria to select the Vendors (type, size, etc.), and the Cypher query would need to be tailored, but for this demo, we will invite all of them.
-MATCH (t:Tender {Title:"Tender 1"})-[:HAS_INVITEES]->(iv:InvitedVendorS {Name:"InvitedVendorS"})
-UNWIND COLLECT {MATCH (v:Vendor)<-[:IS_VENDOR_APPROVED_STATE]-(:ApprovedVendorS) RETURN v} AS vendor
-        CREATE (iv)-[:HAS_INVITATION {Date:datetime()}]->(vendor);
+MATCH (t:Tender {Title: "Tender 1"})-[:HAS_INVITEES]->(iv:InvitedVendorS {Name: "InvitedVendorS"})
+MATCH (v:Vendor)<-[:IS_VENDOR_APPROVED_STATE]-(:ApprovedVendorS)
+CREATE (iv)-[:HAS_INVITATION {Date: LocalDateTime()}]->(v);
 
 
 // Now we must communicate all the Tender 1 invitees about their invitation so they can decide if they want to participate in the Tender.
@@ -773,9 +764,9 @@ CREATE (t)-[:HAS_PUBLISHER_TENDER_APPROVAL {Date:datetime(), Comment:"This tende
 DELETE r1;
 
 // As this Tender 4 is Type "Open", we can invite all the Approved Vendors to it. This time around, we will retrieve the Tender using the Employee Name "Donald" as the Tender Requester.
-MATCH (t:Tender {Title:"Tender 4"})-[:HAS_INVITEES]->(iv:InvitedVendorS {Name:"InvitedVendorS"})
-UNWIND COLLECT {MATCH (v:Vendor)<-[:IS_VENDOR_APPROVED_STATE]-(:ApprovedVendorS) RETURN v} AS vendor
-        CREATE (iv)-[:HAS_INVITATION {Date:datetime()}]->(vendor);
+MATCH (t:Tender {Title: "Tender 4"})-[:HAS_INVITEES]->(iv:InvitedVendorS {Name: "InvitedVendorS"})
+MATCH (v:Vendor)<-[:IS_VENDOR_APPROVED_STATE]-(:ApprovedVendorS)
+CREATE (iv)-[:HAS_INVITATION {Date: LocalDateTime()}]->(v);
 
 
 // Now we must communicate all the Tender 4 invitees about their invitation so they can decide if they want to participat in the Tender.
@@ -796,7 +787,7 @@ DELETE r1;
 
 // As Tender "Tender 5" is Type "Selective", we will invite a subset of the Approved Vendors to it. In this case, we will invite two Approved Vendors.
 MATCH (t:Tender {Title:"Tender 5"})-[:HAS_INVITEES]->(iv:InvitedVendorS {Name:"InvitedVendorS"})
-UNWIND COLLECT {MATCH (v:Vendor)<-[:IS_VENDOR_APPROVED_STATE]-(:ApprovedVendorS) ORDER BY v.ShortName DESC RETURN v LIMIT 2} AS vendor
+MATCH (v:Vendor)<-[:IS_VENDOR_APPROVED_STATE]-(:ApprovedVendorS) WHERE v.ShortName = "Vendor 7" OR v.ShortName = "Vendor 8"
         CREATE (iv)-[:HAS_INVITATION {Date:datetime()}]->(vendor);
 
 
@@ -858,7 +849,7 @@ MATCH (v:Vendor {ShortName:"Vendor 7"})-[:HAS_ACCEPTED_INVITATIONS]->()-[:HAS_AC
 
 // Create a Bid from Vendor 7 for Tender 1. We will use the Bid Code "B79c69d9843ff" for the Bid of Tender 1 for demonstration purposes, so that we can use it later.
 MATCH (vb:ActiveBidS)<-[:HAS_ACTIVE_BIDS]-(v:Vendor {ShortName:"Vendor 7"})-[:HAS_ACCEPTED_INVITATIONS]->()-[:HAS_ACCEPTED_TENDER_INVITATION]->(t:Tender {Title:"Tender 1"})-[:HAS_TENDER_BIDS]->(tb:TenderBidS {Name:"TenderBidS"})
-CREATE (vb)-[:HAS_ACTIVE_BID {Date:datetime()}]->(b:Bid {BidCode:"B79c69d9843ff", Title:"Title of Bid for Tender 1 from Vendor 7", Description:"Description of Bid for Tender 1 from Vendor 7", Scope:"Scope of Bid for Tender 1 from Vendor 7", Deliverables:"List of deliverables of Bid for Tender 1 from Vendor 7", CompletionDate: datetime() + duration({days:90}), Price:80000.00, Conditions:"Vendor 7 Conditions for Bid of Tender 1", Qualifications:"Vendor 7 qualifications for Tender 1",  SubmissionDate:datetime()})<-[:HAS_TENDER_BID {Date:datetime()}]-(tb),
+CREATE (vb)-[:HAS_ACTIVE_BID {Date:datetime()}]->(b:Bid {BidCode:"B79c69d9843ff", Title:"Title of Bid for Tender 1 from Vendor 7", Description:"Description of Bid for Tender 1 from Vendor 7", Scope:"Scope of Bid for Tender 1 from Vendor 7", Deliverables:"List of deliverables of Bid for Tender 1 from Vendor 7", CompletionDate: datetime() + duration({day:90}), Price:80000.00, Conditions:"Vendor 7 Conditions for Bid of Tender 1", Qualifications:"Vendor 7 qualifications for Tender 1",  SubmissionDate:datetime()})<-[:HAS_TENDER_BID {Date:datetime()}]-(tb),
        (b)-[:HAS_VENDOR]->(v),
        (b)-[:HAS_TENDER]->(t),
        (b)-[:HAS_BID_DOCS]->(:BidDocS {Name:"BidDocS"})-[:HAS_BID_DOCUMENT]->(d:BidDoc {DocName:"BidDoc T1-V7", Type:"PDF", URL:"https://docs.google.com/document/d/Vendor7/Tender1/Bid_RFPDocT1_V7_01.pdf", Description:"This is the description of the RFP Document", Date:datetime()}),
@@ -867,7 +858,7 @@ CREATE (vb)-[:HAS_ACTIVE_BID {Date:datetime()}]->(b:Bid {BidCode:"B79c69d9843ff"
 
 // Create Bid from the Vendor 7 for Tender 3 (this time we will let the system generate the Bid Code; this will be the default behaviour)
 MATCH  (vb:ActiveBidS)<-[:HAS_ACTIVE_BIDS]-(v:Vendor {ShortName:"Vendor 7"})-[:HAS_ACCEPTED_INVITATIONS]->()-[:HAS_ACCEPTED_TENDER_INVITATION]->(t:Tender {Title:"Tender 3"})-[:HAS_TENDER_BIDS]->(tb:TenderBidS {Name:"TenderBidS"})
-CREATE (vb)-[:HAS_ACTIVE_BID {Date:datetime()}]->(b:Bid {BidCode:"B"+left(randomUUID(),8)+right(randomUUID(),4), Title:"Title of Bid for Tender 3 from Vendor 7", Description:"Description of Bid for Tender 3 from Vendor 7", Scope:"Scope of Bid for Tender 3 from Vendor 7", Deliverables:"List of deliverables of Bid for Tender 3 from Vendor 7", CompletionDate: datetime() + duration({days:160}), Price:290000.00, Conditions:"Vendor 7 Conditions for Bid of Tender 3", Qualifications:"Vendor 7 qualifications for Tender 3", SubmissionDate:datetime()})<-[:HAS_TENDER_BID {Date:datetime()}]-(tb),
+CREATE (vb)-[:HAS_ACTIVE_BID {Date:datetime()}]->(b:Bid {BidCode:"B"+left(randomUUID(),8)+right(randomUUID(),4), Title:"Title of Bid for Tender 3 from Vendor 7", Description:"Description of Bid for Tender 3 from Vendor 7", Scope:"Scope of Bid for Tender 3 from Vendor 7", Deliverables:"List of deliverables of Bid for Tender 3 from Vendor 7", CompletionDate: datetime() + duration({day:160}), Price:290000.00, Conditions:"Vendor 7 Conditions for Bid of Tender 3", Qualifications:"Vendor 7 qualifications for Tender 3", SubmissionDate:datetime()})<-[:HAS_TENDER_BID {Date:datetime()}]-(tb),
        (b)-[:HAS_VENDOR]->(v),
        (b)-[:HAS_TENDER]->(t),
        (b)-[:HAS_BID_DOCS]->(:BidDocS {Name:"BidDocS"})-[:HAS_BID_DOCUMENT]->(d:BidDoc {DocName:"BidDoc T3-V7", Type:"PDF", URL:"https://docs.google.com/document/d/Vendor7/Tender1/Bid_RFPDocT3_V7_01.pdf", Description:"This is the description of the RFP Document", Date:datetime()}),
@@ -879,7 +870,7 @@ MATCH (v:Vendor {ShortName:"Vendor 4"})-[:HAS_ACCEPTED_INVITATIONS]->()-[:HAS_AC
 
 // Create Bid from the Vendor 4 for Tender 1 (this time we will let the system generate the Bid Code; this will be the default behaviour)
 MATCH (vb:ActiveBidS)<-[:HAS_ACTIVE_BIDS]-(v:Vendor {ShortName:"Vendor 4"})-[:HAS_ACCEPTED_INVITATIONS]->()-[:HAS_ACCEPTED_TENDER_INVITATION]->(t:Tender {Title:"Tender 1"})-[:HAS_TENDER_BIDS]->(tb:TenderBidS {Name:"TenderBidS"})
-CREATE (vb)-[:HAS_ACTIVE_BID {Date:datetime()}]->(b:Bid {BidCode:"B"+left(randomUUID(),8)+right(randomUUID(),4), Title:"Title of Bid for Tender 1 from Vendor 4", Description:"Description of Bid for Tender 1 from Vendor 4", Scope:"Scope of Bid for Tender 1 from Vendor 4", Deliverables:"List of deliverables of Bid for Tender 1 from Vendor 4", CompletionDate: datetime() + duration({days:75}), Price:75000.00, Conditions:"Vendor 4 Conditions for Bid of Tender 1", Qualifications:"Vendor 4 qualifications for Tender 1", SubmissionDate:datetime()})<-[:HAS_TENDER_BID {Date:datetime()}]-(tb),
+CREATE (vb)-[:HAS_ACTIVE_BID {Date:datetime()}]->(b:Bid {BidCode:"B"+left(randomUUID(),8)+right(randomUUID(),4), Title:"Title of Bid for Tender 1 from Vendor 4", Description:"Description of Bid for Tender 1 from Vendor 4", Scope:"Scope of Bid for Tender 1 from Vendor 4", Deliverables:"List of deliverables of Bid for Tender 1 from Vendor 4", CompletionDate: datetime() + duration({day:75}), Price:75000.00, Conditions:"Vendor 4 Conditions for Bid of Tender 1", Qualifications:"Vendor 4 qualifications for Tender 1", SubmissionDate:datetime()})<-[:HAS_TENDER_BID {Date:datetime()}]-(tb),
        (b)-[:HAS_VENDOR]->(v),
        (b)-[:HAS_TENDER]->(t),
        (b)-[:HAS_BID_DOCS]->(:BidDocS {Name:"BidDocS"})-[:HAS_BID_DOCUMENT]->(d:BidDoc {DocName:"BidDoc T1-V4", Type:"PDF", URL:"https://docs.google.com/document/d/Vendor7/Tender1/Bid_RFPDocT1_V4_01.pdf", Description:"This is the description of the RFP Document", Date:datetime()}),
@@ -891,7 +882,7 @@ MATCH (v:Vendor {ShortName:"Vendor 3"})-[:HAS_ACCEPTED_INVITATIONS]->()-[:HAS_AC
 
 // Create Bid from the Vendor 3 for Tender 4 (this time we will let the system generate the Bid Code; this will be the default behaviour)
 MATCH (vb:ActiveBidS)<-[:HAS_ACTIVE_BIDS]-(v:Vendor {ShortName:"Vendor 3"})-[:HAS_ACCEPTED_INVITATIONS]->()-[:HAS_ACCEPTED_TENDER_INVITATION]->(t:Tender {Title:"Tender 4"})-[:HAS_TENDER_BIDS]->(tb:TenderBidS {Name:"TenderBidS"})
-CREATE (vb)-[:HAS_ACTIVE_BID {Date:datetime()}]->(b:Bid {BidCode:"B"+left(randomUUID(),8)+right(randomUUID(),4), Title:"Title of Bid for Tender 4 from Vendor 3", Description:"Description of Bid for Tender 4 from Vendor 3", Scope:"Scope of Bid for Tender 4 from Vendor 3", Deliverables:"List of deliverables of Bid for Tender 4 from Vendor 3", CompletionDate: datetime() + duration({days:75}), Price:75000.00, Conditions:"Vendor 3 Conditions for Bid of Tender 4", Qualifications:"Vendor 3 qualifications for Tender 4", SubmissionDate:datetime()})<-[:HAS_TENDER_BID {Date:datetime()}]-(tb),
+CREATE (vb)-[:HAS_ACTIVE_BID {Date:datetime()}]->(b:Bid {BidCode:"B"+left(randomUUID(),8)+right(randomUUID(),4), Title:"Title of Bid for Tender 4 from Vendor 3", Description:"Description of Bid for Tender 4 from Vendor 3", Scope:"Scope of Bid for Tender 4 from Vendor 3", Deliverables:"List of deliverables of Bid for Tender 4 from Vendor 3", CompletionDate: datetime() + duration({day:75}), Price:75000.00, Conditions:"Vendor 3 Conditions for Bid of Tender 4", Qualifications:"Vendor 3 qualifications for Tender 4", SubmissionDate:datetime()})<-[:HAS_TENDER_BID {Date:datetime()}]-(tb),
        (b)-[:HAS_VENDOR]->(v),
        (b)-[:HAS_TENDER]->(t),
        (b)-[:HAS_BID_DOCS]->(:BidDocS {Name:"BidDocS"})-[:HAS_BID_DOCUMENT]->(d:BidDoc {DocName:"BidDoc T4-V3", Type:"PDF", URL:"https://docs.google.com/document/d/Vendor7/Tender1/Bid_RFQDocT4_V3_01.pdf", Description:"This is the description of the Bid RFQ Document", Date:datetime()}),
@@ -902,7 +893,7 @@ MATCH (v:Vendor {ShortName:"Vendor 8"})-[:HAS_ACCEPTED_INVITATIONS]->()-[:HAS_AC
 
 // Create Bid from the Vendor 8 for Tender 4  - We will use the Bid Code "B784981c5b0cc" manually for this Bid for demonstration purposes, so that we can use it later. "B784981c5b0cc" 
 MATCH (vb:ActiveBidS)<-[:HAS_ACTIVE_BIDS]-(v:Vendor {ShortName:"Vendor 8"})-[:HAS_ACCEPTED_INVITATIONS]->()-[:HAS_ACCEPTED_TENDER_INVITATION]->(t:Tender {Title:"Tender 4"})-[:HAS_TENDER_BIDS]->(tb:TenderBidS {Name:"TenderBidS"})
-CREATE (vb)-[:HAS_ACTIVE_BID {Date:datetime()}]->(b:Bid {BidCode:"B784981c5b0cc", Title:"Title of Bid for Tender 4 from Vendor 8", Description:"Description of Bid for Tender 4 from Vendor 8", Scope:"Scope of Bid for Tender 4 from Vendor 8", Deliverables:"List of deliverables of Bid for Tender 4 from Vendor 8", CompletionDate: datetime() + duration({days:75}), Price:75000.00, Conditions:"Vendor 8 Conditions for Bid of Tender 4", Qualifications:"Vendor 8 qualifications for Tender 4", SubmissionDate:datetime()})<-[:HAS_TENDER_BID {Date:datetime()}]-(tb),
+CREATE (vb)-[:HAS_ACTIVE_BID {Date:datetime()}]->(b:Bid {BidCode:"B784981c5b0cc", Title:"Title of Bid for Tender 4 from Vendor 8", Description:"Description of Bid for Tender 4 from Vendor 8", Scope:"Scope of Bid for Tender 4 from Vendor 8", Deliverables:"List of deliverables of Bid for Tender 4 from Vendor 8", CompletionDate: datetime() + duration({day:75}), Price:75000.00, Conditions:"Vendor 8 Conditions for Bid of Tender 4", Qualifications:"Vendor 8 qualifications for Tender 4", SubmissionDate:datetime()})<-[:HAS_TENDER_BID {Date:datetime()}]-(tb),
        (b)-[:HAS_VENDOR]->(v),
        (b)-[:HAS_TENDER]->(t),
        (b)-[:HAS_BID_DOCS]->(:BidDocS {Name:"BidDocS"})-[:HAS_BID_DOCUMENT]->(d:BidDoc {DocName:"BidDoc T4-V8", Type:"PDF", URL:"https://docs.google.com/document/d/Vendor7/Tender1/Bid_RFQDocT4_V8_01.pdf", Description:"This is the description of the Bid RFQ Document", Date:datetime()}),
@@ -1078,7 +1069,7 @@ DELETE r1, r2;
 // The Requester Employee will log in, and the UI will gather all the information and execute the following Cypher command to create the Tender and supporting schema Nodes 
 // Create the Tender 10 + Schema and let the system generate the Tender Code 
 MATCH (em:Employee {Name:"Albert"}), (nt:NewTenderS {Name:"NewTenderS"}), (ty:TenderType {Name:"Open"}) 
-CREATE (t1:Tender {TenderCode:"T"+left(randomUUID(),8)+right(randomUUID(),4), Title:"Tender 10", Description:"This is the tenth tender for testing purposes", SubmissionDate:datetime(), EndBidingDate:datetime() + duration({days:20}) , Budget:100000.00 })<-[:IS_NEW_TENDER_STATE]-(nt),
+CREATE (t1:Tender {TenderCode:"T"+left(randomUUID(),8)+right(randomUUID(),4), Title:"Tender 10", Description:"This is the tenth tender for testing purposes", SubmissionDate:datetime(), EndBidingDate:datetime() + duration({day:20}) , Budget:100000.00 })<-[:IS_NEW_TENDER_STATE]-(nt),
          (t1)-[:HAS_TENDER_DOCS]->(d:TenderDocS {Name:"TenderDocS"})-[:HAS_TENDER_DOCUMENT]->(:TenderDoc {DocName:"Tender_10_RFP", Type:"PDF", URL:"https://company-my.sharepoint.com/personal/Albert/Tender1/RFPDocument_t10.pdf", Description:"This is the Tender 10 RFP Document", Date:datetime()}),
          (d)-[:HAS_TENDER_DOCUMENT]->(:TenderDoc {DocName:"Tender_10_RFP_ResponseTemplate", Type:"PDF", URL:"https://company-my.sharepoint.com/personal/Albert/Tender10/RFPResponseTemplate-t10.pdf", Description:"This is the Tender 10 RFP mandatory response template", Date:datetime()}),
          (d)-[:HAS_TENDER_DOCUMENT]->(:TenderDoc {DocName:"Tender_10_RFP_Presentation", Type:"PDF", URL:"https://company-my.sharepoint.com/personal/Albert/Tender10/RFPPresentation_t10.pdf", Description:"This is the Tender 10 RFP Presentation", Date:datetime()}),
@@ -1091,7 +1082,7 @@ CREATE (t1:Tender {TenderCode:"T"+left(randomUUID(),8)+right(randomUUID(),4), Ti
 
 // Create the Tender 11 + Schema and let the system generate the Tender Code
 MATCH (em:Employee {Name:"Brandon"}), (nt:NewTenderS {Name:"NewTenderS"}) , (ty:TenderType {Name:"Selective"}) 
-CREATE (t1:Tender {TenderCode:"T"+left(randomUUID(),8)+right(randomUUID(),4), Title:"Tender 11", Description:"This is the eleventh tender for testing purposes", SubmissionDate:datetime(), EndBidingDate:datetime() + duration({days:30}) , Budget:500000.00 })<-[:IS_NEW_TENDER_STATE]-(nt),
+CREATE (t1:Tender {TenderCode:"T"+left(randomUUID(),8)+right(randomUUID(),4), Title:"Tender 11", Description:"This is the eleventh tender for testing purposes", SubmissionDate:datetime(), EndBidingDate:datetime() + duration({day:30}) , Budget:500000.00 })<-[:IS_NEW_TENDER_STATE]-(nt),
          (t1)-[:HAS_TENDER_DOCS]->(d:TenderDocS {Name:"TenderDocS"})-[:HAS_TENDER_DOCUMENT]->(:TenderDoc {DocName:"Tender_11_RFP", Type:"PDF", URL:"https://company-my.sharepoint.com/personal/Brandon/Tender11/RFPDocument_t11.pdf", Description:"This is the Tender 11 RFP Document", Date:datetime()}),
          (d)-[:HAS_TENDER_DOCUMENT]->(:TenderDoc {DocName:"Tender_11_RFP_ResponseTemplate", Type:"PDF", URL:"https://company-my.sharepoint.com/personal/Brndon/Tender11/RFPResponseTemplate-t11.pdf", Description:"This is the Tender 11 RFP mandatory response template", Date:datetime()}),
          (t1)-[:HAS_REQUESTER]->(em),
@@ -1103,7 +1094,7 @@ CREATE (t1:Tender {TenderCode:"T"+left(randomUUID(),8)+right(randomUUID(),4), Ti
 
 // Create Tender 12 + Schema and let the system generate the Tender Code. This will be a "Negotiated" Tender Type, and we will only invite Vendor 7 to it.
 MATCH (em:Employee {Name:"Charles"}), (nt:NewTenderS {Name:"NewTenderS"}) , (ty:TenderType {Name:"Negotiated"}) 
-CREATE (t1:Tender {TenderCode:"T"+left(randomUUID(),8)+right(randomUUID(),4), Title:"Tender 12", Description:"This is the twelvth tender for testing purposes", SubmissionDate:datetime(), EndBidingDate:datetime() + duration({days:45}) , Budget:1300000.00 })<-[:IS_NEW_TENDER_STATE]-(nt),
+CREATE (t1:Tender {TenderCode:"T"+left(randomUUID(),8)+right(randomUUID(),4), Title:"Tender 12", Description:"This is the twelvth tender for testing purposes", SubmissionDate:datetime(), EndBidingDate:datetime() + duration({day:45}) , Budget:1300000.00 })<-[:IS_NEW_TENDER_STATE]-(nt),
          (t1)-[:HAS_TENDER_DOCS]->(d:TenderDocS {Name:"TenderDocS"})-[:HAS_TENDER_DOCUMENT]->(:TenderDoc {DocName:"Tender_12_RFP", Type:"PDF", URL:"https://company-my.sharepoint.com/personal/Charles/Tender12/RFPDocument_t12.pdf", Description:"This is the Tender 12 RFP Document", Date:datetime()}),
          (d)-[:HAS_TENDER_DOCUMENT]->(:TenderDoc {DocName:"Tender_12_RFP_ResponseTemplate", Type:"PDF", URL:"https://company-my.sharepoint.com/personal/Charles/Tender12/RFPResponseTemplate-t12.pdf", Description:"This is the Tender 12 RFP mandatory response template", Date:datetime()}),
          (d)-[:HAS_TENDER_DOCUMENT]->(:TenderDoc {DocName:"Tender_12_RFP_Presentation", Type:"PDF", URL:"https://company-my.sharepoint.com/personal/Charles/Tender12/RFPPresentation_t12.pdf", Description:"This is the Tender 12 RFP Presentation", Date:datetime()}),
@@ -1116,7 +1107,7 @@ CREATE (t1:Tender {TenderCode:"T"+left(randomUUID(),8)+right(randomUUID(),4), Ti
 
 // Create the Tender 13 + Schema and let the system generate the Tender Code  
 MATCH (em:Employee {Name:"Donald"}), (nt:NewTenderS {Name:"NewTenderS"}) , (ty:TenderType {Name:"Open"}) 
-CREATE (t1:Tender {TenderCode:"T"+left(randomUUID(),8)+right(randomUUID(),4), Title:"Tender 13", Description:"This is the thirteenth tender for testing purposes", SubmissionDate:datetime(), EndBidingDate:datetime() + duration({days:30}) , Budget:70000.00 })<-[:IS_NEW_TENDER_STATE]-(nt),
+CREATE (t1:Tender {TenderCode:"T"+left(randomUUID(),8)+right(randomUUID(),4), Title:"Tender 13", Description:"This is the thirteenth tender for testing purposes", SubmissionDate:datetime(), EndBidingDate:datetime() + duration({day:30}) , Budget:70000.00 })<-[:IS_NEW_TENDER_STATE]-(nt),
          (t1)-[:HAS_TENDER_DOCS]->(d:TenderDocS {Name:"TenderDocS"})-[:HAS_TENDER_DOCUMENT]->(:TenderDoc {DocName:"Tender_13_RFQ", Type:"PDF", URL:"https://company-my.sharepoint.com/personal/Donald/Tender13/RFQDocument_t13.pdf", Description:"This is the Tender 13 RFQ Document", Date:datetime()}),
          (d)-[:HAS_TENDER_DOCUMENT]->(:TenderDoc {DocName:"Tender_13_RFQ_ResponseTemplate", Type:"PDF", URL:"https://company-my.sharepoint.com/personal/Donald/Tender13/RFQResponseTemplate-t13.pdf", Description:"This is the Tender 13 RFQ mandatory response template", Date:datetime()}),
          (t1)-[:HAS_REQUESTER]->(em),
@@ -1183,7 +1174,7 @@ DELETE r1;
 // As Tender 10 is Type "Open", we can invite all the Approved Vendors to it. The UI will do this.
 // In a real scenario, there would be more criteria to select the Vendors (type, size, etc.), and the Cypher query would need to be tailored, but for this demo, we will just invite all of them.
 MATCH (t:Tender {Title:"Tender 10"})-[:HAS_INVITEES]->(iv:InvitedVendorS {Name:"InvitedVendorS"})
-UNWIND COLLECT {MATCH (v:Vendor)<-[:IS_VENDOR_APPROVED_STATE]-(:ApprovedVendorS) RETURN v} AS vendor
+MATCH (v:Vendor)<-[:IS_VENDOR_APPROVED_STATE]-(:ApprovedVendorS)  
         CREATE (iv)-[:HAS_INVITATION {Date:datetime()}]->(vendor);
 
 // Now we must communicate all the Tender 10 invitees about their invitation so they can decide if they want to participate in the Tender.
@@ -1254,5 +1245,4 @@ RETURN p1, p2;
 
 // The advantages of running a workflow like this one on a Property Graph is that you can be proactive not allowing Emplyees  
 // to parcticipate in the vetting of Bids by Vendors they have interacted multiple times in past Tenders when they played a different Role (Tender Requester/Manager). 
-// If you run your Workflows in RDBMSs as your have probably been doing, it would be impractical to do these type of assesments in real-time   
-
+// If you run your Workflows in RDBMSs as your have probably been doing, it would be impractical to do these type of assesments in real-time  
