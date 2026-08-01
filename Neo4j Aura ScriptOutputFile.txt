@@ -1,3 +1,17 @@
+// Running Neo4j Aura on a Google Cloud instance (latency) with GRAPH TYPE constraint check
+
+Pinging xxxxxxx.databases.neo4j.io [xx.xx.xxx.xxx] with 32 bytes of data:
+Reply from xx.xx.xxx.xxx: bytes=32 time=168ms TTL=104
+Reply from xx.xx.xxx.xxx: bytes=32 time=167ms TTL=104
+Reply from xx.xx.xxx.xxx: bytes=32 time=165ms TTL=104
+Reply from xx.xx.xxx.xxx: bytes=32 time=167ms TTL=104
+
+Ping statistics for xx.xx.xxx.xxx:
+    Packets: Sent = 4, Received = 4, Lost = 0 (0% loss),
+Approximate round trip times in milli-seconds:
+    Minimum = 165ms, Maximum = 168ms, Average = 166ms
+ 
+--------------------------------------------------------------------------------------
 
 Loaded 10 requester(s), 1 publisher(s), 6 approved vendor(s), 5 tender type(s)
 

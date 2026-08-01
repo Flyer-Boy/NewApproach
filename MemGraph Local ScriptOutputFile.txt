@@ -1,3 +1,5 @@
+// Running MemGraph on a local Docker Container - no constraints 
+
 Loaded 13 requester(s), 1 publisher(s), 6 approved vendor(s), 5 tender type(s)
 
 --- Tender lifecycle 1/20 ---
