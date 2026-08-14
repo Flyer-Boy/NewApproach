@@ -2,7 +2,7 @@
  
 After decades of working with RDBMS/SQL and enterprise software development, I dedicated eight years—and counting—to exploring and developing new ways to build Line of Business applications using Graph Databases, discovering innovative ways to leverage Graphs far beyond their conventional use cases.
 
-This journey began in 2013, after 17 years at Microsoft, where I worked in its Consulting division and later led Developer and Platform Evangelism across Brazil and Asia Pacific. I invested in and joined a startup to build what I believed could become a revolutionary Graph-Native Platform, where I developed many of the concepts, principles, and methodologies I continue to advocate today.
+This journey began in 2013, after 17 years at Microsoft, where I worked in its Consulting division and later led Developer and Platform Evangelism across Brazil and Asia Pacific. I invested in and joined a startup to build what I believed could become a revolutionary Graph-Native Platform, where I helped develop many of the concepts, principles, and methodologies I continue to enhance, adapt, and advocate today.
 
 Unfortunately, the startup did not survive. We were too ambitious and, arguably, ahead of our time in a very conservative market. Nevertheless, I believe those concepts and ideas are even more relevant today as we enter the AI era.
 
