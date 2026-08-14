@@ -1,6 +1,20 @@
 # A new approach to application development using Cypher/GQL (Graphs)
  
-After decades of working with RDBMS and SQL, I dedicated eight years (and counting…) to building and exploring ways to develop Line of Business applications using Graph Databases, discovering innovative ways to leverage Graphs beyond conventional approaches. My deep dive into Graphs turned me into a passionate advocate, unwilling to see their potential confined to Data Science, Knowledge Graphs, or Graph RAG for LLMs — which currently account for a mere 2% of the entire database market. Graphs aren’t just specialized tools but the ideal foundation for almost any application. Data should be conceived in the Graph, not created elsewhere and then imported. By doing so, we unlock the full power of Data Science and Knowledge Graphs from the start. Most importantly, graph-native systems are Agentic AI-ready, as they gather all the information + context/semantics needed for reasoning.
+After decades of working with RDBMS/SQL and enterprise software development, I dedicated eight years—and counting—to exploring and developing new ways to build Line of Business applications using Graph Databases, discovering innovative ways to leverage Graphs far beyond their conventional use cases.
+
+This journey began in 2013, after 17 years at Microsoft, where I worked in its Consulting division and later led Developer and Platform Evangelism across Brazil and Asia Pacific. I invested in and joined a startup to build what I believed could become a revolutionary Graph-Native Platform, where I developed many of the concepts, principles, and methodologies I continue to advocate today.
+
+Unfortunately, the startup did not survive. We were too ambitious and, arguably, ahead of our time in a very conservative market. Nevertheless, I believe those concepts and ideas are even more relevant today as we enter the AI era.
+
+My deep dive into Graphs turned me into a passionate advocate, and I have become increasingly unwilling to see their potential confined to Data Science, Knowledge Graphs, or Graph RAG for LLMs—which together represent only a small fraction of the broader database market.
+
+Graphs are not merely specialized tools for specialized use cases. I believe they can become the ideal foundation for almost any Line of Business application.
+
+Data should be conceived and created in the Graph—not created elsewhere in tables and subsequently imported into a Graph. When the Graph becomes the native data substrate, we can unlock the full potential of relationships, semantics, ontology, context, and ultimately Data Science and Knowledge Graph capabilities from the very beginning.
+
+Most importantly, Graph-Native systems are inherently **Agentic AI-ready**. They can gather, connect, and expose the information, context, semantics, ontology, and even embeddings that AI agents need to reason about data in real time—without relying on expensive, complex ETL pipelines or repeated data ingestion from disconnected tables.
+
+This is the fundamental shift I am advocating: **don't put Graphs around your applications. Build the applications around the Graph.**
 
 This repository is an extension of my Articles on developing applications using a Graph Database, using an alternative approach; here are a few:
 
@@ -71,3 +85,7 @@ I am constantly testing my model with different Graph Databases, and when they w
 **“Alea iacta est”—crossing the Rubicon of Graph adoption!** 🚀
 
 Enjoy!
+
+
+
+*(If you are curious about the repo name “Flyer-Boy”, well...that is a long, long story, and it happens to be my XBOX Gametag “Flyerboy”, Instagram name, Discord tag, etc… it now follows me everywhere, so bear with it. Sorry)*
