@@ -32,7 +32,7 @@ Usage:
     export URI="bolt://localhost:7687"
     export USERNAME=""
     export PASSWORD=""
-    python Tender_Workflow_Random_Test_Generator_MemGraph_BETA.py --tenders 20 --seed 42
+    python Tender_Workflow_Random_Test_Generator_MemGraph.py --tenders 20 --seed 42
 """
 
 from __future__ import annotations
