@@ -16,6 +16,8 @@ Most importantly, Graph-Native systems are inherently **Agentic AI-ready**. They
 
 This is the fundamental shift I am advocating: **don't put Graphs around your applications. Build the applications around the Graph.**
 
+**This has evolved far beyond a side project. It is now a life mission—one I will pursue for as long as it takes, until I see it become reality in one form or another.**
+
 This repository is an extension of my Articles on developing applications using a Graph Database, using an alternative approach; here are a few:
 
 1) **The Concept:**  https://medium.com/@marcospinedo/a-new-approach-to-application-development-using-cypher-gql-graphs-7d191e0c55d3
