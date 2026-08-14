@@ -32,12 +32,13 @@ In a nutshell/key principles:
 
 3) **How to use Graphs to build Business Processes/Workflows**: https://medium.com/@marcospinedo/how-graphs-simplify-business-processes-and-workflows-like-moving-balls-between-baskets-c9606c9e973f
 
-4) **A video presentation of the Concepts + POC Demo:** https://youtu.be/ExupBmmH1Rs
+4) **A video presentation of the Concepts + POC Demo:** https://youtu.be/ExupBmmH1Rs - I also recommend the companion article with the slides and extended transcripts: https://medium.com/@marcospinedo/rethinking-line-of-business-applications-graphs-cypher-as-an-alternative-to-rdbms-sql-fd1d204f99b7
 
 In this repo, you will find a few Cypher scripts I used to demonstrate concepts in a Ride-Hailing POC, along with the Prototype (POC) Application code. It also includes the Tender Workflow script, illustrating how a Workflow application can be developed using Graphs. 
 
 I will keep adding content and prototypes on using Graphs to build line-of-business applications, fusing this New Approach.   
 
+The files are:
 The files are:
 
 1. **/RideHailing/RideHailing.cypher** — This script can be executed in full to create the initial nodes (Passengers, Drivers, Cars, and Bookings) in different states so that you can familiarize yourself with the Model.
@@ -50,14 +51,23 @@ The files are:
 8. **/TenderWorkflow/TenderWorkflow v6.cypher** - The Tendering System Proof of Concept (POC) simulation script with the RelType property on the “:HAS” collection relationships. (Neo4j Compatible)
 9. **/TenderWorkflow/TenderWorkflow v6 - MemGraph.cypher** - The Tendering System Proof of Concept (POC) simulation script adapted to work on MemGraph (MemGraph Compatible)
 10. **/TenderWorkflow/TenderWorkflow Graph Model.png** - The Tender Workflow model for you to have a look at.
-11. The new **/TenderWorkflow/TenderWorkflow v7.1.cypher** - Now with full ontology implementation
-12. The **/TenderWorkflow/TenderGraphType v1.cypher** - TenderWorkflow v7.1 companion script that implements Cypher 25/Neo4j 2026.02 GRAPH TYPE, adding an extra layer of ontology compliance to the Tender Workflow. (requires Neo4j Aura with Cypher 25)
-13. The **/TenderWorkflow/Tender_Workflow_Random_Test_Generator.py** is a parameterized Python application that serves as a Tender Workflow Random Test Generator. It randomly creates new Tenders, vets them, invites vendors, accepts Bids, vets the bids, and awards (or not) the Tenders strictly following the Workflow rules, showcasing this Approach of using graphs to run any workflow Business Application, with full Ontology and Context built in from inception. I invite you to play with it!
+11. The NEW **/TenderWorkflow/TenderWorkflow v7.1.cypher** - Now with full ontology implementation
+12. The NEW **/TenderWorkflow/TenderGraphType v1.cypher** - TenderWorkflow v7.1 companion script that implements Cypher 25/Neo4j 2026.02 GRAPH TYPE, adding an extra layer of ontology compliance to the Tender Workflow. (requires Neo4j Aura with Cypher 25)
+13. The **/TenderWorkflow/Tender_Workflow_Random_Test_Generator.py** is a parameterized Python application that serves as a Tender Workflow Random Test Generator (Thanks, Claude, for your help). It randomly creates new Tenders, vets them, invites vendors, accepts Bids, vets the bids, and awards (or not) the Tenders strictly following the Workflow rules, showcasing this Approach of using graphs to run any workflow Business Application, with full Ontology and Context built in from inception. I invite you to play with it and stress test the Graph!
+14. The **/NorthWind** - The good old NorthWind database model adapted to the Graph Model according to the concepts/key principles. You will find the Cypher script and the import files (fixed, as the original ones provided by Neo4j (neo4j-graph-examples/northwind: From RDBMS to Graph, using a classic dataset) are not properly cleaned up, as I reported: Some CSV files have misplaced fields due to comas · Issue #53 · neo4j-graph-examples/northwind) 
+15. The **/NorthWindPLUS** - This is still “work in progress” (WIP). It is an ambitious project in which I am adding a full ontology to this old model and making it a 360/full-cycle process with everything I can add. When the Graph model is completed, I will create the Python loop applications that will simulate each part of the model separately (Random Customer Orders, PO generation for low inventory, PO vetting with 3+ vetting levels, Supplier RFQ submission for incoming PO’s, RFQ vetting, Inventory update as PO’s are fulfilled, Customer Order fulfillment, Inventory update, Customer order shipping, recomendation engine update, etc.. ) so you can run them in paralell and see if the Graph holds the load.
+
+Most of the Cypher scripts are documented, and they explain what is going on at each block, so you can learn how the concepts/principles are being applied to the model. They are a good learning resource. 
+
+To try these scripts out and get to understand the concepts, you will need a Neo4j Database.     
 
 You can try it with Neo4j Aura or Neo4j Desktop. If you don’t have an Aura account yet, get one here: https://neo4j.com/cloud/aura-free/. If you are new to Cypher, you can get started at Neo4j’s GraphAcademy: https://graphacademy.neo4j.com/
 
 I used Neo4j Cypher in my scripts and the code above. With the standardization of GQL and the widespread adoption of OpenCypher, the portability of Cypher-based scripts across various graph databases is becoming increasingly feasible. However, it is always subject to nuances in graph implementation.
 
-“Alea iacta est”—crossing the Rubicon of Graph adoption! 🚀
+I am constantly testing my model with different Graph Databases, and when they work, I will place the scripts adapted to the Graph's Cipher/GQL implementation. 
+
+
+**“Alea iacta est”—crossing the Rubicon of Graph adoption!** 🚀
 
 Enjoy!
