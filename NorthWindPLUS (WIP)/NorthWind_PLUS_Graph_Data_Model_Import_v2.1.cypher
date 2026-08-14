@@ -466,7 +466,7 @@ CREATE (p)-[:HAS_L3_PO_APPROVAL {Date:datetime(), Comment:"This PO is approved b
 MATCH (s:Supplier)
 CREATE (s)-[:HAS_NEW_PENDIG_POS]->(:NewPoS) // Answers to supplier question: Do I have any new PO's  
        (s)-[:HAS_IN_PROGRESS_POS]->(:InProgressPoS)  // Answers to supplier question: Do I have PO's in progress that require my followup 
-       (s)-[:HAS_CLOSED_POS]->(:ClosedPoS) // Answers to supplier question: Where are my passed PO's 
+       (s)-[:HAS_CLOSED_POS]->(:ClosedPoS); // Answers to supplier question: Where are my passed PO's 
 
 // We will also have to Create a schemas for the PO's that have made it thrugh the entire vetting process and are submitted to the Supplier. 
 // We will do this as part of the PO submission process.
@@ -474,7 +474,7 @@ CREATE (s)-[:HAS_NEW_PENDIG_POS]->(:NewPoS) // Answers to supplier question: Do 
 // Let's now put on the "Buyer" hat and do the last phase of the PO vetting.
 // The Buyer will Approve and Submit the PO's to the respective Supplier
 
-MATCH (bu:Employee)<-[:IS_ACTIVE_ROLE]-(ro:RolE {Name:"Level3Approver"}), (su:SubmittedPoS {Name:"SubmittedPoS"})
+MATCH (bu:Employee)<-[:IS_ACTIVE_ROLE]-(ro:RolE {Name:"Buyer"}), (su:SubmittedPoS {Name:"SubmittedPoS"})
 WITH su, bu ORDER BY rand() LIMIT 1
 MATCH (a:ApprovedPoS {Name:"ApprovedPoS"})-[ap]->(p:PurchaseOrder)-[id:HAS_PO_ITEM]->(i:Product)-[]-(s:Supplier)-[:HAS_NEW_PENDIG_POS]->(snp:NewPoS) 
 WITH ap, s, bu, su, p
@@ -482,9 +482,49 @@ CREATE (p)-[:HAS_BUYER_PO_APPROVAL {Date:datetime(), Comment:"This PO is approve
        (su)-[:IS_SUBMITTED_PO_STATE {Date:datetime()}]->(p)
        (snp)-[:HAS_NEW_PO]-(p)  // The Buyer places the PO in the Supplire's NewPoS collection 
        (p)-[:HAS_SUPPLIER_NEW_RFQ]-(:PoNewRFQ)  //The Buyer enhances the Schema of the PO with s collection to hold future RFQs submited by the Supplier
+       (p)-[:HAS_SUPPLIER_NEW_RFQ]-(:PoNewRFQ)
        (p)-[:HAS_SUPPLIER_APPROVED_RFQ]-(:PoApprovedRFQ)
        (p)-[:HAS_SUPPLIER_REJECTED_RFQ]-(:PoRejectedRFQ)
 DELETE ap;
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 
 
 
