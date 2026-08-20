@@ -22,7 +22,7 @@ This repository is an extension of my Articles on developing applications using 
 
 1) **The Concept:**  https://medium.com/@marcospinedo/a-new-approach-to-application-development-using-cypher-gql-graphs-7d191e0c55d3
 
-In a nutshell/key principles:
+   In a nutshell/key principles:
 
 * **Proper Noun Nodes:**
 
