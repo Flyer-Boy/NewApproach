@@ -1,0 +1,12 @@
+categories.csv
+customers.csv
+employee-territories.csv
+employees.csv
+files.txt
+order-details.csv
+orders.csv
+products.csv
+regions.csv
+shippers.csv
+suppliers.csv
+territories.csv

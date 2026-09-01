@@ -1,0 +1,407 @@
+@prefix :     <http://example.org/northwindplus#> .
+@prefix owl:  <http://www.w3.org/2002/07/owl#> .
+@prefix rdf:  <http://www.w3.org/1999/02/22-rdf-syntax-ns#> .
+@prefix rdfs: <http://www.w3.org/2000/01/rdf-schema#> .
+@prefix xsd:  <http://www.w3.org/2001/XMLSchema#> .
+
+#################################################################
+# NorthWind PLUS Ontology (RDF/OWL equivalent of the Neo4j
+# GRAPH TYPE schema, NorthwindPlusGraphType_v1.cypher).
+#
+# Same conventions as the Tender Workflow ontology this project's
+# sibling produced: two top-level classes (:Entity / :Collection)
+# make the model's own "Proper Noun Nodes vs. Collections" design
+# principle explicit, and owl:hasKey is the closest OWL analog to
+# the GRAPH TYPE's REQUIRE ... IS KEY constraints.
+#
+# Translation notes / known issues (see the .cypher schema's own
+# header for full detail):
+#
+# 1. RESOLVED: HAS_CLOSED_PO_STATE was previously used in the source
+#    model for two structurally different edges: (PoS)->(ClosedPoS)
+#    collection membership, and (ClosedPoS)->(PurchaseOrder) instance
+#    state. Confirmed resolution: HAS_CLOSED_PO_STATE stays the
+#    collection-membership edge (:hasClosedPoState below); the
+#    instance-level edge is IS_CLOSED_PO_STATE (:isClosedPoState below).
+#    The source Cypher script and the Python stress-test harness both
+#    still need this rename applied to their own IS_CLOSED_PO_STATE
+#    edges -- this file reflects the target state.
+# 2. Order.OrderDate/RequiredDate/RequireDate: two creation paths,
+#    two shapes (see schema header). All declared as xsd:string
+#    below, matching the less-normalized of the two paths, since
+#    OWL datatype properties need one range and the two paths
+#    don't currently agree on either name or type.
+# 3. Edge (relationship) properties -- Date, Comment, StartDate,
+#    etc. -- attach to a specific edge instance in the property
+#    graph. Plain RDF triples have no slot for that. The datatype
+#    properties below are declared for completeness, but a fully
+#    faithful RDF version would need reification or an n-ary
+#    relation pattern to attach them correctly, same caveat as
+#    the Tender Workflow ontology.
+# 4. SupplierNewPoS, SupplierOpenPoS, SupplierClosedPoS, PoNewRFQ,
+#    and PoRejectedRFQ are per-Supplier / per-PurchaseOrder
+#    Collection instances, not singletons, and carry no
+#    identifying property at all -- no owl:hasKey is declared for
+#    these five classes, matching the schema's own choice not to
+#    require one.
+#################################################################
+
+<http://example.org/northwindplus>
+    a owl:Ontology ;
+    rdfs:label "NorthWind PLUS Ontology" ;
+    rdfs:comment "RDF/OWL translation of the Neo4j GRAPH TYPE schema for the NorthWind PLUS Graph-Native procurement/fulfillment model." .
+
+#################################################################
+# Top-level classes
+#################################################################
+
+:Entity a owl:Class ;
+    rdfs:comment "A 'proper noun' node: an individual real-world thing with identity-defining properties." .
+
+:Collection a owl:Class ;
+    rdfs:comment "A hub/collection node representing a superset or a state-based subset. Membership is expressed via HAS_*_STATE / IS_*_STATE object properties, not via OWL class membership." .
+
+#################################################################
+# Entity classes
+#################################################################
+
+:ProductCategorY a owl:Class ; rdfs:subClassOf :Entity .
+:Supplier a owl:Class ; rdfs:subClassOf :Entity .
+:Product a owl:Class ; rdfs:subClassOf :Entity .
+:Customer a owl:Class ; rdfs:subClassOf :Entity .
+:Employee a owl:Class ; rdfs:subClassOf :Entity .
+:Person a owl:Class ; rdfs:subClassOf :Entity .
+:Territory a owl:Class ; rdfs:subClassOf :Entity .
+:Regions a owl:Class ; rdfs:subClassOf :Entity .
+:Shipper a owl:Class ; rdfs:subClassOf :Entity .
+:Order a owl:Class ; rdfs:subClassOf :Entity .
+:PurchaseOrder a owl:Class ; rdfs:subClassOf :Entity .
+:RFQ a owl:Class ; rdfs:subClassOf :Entity .
+:Address a owl:Class ; rdfs:subClassOf :Entity .
+:Contact a owl:Class ; rdfs:subClassOf :Entity .
+:Notes a owl:Class ; rdfs:subClassOf :Entity .
+:ShipInfo a owl:Class ; rdfs:subClassOf :Entity .
+:RolE a owl:Class ; rdfs:subClassOf :Entity ;
+    rdfs:comment "An individual job title; a member of RoleS, and a hub of Employees holding that title." .
+
+# Isotope classes -- see the source schema's Read-Only Nodes exceptions.
+:InventoryLevel a owl:Class ; rdfs:subClassOf :Entity .
+:OrderLevel a owl:Class ; rdfs:subClassOf :Entity .
+:ReorderLevel a owl:Class ; rdfs:subClassOf :Entity .
+
+#################################################################
+# Collection classes
+#################################################################
+
+:CategorieS a owl:Class ; rdfs:subClassOf :Collection .
+:RoleS a owl:Class ; rdfs:subClassOf :Collection .
+:EmployeeDirectorY a owl:Class ; rdfs:subClassOf :Collection .
+:ProductStatusDiscontinueD a owl:Class ; rdfs:subClassOf :Collection .
+:ProductStatusAvailablE a owl:Class ; rdfs:subClassOf :Collection .
+:OrderStatusOpeN a owl:Class ; rdfs:subClassOf :Collection .
+:OrderStatusFulfilleD a owl:Class ; rdfs:subClassOf :Collection .
+:OrderStatusCanceleD a owl:Class ; rdfs:subClassOf :Collection .
+:OrderS a owl:Class ; rdfs:subClassOf :Collection .
+:SupplierS a owl:Class ; rdfs:subClassOf :Collection .
+:PendingSupplierS a owl:Class ; rdfs:subClassOf :Collection .
+:ApprovedSupplierS a owl:Class ; rdfs:subClassOf :Collection .
+:RejectedSupplierS a owl:Class ; rdfs:subClassOf :Collection .
+:PoS a owl:Class ; rdfs:subClassOf :Collection .
+:NewPoS a owl:Class ; rdfs:subClassOf :Collection .
+:ApprovedPoS a owl:Class ; rdfs:subClassOf :Collection .
+:RejectedPoS a owl:Class ; rdfs:subClassOf :Collection .
+:SubmittedPoS a owl:Class ; rdfs:subClassOf :Collection .
+:ClosedPoS a owl:Class ; rdfs:subClassOf :Collection .
+
+# Non-singleton Collections -- one instance per Supplier / per
+# PurchaseOrder, no identifying property. See translation note 4.
+:SupplierNewPoS a owl:Class ; rdfs:subClassOf :Collection .
+:SupplierOpenPoS a owl:Class ; rdfs:subClassOf :Collection .
+:SupplierClosedPoS a owl:Class ; rdfs:subClassOf :Collection .
+:PoNewRFQ a owl:Class ; rdfs:subClassOf :Collection .
+:PoRejectedRFQ a owl:Class ; rdfs:subClassOf :Collection .
+
+#################################################################
+# Datatype properties (node properties)
+#################################################################
+
+:name a owl:DatatypeProperty ; rdfs:range xsd:string ;
+    rdfs:domain [ a owl:Class ; owl:unionOf ( :CategorieS :RoleS :EmployeeDirectorY :SupplierS
+        :PendingSupplierS :ApprovedSupplierS :RejectedSupplierS :PoS :NewPoS :ApprovedPoS
+        :RejectedPoS :SubmittedPoS :ClosedPoS ) ] ;
+    rdfs:comment "The single identifying/hub property for every singleton Collection class." .
+
+:status a owl:DatatypeProperty ; rdfs:range xsd:string ;
+    rdfs:domain [ a owl:Class ; owl:unionOf ( :ProductStatusDiscontinueD :ProductStatusAvailablE
+        :OrderStatusOpeN :OrderStatusFulfilleD :OrderStatusCanceleD ) ] .
+
+:categoryID a owl:DatatypeProperty ; rdfs:domain :ProductCategorY ; rdfs:range xsd:string .
+:categoryName a owl:DatatypeProperty ; rdfs:domain :ProductCategorY ; rdfs:range xsd:string .
+:description a owl:DatatypeProperty ; rdfs:range xsd:string ;
+    rdfs:domain [ a owl:Class ; owl:unionOf ( :ProductCategorY :RolE ) ] .
+
+:supplierID a owl:DatatypeProperty ; rdfs:domain :Supplier ; rdfs:range xsd:string .
+:companyName a owl:DatatypeProperty ; rdfs:range xsd:string ;
+    rdfs:domain [ a owl:Class ; owl:unionOf ( :Supplier :Customer :Shipper ) ] .
+:homePage a owl:DatatypeProperty ; rdfs:domain :Supplier ; rdfs:range xsd:string .
+
+:productID a owl:DatatypeProperty ; rdfs:domain :Product ; rdfs:range xsd:string .
+:productName a owl:DatatypeProperty ; rdfs:domain :Product ; rdfs:range xsd:string .
+:unitPrice a owl:DatatypeProperty ; rdfs:range xsd:float ;
+    rdfs:domain [ a owl:Class ; owl:unionOf ( :Product ) ] .
+:quantityPerUnit a owl:DatatypeProperty ; rdfs:domain :Product ; rdfs:range xsd:string .
+
+:customerID a owl:DatatypeProperty ; rdfs:domain :Customer ; rdfs:range xsd:string .
+:contactName a owl:DatatypeProperty ; rdfs:range xsd:string ;
+    rdfs:domain [ a owl:Class ; owl:unionOf ( :Customer :Contact ) ] .
+:contactTitle a owl:DatatypeProperty ; rdfs:range xsd:string ;
+    rdfs:domain [ a owl:Class ; owl:unionOf ( :Customer :Contact ) ] .
+
+:employeeID a owl:DatatypeProperty ; rdfs:domain :Employee ; rdfs:range xsd:string .
+:email a owl:DatatypeProperty ; rdfs:range xsd:string ;
+    rdfs:domain [ a owl:Class ; owl:unionOf ( :Employee :Contact ) ] .
+:extension a owl:DatatypeProperty ; rdfs:domain :Employee ; rdfs:range xsd:string .
+:hireDate a owl:DatatypeProperty ; rdfs:domain :Employee ; rdfs:range xsd:string .
+:photoPath a owl:DatatypeProperty ; rdfs:domain :Employee ; rdfs:range xsd:string .
+
+:firstName a owl:DatatypeProperty ; rdfs:domain :Person ; rdfs:range xsd:string .
+:lastName a owl:DatatypeProperty ; rdfs:domain :Person ; rdfs:range xsd:string .
+:titleOfCourtesy a owl:DatatypeProperty ; rdfs:domain :Person ; rdfs:range xsd:string .
+:birthDate a owl:DatatypeProperty ; rdfs:domain :Person ; rdfs:range xsd:string .
+:personalPhone a owl:DatatypeProperty ; rdfs:domain :Person ; rdfs:range xsd:string .
+:personalEmail a owl:DatatypeProperty ; rdfs:domain :Person ; rdfs:range xsd:string .
+
+:territoryID a owl:DatatypeProperty ; rdfs:domain :Territory ; rdfs:range xsd:string .
+:territoryDescription a owl:DatatypeProperty ; rdfs:domain :Territory ; rdfs:range xsd:string .
+:regionID a owl:DatatypeProperty ; rdfs:domain :Regions ; rdfs:range xsd:string .
+:regionDescription a owl:DatatypeProperty ; rdfs:domain :Regions ; rdfs:range xsd:string .
+:shipperID a owl:DatatypeProperty ; rdfs:domain :Shipper ; rdfs:range xsd:string .
+:phone a owl:DatatypeProperty ; rdfs:range xsd:string ;
+    rdfs:domain [ a owl:Class ; owl:unionOf ( :Shipper :Contact ) ] .
+
+# See translation note 2: two shapes, one range chosen for both.
+:orderID a owl:DatatypeProperty ; rdfs:domain :Order ; rdfs:range xsd:string .
+:orderDate a owl:DatatypeProperty ; rdfs:domain :Order ; rdfs:range xsd:string .
+:requiredDate a owl:DatatypeProperty ; rdfs:domain :Order ; rdfs:range xsd:string .
+:requireDate a owl:DatatypeProperty ; rdfs:domain :Order ; rdfs:range xsd:string ;
+    rdfs:comment "Likely a typo for requiredDate in the source Cypher -- kept as its own property since the source model hasn't unified them yet." .
+
+:poNumber a owl:DatatypeProperty ; rdfs:domain :PurchaseOrder ; rdfs:range xsd:string .
+:poDate a owl:DatatypeProperty ; rdfs:domain :PurchaseOrder ; rdfs:range xsd:string .
+
+:rfqNumber a owl:DatatypeProperty ; rdfs:domain :RFQ ; rdfs:range xsd:string .
+:rfqDate a owl:DatatypeProperty ; rdfs:domain :RFQ ; rdfs:range xsd:string .
+:rfqComments a owl:DatatypeProperty ; rdfs:domain :RFQ ; rdfs:range xsd:string .
+
+:address a owl:DatatypeProperty ; rdfs:domain :Address ; rdfs:range xsd:string .
+:city a owl:DatatypeProperty ; rdfs:domain :Address ; rdfs:range xsd:string .
+:region a owl:DatatypeProperty ; rdfs:domain :Address ; rdfs:range xsd:string .
+:postalCode a owl:DatatypeProperty ; rdfs:domain :Address ; rdfs:range xsd:string .
+:country a owl:DatatypeProperty ; rdfs:domain :Address ; rdfs:range xsd:string .
+:fax a owl:DatatypeProperty ; rdfs:domain :Contact ; rdfs:range xsd:string .
+
+:notes a owl:DatatypeProperty ; rdfs:domain :Notes ; rdfs:range xsd:string .
+
+:shipName a owl:DatatypeProperty ; rdfs:domain :ShipInfo ; rdfs:range xsd:string .
+:shippedDate a owl:DatatypeProperty ; rdfs:domain :ShipInfo ; rdfs:range xsd:string .
+:freight a owl:DatatypeProperty ; rdfs:domain :ShipInfo ; rdfs:range xsd:string .
+:shippmentID a owl:DatatypeProperty ; rdfs:domain :ShipInfo ; rdfs:range xsd:string .
+
+:title a owl:DatatypeProperty ; rdfs:domain :RolE ; rdfs:range xsd:string .
+:rules a owl:DatatypeProperty ; rdfs:domain :RolE ; rdfs:range xsd:string .
+:approvalBase a owl:DatatypeProperty ; rdfs:domain :RolE ; rdfs:range xsd:float .
+:approvalLimit a owl:DatatypeProperty ; rdfs:domain :RolE ; rdfs:range xsd:float .
+
+:unitsInStock a owl:DatatypeProperty ; rdfs:domain :InventoryLevel ; rdfs:range xsd:integer .
+:unitsOnOrder a owl:DatatypeProperty ; rdfs:domain :OrderLevel ; rdfs:range xsd:integer .
+:stockThreshold a owl:DatatypeProperty ; rdfs:domain :ReorderLevel ; rdfs:range xsd:integer .
+:lastUpdate a owl:DatatypeProperty ; rdfs:range xsd:dateTime ;
+    rdfs:domain [ a owl:Class ; owl:unionOf ( :InventoryLevel :OrderLevel :ReorderLevel ) ] .
+
+# Edge-property (relationship-attached) datatype properties -- see
+# translation note 3. Declared for completeness; not attached to any
+# class domain since the same names recur across many relationship types.
+:date a owl:DatatypeProperty ; rdfs:range xsd:dateTime ;
+    rdfs:comment "Corresponds to the {Date} property on most state-transition and approval/rejection relationships. Requires reification or an n-ary relation pattern to express faithfully." .
+:startDate a owl:DatatypeProperty ; rdfs:range xsd:dateTime .
+:endDate a owl:DatatypeProperty ; rdfs:range xsd:dateTime .
+:comment a owl:DatatypeProperty ; rdfs:range xsd:string .
+:fulfillDate a owl:DatatypeProperty ; rdfs:range xsd:dateTime .
+:quantity a owl:DatatypeProperty ; rdfs:range xsd:integer .
+:discount a owl:DatatypeProperty ; rdfs:range xsd:float .
+:poqt a owl:DatatypeProperty ; rdfs:range xsd:float .
+:poPriceDiscount a owl:DatatypeProperty ; rdfs:range xsd:float .
+:rfqqt a owl:DatatypeProperty ; rdfs:range xsd:float .
+:rfqcost a owl:DatatypeProperty ; rdfs:range xsd:float .
+:resubmissionJustification a owl:DatatypeProperty ; rdfs:range xsd:string .
+:justification a owl:DatatypeProperty ; rdfs:range xsd:string .
+
+#################################################################
+# Object properties (relationships)
+#################################################################
+
+:isProductCategoryOf a owl:ObjectProperty ; rdfs:domain :ProductCategorY ; rdfs:range :Product .
+:hasCategory a owl:ObjectProperty ; rdfs:domain :CategorieS ; rdfs:range :ProductCategorY .
+:hasReorderLevel a owl:ObjectProperty ; rdfs:domain :Product ; rdfs:range :ReorderLevel .
+:hasSupplyOrder a owl:ObjectProperty ; rdfs:domain :Product ; rdfs:range :OrderLevel .
+:hasInventoryLevel a owl:ObjectProperty ; rdfs:domain :Product ; rdfs:range :InventoryLevel .
+:isDiscontinuedProduct a owl:ObjectProperty ; rdfs:domain :ProductStatusDiscontinueD ; rdfs:range :Product .
+:isAvailableProduct a owl:ObjectProperty ; rdfs:domain :ProductStatusAvailablE ; rdfs:range :Product .
+:hasProductSupplier a owl:ObjectProperty ; rdfs:domain :Product ; rdfs:range :Supplier .
+:supplies a owl:ObjectProperty ; rdfs:domain :Supplier ; rdfs:range :Product .
+:hasSupplierAddress a owl:ObjectProperty ; rdfs:domain :Supplier ; rdfs:range :Address .
+:hasSupplierContact a owl:ObjectProperty ; rdfs:domain :Supplier ; rdfs:range :Contact .
+
+:hasCustomerAddress a owl:ObjectProperty ; rdfs:domain :Customer ; rdfs:range :Address .
+:hasCustomerContact a owl:ObjectProperty ; rdfs:domain :Customer ; rdfs:range :Contact .
+
+:hasRoleTitle a owl:ObjectProperty ; rdfs:domain :RoleS ; rdfs:range :RolE .
+:isActiveRole a owl:ObjectProperty ; rdfs:domain :RolE ; rdfs:range :Employee .
+:hasPerson a owl:ObjectProperty ; rdfs:domain :Employee ; rdfs:range :Person .
+:hasHomeAddress a owl:ObjectProperty ; rdfs:domain :Person ; rdfs:range :Address .
+:hasEmployeeNotes a owl:ObjectProperty ; rdfs:domain :Employee ; rdfs:range :Notes .
+:reportsTo a owl:ObjectProperty ; rdfs:domain :Employee ; rdfs:range :Employee .
+:hasEmployee a owl:ObjectProperty ; rdfs:domain :Territory ; rdfs:range :Employee .
+:hasTerritory a owl:ObjectProperty ; rdfs:domain :Regions ; rdfs:range :Territory .
+:hasActiveEmployee a owl:ObjectProperty ; rdfs:domain :EmployeeDirectorY ; rdfs:range :Employee .
+
+:hasSupplierPendingState a owl:ObjectProperty ; rdfs:domain :SupplierS ; rdfs:range :PendingSupplierS .
+:hasSupplierApprovedState a owl:ObjectProperty ; rdfs:domain :SupplierS ; rdfs:range :ApprovedSupplierS .
+:hasSupplierRejectedState a owl:ObjectProperty ; rdfs:domain :SupplierS ; rdfs:range :RejectedSupplierS .
+:isSupplierPendingState a owl:ObjectProperty ; rdfs:domain :PendingSupplierS ; rdfs:range :Supplier .
+:isSupplierApprovedState a owl:ObjectProperty ; rdfs:domain :ApprovedSupplierS ; rdfs:range :Supplier .
+:isSupplierRejectedState a owl:ObjectProperty ; rdfs:domain :RejectedSupplierS ; rdfs:range :Supplier .
+
+:hasOrderCustomer a owl:ObjectProperty ; rdfs:domain :Order ; rdfs:range :Customer .
+:hasShipmentInfo a owl:ObjectProperty ; rdfs:domain :Order ; rdfs:range :ShipInfo .
+:hasShipper a owl:ObjectProperty ; rdfs:domain :ShipInfo ; rdfs:range :Shipper .
+:hasShipmentAddress a owl:ObjectProperty ; rdfs:domain :ShipInfo ; rdfs:range :Address .
+:soldBy a owl:ObjectProperty ; rdfs:domain :Order ; rdfs:range :Employee .
+:hasOrderProduct a owl:ObjectProperty ; rdfs:domain :Order ; rdfs:range :Product .
+:isFulfilledOrderState a owl:ObjectProperty ; rdfs:domain :OrderStatusFulfilleD ; rdfs:range :Order .
+:isOpenOrderState a owl:ObjectProperty ; rdfs:domain :OrderStatusOpeN ; rdfs:range :Order .
+:hasWarehouseFulfillment a owl:ObjectProperty ; rdfs:domain :Order ; rdfs:range :Employee .
+:hasOpenOrderStatus a owl:ObjectProperty ; rdfs:domain :OrderS ; rdfs:range :OrderStatusOpeN .
+:hasFulfilledOrderStatus a owl:ObjectProperty ; rdfs:domain :OrderS ; rdfs:range :OrderStatusFulfilleD .
+:hasCanceledOrderStatus a owl:ObjectProperty ; rdfs:domain :OrderS ; rdfs:range :OrderStatusCanceleD .
+
+:hasNewPoState a owl:ObjectProperty ; rdfs:domain :PoS ; rdfs:range :NewPoS .
+:hasApprovedPoState a owl:ObjectProperty ; rdfs:domain :PoS ; rdfs:range :ApprovedPoS .
+:hasRejectedPoState a owl:ObjectProperty ; rdfs:domain :PoS ; rdfs:range :RejectedPoS .
+:hasSubmittedPoState a owl:ObjectProperty ; rdfs:domain :PoS ; rdfs:range :SubmittedPoS .
+:hasClosedPoState a owl:ObjectProperty ; rdfs:domain :PoS ; rdfs:range :ClosedPoS .
+:isNewPoState a owl:ObjectProperty ; rdfs:domain :NewPoS ; rdfs:range :PurchaseOrder .
+:isApprovedPoState a owl:ObjectProperty ; rdfs:domain :ApprovedPoS ; rdfs:range :PurchaseOrder .
+:isRejectedPoState a owl:ObjectProperty ; rdfs:domain :RejectedPoS ; rdfs:range :PurchaseOrder .
+:isSubmittedPoState a owl:ObjectProperty ; rdfs:domain :SubmittedPoS ; rdfs:range :PurchaseOrder .
+# See translation note 1: this is the instance-level sense, named to
+# match what the source Cypher's own ontology comment says it SHOULD
+# be called, not its current (colliding) name.
+:isClosedPoState a owl:ObjectProperty ; rdfs:domain :ClosedPoS ; rdfs:range :PurchaseOrder .
+
+:poForSupplier a owl:ObjectProperty ; rdfs:domain :PurchaseOrder ; rdfs:range :Supplier .
+:poCreatedBy a owl:ObjectProperty ; rdfs:domain :PurchaseOrder ; rdfs:range :Employee .
+:hasPoItem a owl:ObjectProperty ; rdfs:domain :PurchaseOrder ; rdfs:range :Product .
+:hasPreviousPo a owl:ObjectProperty ; rdfs:domain :PurchaseOrder ; rdfs:range :PurchaseOrder .
+:hasBuyerPoApproval a owl:ObjectProperty ; rdfs:domain :PurchaseOrder ; rdfs:range :Employee .
+:hasL1PoApproval a owl:ObjectProperty ; rdfs:domain :PurchaseOrder ; rdfs:range :Employee .
+:hasL1PoRejection a owl:ObjectProperty ; rdfs:domain :PurchaseOrder ; rdfs:range :Employee .
+:hasL2PoApproval a owl:ObjectProperty ; rdfs:domain :PurchaseOrder ; rdfs:range :Employee .
+:hasL2PoRejection a owl:ObjectProperty ; rdfs:domain :PurchaseOrder ; rdfs:range :Employee .
+:hasL3PoApproval a owl:ObjectProperty ; rdfs:domain :PurchaseOrder ; rdfs:range :Employee .
+:hasL3PoRejection a owl:ObjectProperty ; rdfs:domain :PurchaseOrder ; rdfs:range :Employee .
+:hasWarehouseDelivery a owl:ObjectProperty ; rdfs:domain :PurchaseOrder ; rdfs:range :Employee .
+:hasFinancePayment a owl:ObjectProperty ; rdfs:domain :PurchaseOrder ; rdfs:range :Employee .
+
+:hasSupplierNewPendingPos a owl:ObjectProperty ; rdfs:domain :Supplier ; rdfs:range :SupplierNewPoS .
+:hasSupplierOpenPos a owl:ObjectProperty ; rdfs:domain :Supplier ; rdfs:range :SupplierOpenPoS .
+:hasSupplierClosedPos a owl:ObjectProperty ; rdfs:domain :Supplier ; rdfs:range :SupplierClosedPoS .
+:isSupplierNewPoState a owl:ObjectProperty ; rdfs:domain :SupplierNewPoS ; rdfs:range :PurchaseOrder .
+:isSupplierOpenPoState a owl:ObjectProperty ; rdfs:domain :SupplierOpenPoS ; rdfs:range :PurchaseOrder .
+:hasSupplierClosedPoState a owl:ObjectProperty ; rdfs:domain :SupplierClosedPoS ; rdfs:range :PurchaseOrder .
+
+:hasSupplierNewRfq a owl:ObjectProperty ; rdfs:domain :PurchaseOrder ; rdfs:range :PoNewRFQ .
+:hasSupplierRejectedRfq a owl:ObjectProperty ; rdfs:domain :PurchaseOrder ; rdfs:range :PoRejectedRFQ .
+:isSupplierNewRfq a owl:ObjectProperty ; rdfs:domain :PoNewRFQ ; rdfs:range :RFQ .
+:isSupplierRejectedRfqState a owl:ObjectProperty ; rdfs:domain :PoRejectedRFQ ; rdfs:range :RFQ .
+:isRfqForPo a owl:ObjectProperty ; rdfs:domain :RFQ ; rdfs:range :PurchaseOrder .
+:rfqFromSupplier a owl:ObjectProperty ; rdfs:domain :RFQ ; rdfs:range :Supplier .
+:hasRfqItem a owl:ObjectProperty ; rdfs:domain :RFQ ; rdfs:range :Product .
+:hasPreviousRfq a owl:ObjectProperty ; rdfs:domain :RFQ ; rdfs:range :RFQ .
+:hasBuyerRfqApproval a owl:ObjectProperty ; rdfs:domain :RFQ ; rdfs:range :Employee .
+:hasBuyerRfqRejection a owl:ObjectProperty ; rdfs:domain :RFQ ; rdfs:range :Employee .
+:hasApprovedRfq a owl:ObjectProperty ; rdfs:domain :PurchaseOrder ; rdfs:range :RFQ .
+
+#################################################################
+# Recommendation Engine -- an optional add-on context layer, per
+# the main script's own framing ("does not affect the core model...
+# can be added as a new layer of context/semantics/knowledge").
+# Introduces no new classes, only relationships between existing
+# Customer/Product entities.
+#################################################################
+
+:rating a owl:DatatypeProperty ; rdfs:range xsd:float ;
+    rdfs:comment "Corresponds to the {Rating} property on RATED -- collaborative-filtering score derived from purchase frequency." .
+:similarity a owl:DatatypeProperty ; rdfs:range xsd:float ;
+    rdfs:comment "Corresponds to the {Similarity} property on SIMILARITY -- cosine similarity between two Customers' rating vectors." .
+
+:rated a owl:ObjectProperty ; rdfs:domain :Customer ; rdfs:range :Product .
+:isSimilarTo a owl:ObjectProperty ; rdfs:domain :Customer ; rdfs:range :Customer ;
+    rdfs:comment "Conceptually symmetric (SIMILARITY is MERGEd as an undirected pattern in the source Cypher), though RDF/OWL triples are inherently directed -- declared as owl:SymmetricProperty below to capture that." .
+:isSimilarTo a owl:SymmetricProperty .
+
+#################################################################
+# Identity constraints (closest OWL analog to Neo4j KEY)
+#
+# owl:hasKey asserts uniqueness, not existence -- see the Tender
+# Workflow ontology's identical note. Restrictions added alongside
+# for the properties the schema marks NOT NULL (existence + uniqueness).
+#################################################################
+
+:ProductCategorY owl:hasKey ( :categoryID ) .
+:Supplier owl:hasKey ( :supplierID ) .
+:Product owl:hasKey ( :productID ) .
+:Customer owl:hasKey ( :customerID ) .
+:Employee owl:hasKey ( :employeeID ) .
+:Territory owl:hasKey ( :territoryID ) .
+:Regions owl:hasKey ( :regionID ) .
+:Shipper owl:hasKey ( :shipperID ) .
+:Order owl:hasKey ( :orderID ) .
+:PurchaseOrder owl:hasKey ( :poNumber ) .
+:RFQ owl:hasKey ( :rfqNumber ) .
+:RolE owl:hasKey ( :title ) .
+
+:ProductCategorY rdfs:subClassOf [ a owl:Restriction ; owl:onProperty :categoryID ; owl:someValuesFrom xsd:string ] .
+:Supplier rdfs:subClassOf [ a owl:Restriction ; owl:onProperty :supplierID ; owl:someValuesFrom xsd:string ] .
+:Product rdfs:subClassOf [ a owl:Restriction ; owl:onProperty :productID ; owl:someValuesFrom xsd:string ] .
+:Customer rdfs:subClassOf [ a owl:Restriction ; owl:onProperty :customerID ; owl:someValuesFrom xsd:string ] .
+:Employee rdfs:subClassOf [ a owl:Restriction ; owl:onProperty :employeeID ; owl:someValuesFrom xsd:string ] .
+:Territory rdfs:subClassOf [ a owl:Restriction ; owl:onProperty :territoryID ; owl:someValuesFrom xsd:string ] .
+:Regions rdfs:subClassOf [ a owl:Restriction ; owl:onProperty :regionID ; owl:someValuesFrom xsd:string ] .
+:Shipper rdfs:subClassOf [ a owl:Restriction ; owl:onProperty :shipperID ; owl:someValuesFrom xsd:string ] .
+:Order rdfs:subClassOf [ a owl:Restriction ; owl:onProperty :orderID ; owl:someValuesFrom xsd:string ] .
+:PurchaseOrder rdfs:subClassOf [ a owl:Restriction ; owl:onProperty :poNumber ; owl:someValuesFrom xsd:string ] .
+:RFQ rdfs:subClassOf [ a owl:Restriction ; owl:onProperty :rfqNumber ; owl:someValuesFrom xsd:string ] .
+:RolE rdfs:subClassOf [ a owl:Restriction ; owl:onProperty :title ; owl:someValuesFrom xsd:string ] .
+
+# Every singleton Collection class carries the same hasKey/existence
+# pattern on :name (or :status for the Product/Order state hubs).
+:CategorieS owl:hasKey ( :name ) .
+:RoleS owl:hasKey ( :name ) .
+:EmployeeDirectorY owl:hasKey ( :name ) .
+:SupplierS owl:hasKey ( :name ) .
+:PendingSupplierS owl:hasKey ( :name ) .
+:ApprovedSupplierS owl:hasKey ( :name ) .
+:RejectedSupplierS owl:hasKey ( :name ) .
+:PoS owl:hasKey ( :name ) .
+:NewPoS owl:hasKey ( :name ) .
+:ApprovedPoS owl:hasKey ( :name ) .
+:RejectedPoS owl:hasKey ( :name ) .
+:SubmittedPoS owl:hasKey ( :name ) .
+:ClosedPoS owl:hasKey ( :name ) .
+:ProductStatusDiscontinueD owl:hasKey ( :status ) .
+:ProductStatusAvailablE owl:hasKey ( :status ) .
+:OrderStatusOpeN owl:hasKey ( :status ) .
+:OrderStatusFulfilleD owl:hasKey ( :status ) .
+:OrderStatusCanceleD owl:hasKey ( :status ) .
+:OrderS owl:hasKey ( :name ) .
