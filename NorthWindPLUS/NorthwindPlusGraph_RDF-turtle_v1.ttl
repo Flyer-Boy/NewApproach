@@ -23,14 +23,14 @@
 #    state. Confirmed resolution: HAS_CLOSED_PO_STATE stays the
 #    collection-membership edge (:hasClosedPoState below); the
 #    instance-level edge is IS_CLOSED_PO_STATE (:isClosedPoState below).
-#    The source Cypher script and the Python stress-test harness both
-#    still need this rename applied to their own IS_CLOSED_PO_STATE
-#    edges -- this file reflects the target state.
-# 2. Order.OrderDate/RequiredDate/RequireDate: two creation paths,
-#    two shapes (see schema header). All declared as xsd:string
-#    below, matching the less-normalized of the two paths, since
-#    OWL datatype properties need one range and the two paths
-#    don't currently agree on either name or type.
+#    Confirmed applied consistently in the source Cypher script and the
+#    Python stress-test harness as of the ZONED DATETIME standardization
+#    pass -- this is no longer just a target state.
+# 2. ShipInfo.shippedDate is NOT NULL, using a far-future sentinel date
+#    (9999-12-31) for Orders that haven't shipped -- not left nullable.
+#    Open vs. Fulfilled state is determined once, at import, by which
+#    relationship gets created; shippedDate's value (real or sentinel)
+#    has no further role afterward.
 # 3. Edge (relationship) properties -- Date, Comment, StartDate,
 #    etc. -- attach to a specific edge instance in the property
 #    graph. Plain RDF triples have no slot for that. The datatype
@@ -182,18 +182,15 @@
 :phone a owl:DatatypeProperty ; rdfs:range xsd:string ;
     rdfs:domain [ a owl:Class ; owl:unionOf ( :Shipper :Contact ) ] .
 
-# See translation note 2: two shapes, one range chosen for both.
 :orderID a owl:DatatypeProperty ; rdfs:domain :Order ; rdfs:range xsd:string .
-:orderDate a owl:DatatypeProperty ; rdfs:domain :Order ; rdfs:range xsd:string .
-:requiredDate a owl:DatatypeProperty ; rdfs:domain :Order ; rdfs:range xsd:string .
-:requireDate a owl:DatatypeProperty ; rdfs:domain :Order ; rdfs:range xsd:string ;
-    rdfs:comment "Likely a typo for requiredDate in the source Cypher -- kept as its own property since the source model hasn't unified them yet." .
+:orderDate a owl:DatatypeProperty ; rdfs:domain :Order ; rdfs:range xsd:dateTime .
+:requiredDate a owl:DatatypeProperty ; rdfs:domain :Order ; rdfs:range xsd:dateTime .
 
 :poNumber a owl:DatatypeProperty ; rdfs:domain :PurchaseOrder ; rdfs:range xsd:string .
-:poDate a owl:DatatypeProperty ; rdfs:domain :PurchaseOrder ; rdfs:range xsd:string .
+:poDate a owl:DatatypeProperty ; rdfs:domain :PurchaseOrder ; rdfs:range xsd:dateTime .
 
 :rfqNumber a owl:DatatypeProperty ; rdfs:domain :RFQ ; rdfs:range xsd:string .
-:rfqDate a owl:DatatypeProperty ; rdfs:domain :RFQ ; rdfs:range xsd:string .
+:rfqDate a owl:DatatypeProperty ; rdfs:domain :RFQ ; rdfs:range xsd:dateTime .
 :rfqComments a owl:DatatypeProperty ; rdfs:domain :RFQ ; rdfs:range xsd:string .
 
 :address a owl:DatatypeProperty ; rdfs:domain :Address ; rdfs:range xsd:string .
@@ -206,8 +203,9 @@
 :notes a owl:DatatypeProperty ; rdfs:domain :Notes ; rdfs:range xsd:string .
 
 :shipName a owl:DatatypeProperty ; rdfs:domain :ShipInfo ; rdfs:range xsd:string .
-:shippedDate a owl:DatatypeProperty ; rdfs:domain :ShipInfo ; rdfs:range xsd:string .
-:freight a owl:DatatypeProperty ; rdfs:domain :ShipInfo ; rdfs:range xsd:string .
+:shippedDate a owl:DatatypeProperty ; rdfs:domain :ShipInfo ; rdfs:range xsd:dateTime ;
+    rdfs:comment "NOT NULL -- uses a far-future sentinel date for Orders that haven't shipped. See translation note 2." .
+:freight a owl:DatatypeProperty ; rdfs:domain :ShipInfo ; rdfs:range xsd:float .
 :shippmentID a owl:DatatypeProperty ; rdfs:domain :ShipInfo ; rdfs:range xsd:string .
 
 :title a owl:DatatypeProperty ; rdfs:domain :RolE ; rdfs:range xsd:string .
@@ -232,9 +230,9 @@
 :fulfillDate a owl:DatatypeProperty ; rdfs:range xsd:dateTime .
 :quantity a owl:DatatypeProperty ; rdfs:range xsd:integer .
 :discount a owl:DatatypeProperty ; rdfs:range xsd:float .
-:poqt a owl:DatatypeProperty ; rdfs:range xsd:float .
+:poqt a owl:DatatypeProperty ; rdfs:range xsd:integer .
 :poPriceDiscount a owl:DatatypeProperty ; rdfs:range xsd:float .
-:rfqqt a owl:DatatypeProperty ; rdfs:range xsd:float .
+:rfqqt a owl:DatatypeProperty ; rdfs:range xsd:integer .
 :rfqcost a owl:DatatypeProperty ; rdfs:range xsd:float .
 :resubmissionJustification a owl:DatatypeProperty ; rdfs:range xsd:string .
 :justification a owl:DatatypeProperty ; rdfs:range xsd:string .

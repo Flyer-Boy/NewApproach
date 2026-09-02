@@ -20,20 +20,15 @@
 //    this same rename applied -- this schema reflects the target state,
 //    not (yet) what those two files currently create.
 //
-// 2. Order.OrderDate/RequiredDate have two shapes depending on creation
-//    path: CSV-imported Orders get explicitly normalized to real
-//    TIMESTAMP WITH TIME ZONE values; Orders created by the "random
-//    Customer order" loop use OrderDate::DATE and a *differently spelled*
-//    RequireDate::DATE (not RequiredDate) -- a leftover typo flagged
-//    earlier and not yet fixed. Both property names are declared below as
-//    optional rather than assuming one is authoritative.
+// 2. ShipInfo.ShippedDate is NOT NULL, using a far-future sentinel date
+//    (9999-12-31) for Orders that haven't shipped -- not left nullable.
+//    Open vs. Fulfilled state is determined once, at import, by which
+//    relationship (IS_OPEN_ORDER_STATE / IS_FULFILLED_ORDER_STATE) gets
+//    created; after that, ShippedDate's value (real or sentinel) has no
+//    further role in determining state -- consistent with the model's
+//    own principle that state lives in relationships, not properties.
 //
-// 3. ShipInfo has two shapes (bulk import: ShipName/ShippedDate/Freight,
-//    all String, Freight never converted from CSV; "Fulfilling an Order"
-//    example: ShippmentID/ShippedDate). Nothing here is NOT NULL, to
-//    accommodate both.
-//
-// 4. SupplierNewPoS, SupplierOpenPoS, SupplierClosedPoS, PoNewRFQ, and
+// 3. SupplierNewPoS, SupplierOpenPoS, SupplierClosedPoS, PoNewRFQ, and
 //    PoRejectedRFQ are NOT singletons like the other Collection nodes --
 //    one instance is created PER Supplier (the first three) or PER
 //    PurchaseOrder (the last two). They now carry a Name property (added
@@ -46,12 +41,12 @@
 //    creation time (e.g. Name: s.SupplierID + "-SupplierNewPoS"), which
 //    would also require a matching change in the main import script.
 //
-// 5. RolE.ApprovalBase/ApprovalLimit only exist on Level1/2/3Approver;
+// 4. RolE.ApprovalBase/ApprovalLimit only exist on Level1/2/3Approver;
 //    every other RolE (including all CSV-imported Northwind titles like
 //    "Sales Representative") has only Title/Description/Rules. Declared
 //    as optional below.
 //
-// 6. PendingSupplierS/RejectedSupplierS (and their IS_SUPPLIER_PENDING_
+// 5. PendingSupplierS/RejectedSupplierS (and their IS_SUPPLIER_PENDING_
 //    STATE/IS_SUPPLIER_REJECTED_STATE instance edges) and
 //    OrderStatusCanceleD are declared for completeness -- none are
 //    currently exercised by the script (no Supplier vetting workflow or
@@ -132,12 +127,12 @@ ALTER CURRENT GRAPH TYPE SET {
     Phone :: STRING
      }) REQUIRE (sh.ShipperID) IS KEY,
 
-// See caveat 2: two creation paths produce different date property names
-// and types. Both declared, both optional.
+// OrderDate/RequiredDate now consistently ZONED DATETIME on both
+// creation paths (CSV import and the random-order demo/loop).
 (o:Order => {
     OrderID :: STRING NOT NULL,
-    OrderDate :: ZONED DATETIME,
-    RequiredDate :: ZONED DATETIME
+    OrderDate :: ZONED DATETIME NOT NULL,
+    RequiredDate :: ZONED DATETIME NOT NULL
      }) REQUIRE (o.OrderID) IS KEY,
 
 (po:PurchaseOrder => {
@@ -175,11 +170,13 @@ ALTER CURRENT GRAPH TYPE SET {
     Notes :: STRING
      }),
 
-// No identifying property. See caveat 3 -- two shapes, all optional.
+// No identifying property. See caveat 2 -- ShippedDate is NOT NULL
+// via a sentinel date for never-shipped Orders; Freight is now
+// consistently converted to FLOAT at import.
 (:ShipInfo => {
     ShipName :: STRING,
     ShippedDate :: ZONED DATETIME NOT NULL,
-    Freight :: FLOAT,
+    Freight :: FLOAT NOT NULL,
     ShippmentID :: STRING
      }),
 
