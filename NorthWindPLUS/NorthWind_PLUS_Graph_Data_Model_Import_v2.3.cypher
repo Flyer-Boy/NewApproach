@@ -66,8 +66,8 @@
 
 //--------------------------------------------------------------------------------------------------------------------------------------------------------------//
 //                                                                    ** Quick Run Instructions: **
-// Copy this script from line 73 to 1052. Paste it into the Neo4j Aura Query console. Execute and wait. 
-// Follow the instructions from line 1084 to 1097 to run the Python simulation loops.  Run the Queries on line 1210 onwards as the Python loops run. Enjoy!! 
+// Copy this script from line 73 to 1078. Paste it into the Neo4j Aura Query console. Execute and wait. Optionally, you can run the Recommendation Engine - Lines 1173 through 1240.
+// Follow the instructions from line 1087 to 1132 to run the Python simulation loops.  Run the Queries on line 1242 onwards as the Python loops run. Enjoy!! 
 //--------------------------------------------------------------------------------------------------------------------------------------------------------------//
 
 
@@ -76,7 +76,7 @@ MATCH (n) DETACH DELETE n;
 
 //-- Loading Data from CSV files --//
 // We start by importing the Product Categories 
-LOAD CSV WITH HEADERS FROM "https://raw.githubusercontent.com/Flyer-Boy/NewApproach/refs/heads/main/NorthWind/Import/categories.csv" AS row
+LOAD CSV WITH HEADERS FROM "https://raw.githubusercontent.com/Flyer-Boy/NewApproach/refs/heads/main/NorthWindPLUS/Import/categories.csv" AS row
 MERGE (n:ProductCategorY {CategoryID:row.CategoryID, CategoryName:row.CategoryName, Description:row.Description}); 
 
 // Let's create the Product availability Status as Collections where we will connect the products later and the SuperSet CategorieS
@@ -85,7 +85,7 @@ CREATE (:ProductStatusDiscontinueD {Status: "Discontinued"});
 CREATE (:ProductStatusAvailablE {Status: "Available"}); 
 
 // We import the Suppliers
-LOAD CSV WITH HEADERS FROM "https://raw.githubusercontent.com/Flyer-Boy/NewApproach/refs/heads/main/NorthWind/Import/suppliers.csv" AS row
+LOAD CSV WITH HEADERS FROM "https://raw.githubusercontent.com/Flyer-Boy/NewApproach/refs/heads/main/NorthWindPLUS/Import/suppliers.csv" AS row
 MERGE (n:Supplier {SupplierID:row.SupplierID, CompanyName:row.CompanyName, ContactName:row.ContactName, ContactTitle:row.ContactTitle, Address:row.Address, City:row.City, Region:row.Region, PostalCode:row.PostalCode, Country:row.Country, Phone:row.Phone, Fax:row.Fax, HomePage:"https://www." + replace(replace(replace(row.CompanyName," ",""),"'",""),".","") + ".com"});
 
 // We do our first Graph normalization extracting the Address and Contact from the Supplier and placing them in different Nodes with a proper relationship
@@ -108,7 +108,7 @@ CREATE (n)-[:HAS_SUPPLIER_CONTACT]->(c);
 //    We will keep the Price though, for simplicity. In an ideal model we should place it in a separate Node as the Price is not part of the Product Identity but an attribute that might change over time. 
 
 //    We will connect the Product to its respective Product Category
-LOAD CSV WITH HEADERS FROM "https://raw.githubusercontent.com/Flyer-Boy/NewApproach/refs/heads/main/NorthWind/Import/products.csv" AS row
+LOAD CSV WITH HEADERS FROM "https://raw.githubusercontent.com/Flyer-Boy/NewApproach/refs/heads/main/NorthWindPLUS/Import/products.csv" AS row
 MERGE (n:Product {ProductID:row.ProductID, ProductName:row.ProductName, UnitPrice:toFloat(row.UnitPrice), ReorderLevel:toInteger(row.ReorderLevel), QuantityPerUnit:row.QuantityPerUnit, Discontinued:toInteger(row.Discontinued), SupplierID:row.SupplierID})
 CREATE (i:InventoryLevel {UnitsInStock:toInteger(row.UnitsInStock), LastUpdate: datetime()})             // Here is the InventoryLevel.UnitsInStock as a separate Node, as it is a state that will change over time.
 CREATE (reorder:ReorderLevel {StockThreshold:toInteger(row.UnitsInStock) + 10, LastUpdate: datetime()})  // Here is the ReorderLevel.StockThreshold as a separate Node. The StockThreshold is intentionally set to the UnitsInStock + 10 for this Demo. This number will allow the script to generate more PO's later and subsequently more RFQ's in the process creating a richer dataset for us to play with 
@@ -143,34 +143,42 @@ MERGE (s)-[:SUPPLIES]->(p);
 MATCH (n:Product)
 REMOVE n.SupplierID;
 
+// We will remove the Supplier properties that were normalized
 MATCH (s:Supplier)
 REMOVE s.ContactName, s.ContactTitle, s.Address, s.City, s.Region, s.PostalCode, s.Country, s.Phone, s.Fax;
 
+// We will connect the Product Category to the CategorieS Superset Collection
 MATCH (k:CategorieS {Name: "CategorieS"}), (c:ProductCategorY)
 MERGE (k)-[:HAS_CATEGORY]->(c);
 
-LOAD CSV WITH HEADERS FROM "https://raw.githubusercontent.com/Flyer-Boy/NewApproach/refs/heads/main/NorthWind/Import/customers.csv" AS row
+// We will import the Customers into the Graph and normalize them by creating an Address Node and a Contact Node and connecting them to the Customer Node.
+LOAD CSV WITH HEADERS FROM "https://raw.githubusercontent.com/Flyer-Boy/NewApproach/refs/heads/main/NorthWindPLUS/Import/customers.csv" AS row
 MERGE (n:Customer {CustomerID:row.CustomerID})
 SET n += row;
 
+//  We will normalize the Customers by creating an Address Node and a Contact Node and connecting them to the Customer Node.
 MATCH (n:Customer)
 CREATE (a:Address {Address:n.Address, City:n.City, Region:n.Region, PostalCode:n.PostalCode, Country:n.Country})
 CREATE (c:Contact {ContactName:n.ContactName, ContactTitle:n.ContactTitle, Phone:n.Phone, Fax:n.Fax, Email: replace(n.ContactName, " ", ".") +"@" + replace(replace(replace(n.CompanyName," ",""),"'",""),".","") + ".com"})
 CREATE (n)-[:HAS_CUSTOMER_ADDRESS]->(a) 
 CREATE (n)-[:HAS_CUSTOMER_CONTACT]->(c);
 
+// Remove the Customer properties that were normalized
 MATCH (n:Customer)
 REMOVE n.Address, n.City, n.Region, n.PostalCode, n.Country, n.ContactName, n.ContactTitle, n.Phone, n.Fax; 
 
+// We will create the RoleS Superset Collection and the subset RolE Collection Nodes
 CREATE (:RoleS {Name: "RoleS"});
 
-LOAD CSV WITH HEADERS FROM "https://raw.githubusercontent.com/Flyer-Boy/NewApproach/refs/heads/main/NorthWind/Import/employees.csv" AS row
+// We will normalize the Employees by creating a Role Node and connecting it to the Employee Node.
+LOAD CSV WITH HEADERS FROM "https://raw.githubusercontent.com/Flyer-Boy/NewApproach/refs/heads/main/NorthWindPLUS/Import/employees.csv" AS row
 MERGE (l:RolE {Title:row.Title}) 
 WITH l
 MATCH (r:RoleS)
 MERGE (r)-[:HAS_ROLE_TITLE]->(l);
 
-LOAD CSV WITH HEADERS FROM "https://raw.githubusercontent.com/Flyer-Boy/NewApproach/refs/heads/main/NorthWind/Import/employees.csv" AS row
+// We will normalize the Employees by creating a Person Node and an Address Node and connecting them to the Employee Node.
+LOAD CSV WITH HEADERS FROM "https://raw.githubusercontent.com/Flyer-Boy/NewApproach/refs/heads/main/NorthWindPLUS/Import/employees.csv" AS row
 MERGE (n:Employee {EmployeeID:row.EmployeeID, Email: row.FirstName + "." + row.LastName + "@northwind.com"}) 
 SET n += row
 WITH n, row 
@@ -183,62 +191,75 @@ CREATE (n)-[:HAS_PERSON]->(c)
 CREATE (c)-[:HAS_HOME_ADDRESS]->(a)
 CREATE (n)-[:HAS_EMPLOYEE_NOTES]->(o);
 
+// We will normalize the Employee's ReportsTo by creating a relationship between the Employee and the Employee that they report to.
 MATCH (n:Employee)
 WHERE n.ReportsTo IS NOT NULL
 MATCH (m:Employee)
 WHERE n.ReportsTo = m.EmployeeID 
 MERGE (n)-[:REPORTS_TO]->(m);
 
+// Remove the Employee properties that were normalized
 MATCH (n:Employee)
 REMOVE n.FirstName, n.LastName, n.TitleOfCourtesy, n.BirthDate, n.Address, n.City, n.Region, n.PostalCode, n.Country, n.HomePhone, n.Fax, n.Notes, n.Photo, n.ReportsTo, n.Title; 
 
-LOAD CSV WITH HEADERS FROM "https://raw.githubusercontent.com/Flyer-Boy/NewApproach/refs/heads/main/NorthWind/Import/territories.csv" AS row
+// We will normalize the Territories by creating a Territory Node and connecting it to the respective Employee
+LOAD CSV WITH HEADERS FROM "https://raw.githubusercontent.com/Flyer-Boy/NewApproach/refs/heads/main/NorthWindPLUS/Import/territories.csv" AS row
 MERGE (n:Territory {TerritoryID:row.TerritoryID})
 SET n += row;
 
-LOAD CSV WITH HEADERS FROM "https://raw.githubusercontent.com/Flyer-Boy/NewApproach/refs/heads/main/NorthWind/Import/regions.csv" AS row
+// We will normalize the Territories by connecting them to the respective Employee
+LOAD CSV WITH HEADERS FROM "https://raw.githubusercontent.com/Flyer-Boy/NewApproach/refs/heads/main/NorthWindPLUS/Import/regions.csv" AS row
 MERGE (n:Regions {RegionID:row.RegionID})
 SET n += row;
 
-LOAD CSV WITH HEADERS FROM "https://raw.githubusercontent.com/Flyer-Boy/NewApproach/refs/heads/main/NorthWind/Import/employee-territories.csv" AS row
+// We will normalize the Employee Territories by connecting them to the respective Employee and Territory
+LOAD CSV WITH HEADERS FROM "https://raw.githubusercontent.com/Flyer-Boy/NewApproach/refs/heads/main/NorthWindPLUS/Import/employee-territories.csv" AS row
 MATCH (e:Employee), (t:Territory)
 WHERE e.EmployeeID = row.EmployeeID AND t.TerritoryID = row.TerritoryID
 MERGE (t)-[:HAS_EMPLOYEE]->(e);
 
+// We will normalize the Territories by connecting them to the respective Region
 MATCH (t:Territory), (r:Regions)
 WHERE t.RegionID = r.RegionID
 MERGE (r)-[:HAS_TERRITORY]->(t);
 
+// Remove the Territory properties that were normalized
 MATCH (t:Territory) REMOVE t.RegionID;
 
-LOAD CSV WITH HEADERS FROM "https://raw.githubusercontent.com/Flyer-Boy/NewApproach/refs/heads/main/NorthWind/Import/shippers.csv" AS row
+// We will import the Shippers into the Graph
+LOAD CSV WITH HEADERS FROM "https://raw.githubusercontent.com/Flyer-Boy/NewApproach/refs/heads/main/NorthWindPLUS/Import/shippers.csv" AS row
 MERGE (n:Shipper {ShipperID:row.ShipperID, CompanyName:row.CompanyName, Phone:row.Phone});
 
-LOAD CSV WITH HEADERS FROM "https://raw.githubusercontent.com/Flyer-Boy/NewApproach/refs/heads/main/NorthWind/Import/orders.csv" AS row
+// We will import the Orders into a temporary Node OrderTmp and then we will normalize the OrderDate, RequiredDate and ShippedDate to proper datetime format.
+// We will not have the OrderTmp Node declared on the GRAPH TYPE constraint as it is a temporary node only used during the import process.
+LOAD CSV WITH HEADERS FROM "https://raw.githubusercontent.com/Flyer-Boy/NewApproach/refs/heads/main/NorthWindPLUS/Import/orders.csv" AS row
 MERGE (n:OrderTmp {OrderID:row.OrderID})
 SET n += row;
 
 // We will normalize the OrderDate, RequiredDate to proper datetime format.
 MATCH (o:OrderTmp) 
 SET o.OrderDate = datetime(left(o.OrderDate, 10)+"T"+right(o.OrderDate, 12)), 
-o.RequiredDate = datetime(left(o.RequiredDate, 10)+"T"+right(o.RequiredDate, 12));
+o.RequiredDate = datetime(left(o.RequiredDate, 10)+"T"+right(o.RequiredDate, 12)),
+o.ShippedDate =  datetime(left(o.ShippedDate, 10)+"T"+right(o.ShippedDate, 12)),
+o.Freight = toFloat(o.Freight);
  
+// Now that we have normalized the dates, we will create the Order Node and copy the properties from the OrderTmp Node to the Order Node.
 MATCH (n:OrderTmp)
-WITH collect(n) AS originalNodes
-CALL apoc.refactor.cloneNodes(originalNodes, false)
-YIELD output AS clonedNode
-SET clonedNode:Order
-RETURN count(clonedNode) AS clonedCount;
+CREATE (m:Order)
+SET m = properties(n);
 
+// Now that we have created the Order Node, we will delete the OrderTmp Node.
 MATCH (n:OrderTmp) DETACH DELETE  n;
 
+// We will connect the Order to the respective Customer, Shipper and Employee
 MATCH (c:Customer),(o:Order)
 WHERE c.CustomerID = o.CustomerID
 MERGE (o)-[:HAS_ORDER_CUSTOMER]->(c);
 
+// We will create a ShipInfo Node to hold the shipment information and connect it to the Order and Shipper
 MATCH (n:Order), (s:Shipper)
 WHERE n.ShipVia = s.ShipperID 
-CREATE (n)-[:HAS_SHIPMENT_INFO]->(i:ShipInfo {ShipName:n.ShipName, ShippedDate:n.ShippedDate, Freight:n.Freight })
+CREATE (n)-[:HAS_SHIPMENT_INFO]->(i:ShipInfo {ShippmentID:"SH-"+randomUUID(), ShipName:n.ShipName, ShippedDate:n.ShippedDate, Freight:n.Freight })
 CREATE (i)-[:HAS_SHIPPER]->(s)
 WITH n, i
 MATCH (a:Address) WHERE a.Address = n.ShipAddress AND a.City = n.ShipCity AND a.Region = n.ShipRegion AND a.PostalCode = n.ShipPostalCode AND a.Country = n.ShipCountry
@@ -248,16 +269,18 @@ WHERE NOT EXISTS((i)-[:HAS_SHIPMENT_ADDRESS]->(:Address {Address:n.ShipAddress, 
 CREATE (a:Address {Address:n.ShipAddress, City:n.ShipCity, Region:n.ShipRegion, PostalCode:n.ShipPostalCode, Country:n.ShipCountry})
 CREATE (i)-[:HAS_SHIPMENT_ADDRESS]->(a);
 
+// We will connect the Order to the respective Employee that sold the Order
 MATCH (e:Employee), (o:Order)
 WHERE e.EmployeeID = o.EmployeeID 
 MERGE (o)-[:SOLD_BY]->(e);
 
+// We will remove the Order properties that were normalized
 MATCH (n:Order)
 REMOVE n.CustomerID, n.ShipVia, n.ShipName, n.ShipAddress, n.ShipCity, n.ShipRegion, n.ShipPostalCode, n.ShipCountry, n.Freight, n.ShippedDate, n.EmployeeID;
 
 //-- Including Order Details in the Relationship --//
-
-LOAD CSV WITH HEADERS FROM "https://raw.githubusercontent.com/Flyer-Boy/NewApproach/refs/heads/main/NorthWind/Import/order-details.csv" AS row
+// We will import the Order Details and connect them to the respective Order and Product
+LOAD CSV WITH HEADERS FROM "https://raw.githubusercontent.com/Flyer-Boy/NewApproach/refs/heads/main/NorthWindPLUS/Import/order-details.csv" AS row
 MATCH (p:Product), (o:Order)
 WHERE p.ProductID = row.ProductID AND o.OrderID = row.OrderID 
 MERGE (o)-[details:HAS_ORDER_PRODUCT]->(p)
@@ -268,10 +291,12 @@ CREATE (o:OrderS {Name: "OrderS"})-[:HAS_OPEN_ORDER_STATUS]->(:OrderStatusOpeN {
        (o)-[:HAS_FULFILLED_ORDER_STATUS]->(:OrderStatusFulfilleD {Status: "Fulfilled"}),
        (o)-[:HAS_CANCELED_ORDER_STATUS]->(:OrderStatusCanceleD {Status: "Canceled"});
 
+// We will connect the Order to the respective OrderStatus Collection based on the ShippedDate property. If the ShippedDate is not null, the Order is Fulfilled, otherwise it is Open.
 MATCH (f:OrderStatusFulfilleD {Status: "Fulfilled"}), (n:Order)-[:HAS_SHIPMENT_INFO]->(s:ShipInfo)
 WHERE s.ShippedDate IS NOT NULL
 CREATE (f)-[:IS_FULFILLED_ORDER_STATE {FulfillDate: datetime() }]->(n); 
 
+// We will connect the Order to the respective OrderStatus Collection based on the ShippedDate property. If the ShippedDate is null, the Order is Open.
 MATCH (o:OrderStatusOpeN {Status: "Open"}), (n:Order)-[:HAS_SHIPMENT_INFO]->(s:ShipInfo)
 WHERE s.ShippedDate IS NULL 
 CREATE (o)-[:IS_OPEN_ORDER_STATE]->(n);
@@ -522,7 +547,7 @@ WITH e, n, s, COLLECT({
 }) AS orderItems
 CREATE (n)-[:IS_NEW_PO_STATE]->(po:PurchaseOrder {
     PONumber: "PO-" + left(randomUUID(), 3) + right(randomUUID(), 3),
-    PODate: localdatetime()
+    PODate: datetime()
 })
 CREATE (s)<-[:PO_FOR_SUPPLIER]-(po)     // Connect the PO to the respective Supplier
 CREATE (po)-[:PO_CREATED_BY]->(e)       // Connect the PO to the employee that created it
@@ -699,7 +724,7 @@ WITH rpo, e, n, s, COLLECT({
     // Create ONE Purchase Order per Supplier, linking it to the Employee
 CREATE (n)-[:IS_NEW_PO_STATE]->(po:PurchaseOrder {
     PONumber: "PO-" + left(randomUUID(), 3) + right(randomUUID(), 3), 
-    PODate: localdatetime() 
+    PODate: datetime() 
 })
 CREATE (s)<-[:PO_FOR_SUPPLIER]-(po)    // Connect the PO to the respective Supplier
 CREATE (po)-[:PO_CREATED_BY]->(e)      // Connect the PO to the employee that created it
@@ -759,7 +784,7 @@ WITH su, r, po, snr, sop, COLLECT({
 }) AS rfqItems
 CREATE (rfq:RFQ {
     RFQNumber: "RFQ-" + left(randomUUID(), 3) + right(randomUUID(), 3), 
-    RFQDate: localdatetime(), 
+    RFQDate: datetime(), 
     RFQComments: "Thanks for your order, we are able to supply the full PO product request at the discounted price negotiated on our master agreement"})-[:IS_RFQ_FOR_PO]->(po), // We create the RFQ
 (rfq)-[:RFQ_FROM_SUPPLIER]->(su),    // We connect the RFQ to the Suppier 
 (snr)-[:IS_SUPPLIER_NEW_RFQ]->(rfq),  // We place the RFQ in the PO's new RFQ state collection 
@@ -808,7 +833,7 @@ WITH su, r, po, snr, sop, COLLECT({
 }) AS rfqItems
 CREATE (rfq:RFQ {
     RFQNumber: "RFQ-" + left(randomUUID(), 3) + right(randomUUID(), 3), 
-    RFQDate: localdatetime(), 
+    RFQDate: datetime(), 
     RFQComments: "Thanks for your order, we are able to supply the full PO product request at the discounted price negotiated on our master agreement"})-[:IS_RFQ_FOR_PO]->(po), // We create the RFQ
 (rfq)-[:RFQ_FROM_SUPPLIER]->(su),    // We connect the RFQ to the Suppier 
 (snr)-[:IS_SUPPLIER_NEW_RFQ]->(rfq),  // We place the RFQ in the PO's new RFQ state collection 
@@ -881,7 +906,7 @@ WITH rrfq, su, po, snr, COLLECT({
 }) AS rfqItems ORDER BY rand() LIMIT 1  
 CREATE (rfq:RFQ {
     RFQNumber: "RFQ-" + left(randomUUID(), 3) + right(randomUUID(), 3), 
-    RFQDate: localdatetime(), 
+    RFQDate: datetime(), 
     RFQComments: "Thanks for your order, we resubmitting our RFQ and hope weare able to supply the full PO product request at the discounted price negotiated on our master agreement"})-[:IS_RFQ_FOR_PO]->(po), // We create the RFQ
 (rfq)-[:RFQ_FROM_SUPPLIER]->(su),    // We connect the RFQ to the Suppier 
 (snr)-[:IS_SUPPLIER_NEW_RFQ]->(rfq),  // We place the RFQ in the PO's new RFQ state collection 
@@ -958,7 +983,7 @@ WITH e, n, s, COLLECT({
 }) AS orderItems
 CREATE (n)-[:IS_NEW_PO_STATE]->(po:PurchaseOrder {
     PONumber: "PO-" + left(randomUUID(), 3) + right(randomUUID(), 3),
-    PODate: localdatetime()
+    PODate: datetime()
 })
 CREATE (s)<-[:PO_FOR_SUPPLIER]-(po)     // Connect the PO to the respective Supplier
 CREATE (po)-[:PO_CREATED_BY]->(e)       // Connect the PO to the employee that created it
@@ -1021,23 +1046,23 @@ DELETE r1, r2;  // We remove the PO from the Submitted state on the Procurement 
 
 // Select the Warehouse Clerk and a Shipper who will handle this batch of fulfillments.
 // (Same disconnected-pattern Cartesian product warning noted earlier in the script -- harmless here since we cap it to one Employee and one Shipper via ORDER BY rand() LIMIT 1.)
-MATCH (wc:Employee)<-[:IS_ACTIVE_ROLE]-(:RolE {Title:"WarehouseClerk"}), (s:Shipper)
-WITH wc, s ORDER BY rand() LIMIT 1
+MATCH (wc:Employee)<-[:IS_ACTIVE_ROLE]-(:RolE {Title:"WarehouseClerk"}), (s:Shipper)<-[:HAS_SHIPPER]-(si:ShipInfo)
+WITH wc, si, s ORDER BY rand() LIMIT 1  // Select a random Warehouse Clerk and a random Shipper and ShipName for this batch of fulfillments.
 
 // Find Open Orders where every Product line has sufficient stock (all lines must pass, not just some).
 MATCH (op:OrderStatusOpeN {Status:"Open"})-[r:IS_OPEN_ORDER_STATE]->(o:Order)-[details:HAS_ORDER_PRODUCT]->(p:Product)-[:HAS_INVENTORY_LEVEL]->(inv:InventoryLevel)
-WITH wc, s, op, r, o, count(details) AS TotalLines, sum(CASE WHEN inv.UnitsInStock >= details.Quantity THEN 1 ELSE 0 END) AS LinesWithStock
+WITH wc, si, s, op, r, o, count(details) AS TotalLines, sum(CASE WHEN inv.UnitsInStock >= details.Quantity THEN 1 ELSE 0 END) AS LinesWithStock
 WHERE TotalLines = LinesWithStock
-WITH wc, s, op, r, o ORDER BY o.OrderDate LIMIT 5   // oldest Open Orders first; leave the rest Open for later querying
+WITH wc, si, s, op, r, o ORDER BY o.OrderDate LIMIT 5   // oldest Open Orders first; leave the rest Open for later querying
 
 // Ship and fulfill each selected Order.
 MATCH (a)<-[:HAS_CUSTOMER_ADDRESS]-(:Customer)<-[:HAS_ORDER_CUSTOMER]-(o), (f:OrderStatusFulfilleD {Status:"Fulfilled"})
-CREATE (i:ShipInfo {ShippmentID:randomUUID(), ShippedDate:date()})
-CREATE (o)-[:HAS_SHIPMENT_INFO]->(i)
-CREATE (i)-[:HAS_SHIPPER]->(s)
-CREATE (i)-[:HAS_SHIPMENT_ADDRESS]->(a)
-CREATE (f)-[:IS_FULFILLED_ORDER_STATE {FulfillDate: datetime()}]->(o)
-CREATE (o)-[:HAS_WAREHOUSE_FULFILLMENT {Date:datetime(), Comment:"Order picked, packed, and shipped by the Warehouse Clerk."}]->(wc)
+CREATE (i:ShipInfo {ShippmentID:"SH-"+randomUUID(), ShippedDate:datetime(), ShipName:si.ShipName, Freight:round(rand()*500, 2)}),
+       (o)-[:HAS_SHIPMENT_INFO]->(i),
+       (i)-[:HAS_SHIPPER]->(s),
+       (i)-[:HAS_SHIPMENT_ADDRESS]->(a),
+       (f)-[:IS_FULFILLED_ORDER_STATE {FulfillDate: datetime()}]->(o),
+       (o)-[:HAS_WAREHOUSE_FULFILLMENT {Date:datetime(), Comment:"Order picked, packed, and shipped by the Warehouse Clerk."}]->(wc)
 DELETE r
 WITH o
 
@@ -1046,7 +1071,7 @@ MATCH (o)-[details:HAS_ORDER_PRODUCT]->(p:Product)-[:HAS_INVENTORY_LEVEL]->(inv:
 SET inv.UnitsInStock = inv.UnitsInStock - details.Quantity,
     inv.LastUpdate = datetime();
 
- 
+
 // ###### Run the **Inventory Level Report** ######  
 // You will see how the Inventory Level changes after the Order Fulfillment and the updated Supply Order status for the products.
 

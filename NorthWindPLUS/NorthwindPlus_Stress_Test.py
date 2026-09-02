@@ -380,7 +380,7 @@ PO_VETTING_ACTIONS: list[VettingAction] = [
         WHERE size(orderItems) > 0
         CREATE (n)-[:IS_NEW_PO_STATE]->(po:PurchaseOrder {
             PONumber: "PO-" + left(randomUUID(), 3) + right(randomUUID(), 3),
-            PODate: localdatetime()
+            PODate: datetime()
         })
         CREATE (s)<-[:PO_FOR_SUPPLIER]-(po)
         CREATE (po)-[:PO_CREATED_BY]->(e)
@@ -501,7 +501,7 @@ RFQ_VETTING_ACTIONS: list[VettingAction] = [
         }) AS rfqItems
         CREATE (rfq:RFQ {
             RFQNumber: "RFQ-" + left(randomUUID(), 3) + right(randomUUID(), 3),
-            RFQDate: localdatetime(),
+            RFQDate: datetime(),
             RFQComments: "Thanks for your order, we are able to supply the full PO product request at the discounted price negotiated on our master agreement (stress test)."
         })-[:IS_RFQ_FOR_PO]->(po),
         (rfq)-[:RFQ_FROM_SUPPLIER]->(su),
@@ -577,7 +577,7 @@ RFQ_VETTING_ACTIONS: list[VettingAction] = [
         }) AS rfqItems
         CREATE (rfq:RFQ {
             RFQNumber: "RFQ-" + left(randomUUID(), 3) + right(randomUUID(), 3),
-            RFQDate: localdatetime(),
+            RFQDate: datetime(),
             RFQComments: "Thanks for your order, we are resubmitting our RFQ with updated pricing (stress test)."
         })-[:IS_RFQ_FOR_PO]->(po),
         (rfq)-[:RFQ_FROM_SUPPLIER]->(su),
@@ -717,7 +717,7 @@ WITH e, n, s, COLLECT({
 }) AS orderItems
 CREATE (n)-[:IS_NEW_PO_STATE]->(po:PurchaseOrder {
     PONumber: "PO-" + left(randomUUID(), 3) + right(randomUUID(), 3),
-    PODate: localdatetime()
+    PODate: datetime()
 })
 CREATE (s)<-[:PO_FOR_SUPPLIER]-(po)
 CREATE (po)-[:PO_CREATED_BY]->(e)
@@ -763,19 +763,19 @@ def iterate_po_creation(driver: Driver, stats: RunStats, database: str) -> None:
 # is skipped and stays Open, same as the main script's own design.
 
 ORDER_FULFILLMENT_QUERY = """
-MATCH (wc:Employee)<-[:IS_ACTIVE_ROLE]-(:RolE {Title:"WarehouseClerk"}), (s:Shipper)
-WITH wc, s ORDER BY rand() LIMIT 1
+MATCH (wc:Employee)<-[:IS_ACTIVE_ROLE]-(:RolE {Title:"WarehouseClerk"}), (s:Shipper)<-[:HAS_SHIPPER]-(si:ShipInfo)
+WITH wc, si, s ORDER BY rand() LIMIT 1
 MATCH (op:OrderStatusOpeN {Status:"Open"})-[r:IS_OPEN_ORDER_STATE]->(o:Order)-[details:HAS_ORDER_PRODUCT]->(p:Product)-[:HAS_INVENTORY_LEVEL]->(inv:InventoryLevel)
-WITH wc, s, op, r, o, count(details) AS TotalLines, sum(CASE WHEN inv.UnitsInStock >= details.Quantity THEN 1 ELSE 0 END) AS LinesWithStock
+WITH wc, si, s, op, r, o, count(details) AS TotalLines, sum(CASE WHEN inv.UnitsInStock >= details.Quantity THEN 1 ELSE 0 END) AS LinesWithStock
 WHERE TotalLines = LinesWithStock
-WITH wc, s, op, r, o ORDER BY o.OrderDate LIMIT 1
+WITH wc, si, s, op, r, o ORDER BY o.OrderDate LIMIT 5   // oldest Open Orders first; leave the rest Open for later querying
 MATCH (a)<-[:HAS_CUSTOMER_ADDRESS]-(:Customer)<-[:HAS_ORDER_CUSTOMER]-(o), (f:OrderStatusFulfilleD {Status:"Fulfilled"})
-CREATE (i:ShipInfo {ShippmentID:randomUUID(), ShippedDate:date()})
-CREATE (o)-[:HAS_SHIPMENT_INFO]->(i)
-CREATE (i)-[:HAS_SHIPPER]->(s)
-CREATE (i)-[:HAS_SHIPMENT_ADDRESS]->(a)
-CREATE (f)-[:IS_FULFILLED_ORDER_STATE {FulfillDate: datetime()}]->(o)
-CREATE (o)-[:HAS_WAREHOUSE_FULFILLMENT {Date:datetime(), Comment:"Order picked, packed, and shipped by the Warehouse Clerk (stress test)."}]->(wc)
+CREATE (i:ShipInfo {ShippmentID:"SH-"+randomUUID(), ShippedDate:datetime(), ShipName:si.ShipName, Freight:round(rand()*100, 2)}),
+       (o)-[:HAS_SHIPMENT_INFO]->(i),
+       (i)-[:HAS_SHIPPER]->(s),
+       (i)-[:HAS_SHIPMENT_ADDRESS]->(a),
+       (f)-[:IS_FULFILLED_ORDER_STATE {FulfillDate: datetime()}]->(o),
+       (o)-[:HAS_WAREHOUSE_FULFILLMENT {Date:datetime(), Comment:"Order picked, packed, and shipped by the Warehouse Clerk."}]->(wc)
 DELETE r
 WITH o
 MATCH (o)-[details:HAS_ORDER_PRODUCT]->(p:Product)-[:HAS_INVENTORY_LEVEL]->(inv:InventoryLevel)

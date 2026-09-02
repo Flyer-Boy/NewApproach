@@ -142,7 +142,7 @@ ALTER CURRENT GRAPH TYPE SET {
 
 (po:PurchaseOrder => {
     PONumber :: STRING NOT NULL,
-    PODate :: ZONED DATETIME,
+    PODate :: ZONED DATETIME
      }) REQUIRE (po.PONumber) IS KEY,
 
 (rfq:RFQ => {
@@ -178,8 +178,8 @@ ALTER CURRENT GRAPH TYPE SET {
 // No identifying property. See caveat 3 -- two shapes, all optional.
 (:ShipInfo => {
     ShipName :: STRING,
-    ShippedDate :: STRING,
-    Freight :: STRING,
+    ShippedDate :: ZONED DATETIME NOT NULL,
+    Freight :: FLOAT,
     ShippmentID :: STRING
      }),
 
@@ -189,17 +189,17 @@ ALTER CURRENT GRAPH TYPE SET {
 // place via SET rather than superseded by a relationship.
 (:InventoryLevel => {
     UnitsInStock :: INTEGER NOT NULL,
-    LastUpdate :: TIMESTAMP WITH TIME ZONE
+    LastUpdate :: ZONED DATETIME NOT NULL
      }),
 
 (:OrderLevel => {
     UnitsOnOrder :: INTEGER NOT NULL,
-    LastUpdate :: TIMESTAMP WITH TIME ZONE NOT NULL
+    LastUpdate :: ZONED DATETIME NOT NULL
      }),
 
 (:ReorderLevel => {
     StockThreshold :: INTEGER NOT NULL,
-    LastUpdate :: TIMESTAMP WITH TIME ZONE NOT NULL
+    LastUpdate :: ZONED DATETIME NOT NULL
      }),
 
 // Title is the identifying property for every RolE, from the original
@@ -272,14 +272,14 @@ ALTER CURRENT GRAPH TYPE SET {
 
 // Roles / Employees
   (:RoleS)-[:HAS_ROLE_TITLE => {}]->(:RolE),
-  (:RolE)-[:IS_ACTIVE_ROLE => {StartDate :: TIMESTAMP WITH TIME ZONE NOT NULL, EndDate :: TIMESTAMP WITH TIME ZONE}]->(:Employee),
+  (:RolE)-[:IS_ACTIVE_ROLE => {StartDate :: ZONED DATETIME NOT NULL, EndDate :: TIMESTAMP WITH TIME ZONE}]->(:Employee),
   (:Employee)-[:HAS_PERSON => {}]->(:Person),
   (:Person)-[:HAS_HOME_ADDRESS => {}]->(:Address),
   (:Employee)-[:HAS_EMPLOYEE_NOTES => {}]->(:Notes),
   (:Employee)-[:REPORTS_TO => {}]->(:Employee),
   (:Territory)-[:HAS_EMPLOYEE => {}]->(:Employee),
   (:Regions)-[:HAS_TERRITORY => {}]->(:Territory),
-  (:EmployeeDirectorY)-[:HAS_ACTIVE_EMPLOYEE => {StartDate :: TIMESTAMP WITH TIME ZONE NOT NULL}]->(:Employee),
+  (:EmployeeDirectorY)-[:HAS_ACTIVE_EMPLOYEE => {StartDate :: ZONED DATETIME NOT NULL}]->(:Employee),
 
 // Supplier state
   (:SupplierS)-[:HAS_SUPPLIER_PENDING_STATE => {}]->(:PendingSupplierS),
@@ -296,9 +296,9 @@ ALTER CURRENT GRAPH TYPE SET {
   (:ShipInfo)-[:HAS_SHIPMENT_ADDRESS => {}]->(:Address),
   (:Order)-[:SOLD_BY => {}]->(:Employee),
   (:Order)-[:HAS_ORDER_PRODUCT => {Quantity :: INTEGER NOT NULL, UnitPrice :: FLOAT NOT NULL, Discount :: FLOAT NOT NULL}]->(:Product),
-  (:OrderStatusFulfilleD)-[:IS_FULFILLED_ORDER_STATE => {FulfillDate :: TIMESTAMP WITH TIME ZONE NOT NULL}]->(:Order),
+  (:OrderStatusFulfilleD)-[:IS_FULFILLED_ORDER_STATE => {FulfillDate :: ZONED DATETIME NOT NULL}]->(:Order),
   (:OrderStatusOpeN)-[:IS_OPEN_ORDER_STATE => {}]->(:Order),
-  (:Order)-[:HAS_WAREHOUSE_FULFILLMENT => {Date :: TIMESTAMP WITH TIME ZONE NOT NULL, Comment :: STRING}]->(:Employee),
+  (:Order)-[:HAS_WAREHOUSE_FULFILLMENT => {Date :: ZONED DATETIME NOT NULL, Comment :: STRING}]->(:Employee),
   // Three distinct relationship types, one per subset, matching the
   // PoS/SupplierS convention -- sidesteps the untested question of
   // whether GRAPH TYPE permits multiple declarations of one relationship
@@ -313,45 +313,45 @@ ALTER CURRENT GRAPH TYPE SET {
   (:PoS)-[:HAS_REJECTED_PO_STATE => {}]->(:RejectedPoS),
   (:PoS)-[:HAS_SUBMITTED_PO_STATE => {}]->(:SubmittedPoS),
   (:PoS)-[:HAS_CLOSED_PO_STATE => {}]->(:ClosedPoS),
-  (:ClosedPoS)-[:IS_CLOSED_PO_STATE => {Date :: TIMESTAMP WITH TIME ZONE NOT NULL, Comment :: STRING}]->(:PurchaseOrder),
+  (:ClosedPoS)-[:IS_CLOSED_PO_STATE => {Date :: ZONED DATETIME NOT NULL, Comment :: STRING}]->(:PurchaseOrder),
   (:NewPoS)-[:IS_NEW_PO_STATE => {}]->(:PurchaseOrder),
-  (:ApprovedPoS)-[:IS_APPROVED_PO_STATE => {Date :: TIMESTAMP WITH TIME ZONE NOT NULL}]->(:PurchaseOrder),
-  (:RejectedPoS)-[:IS_REJECTED_PO_STATE => {Date :: TIMESTAMP WITH TIME ZONE NOT NULL}]->(:PurchaseOrder),
-  (:SubmittedPoS)-[:IS_SUBMITTED_PO_STATE => {Date :: TIMESTAMP WITH TIME ZONE NOT NULL}]->(:PurchaseOrder),
+  (:ApprovedPoS)-[:IS_APPROVED_PO_STATE => {Date :: ZONED DATETIME NOT NULL}]->(:PurchaseOrder),
+  (:RejectedPoS)-[:IS_REJECTED_PO_STATE => {Date :: ZONED DATETIME NOT NULL}]->(:PurchaseOrder),
+  (:SubmittedPoS)-[:IS_SUBMITTED_PO_STATE => {Date :: ZONED DATETIME NOT NULL}]->(:PurchaseOrder),
   (:PurchaseOrder)-[:PO_FOR_SUPPLIER => {}]->(:Supplier),
   (:PurchaseOrder)-[:PO_CREATED_BY => {}]->(:Employee),
   (:PurchaseOrder)-[:HAS_PO_ITEM => {POqt :: INTEGER NOT NULL, POPriceDiscount :: FLOAT NOT NULL}]->(:Product),
   (:PurchaseOrder)-[:HAS_PREVIOUS_PO => {Resubmission_Justification :: STRING}]->(:PurchaseOrder),
-  (:PurchaseOrder)-[:HAS_BUYER_PO_APPROVAL => {Date :: TIMESTAMP WITH TIME ZONE NOT NULL, Comment :: STRING}]->(:Employee),
-  (:PurchaseOrder)-[:HAS_L1_PO_APPROVAL => {Date :: TIMESTAMP WITH TIME ZONE NOT NULL, Comment :: STRING}]->(:Employee),
-  (:PurchaseOrder)-[:HAS_L1_PO_REJECTION => {Date :: TIMESTAMP WITH TIME ZONE NOT NULL, Comment :: STRING}]->(:Employee),
-  (:PurchaseOrder)-[:HAS_L2_PO_APPROVAL => {Date :: TIMESTAMP WITH TIME ZONE NOT NULL, Comment :: STRING}]->(:Employee),
-  (:PurchaseOrder)-[:HAS_L2_PO_REJECTION => {Date :: TIMESTAMP WITH TIME ZONE NOT NULL, Comment :: STRING}]->(:Employee),
-  (:PurchaseOrder)-[:HAS_L3_PO_APPROVAL => {Date :: TIMESTAMP WITH TIME ZONE NOT NULL, Comment :: STRING}]->(:Employee),
-  (:PurchaseOrder)-[:HAS_L3_PO_REJECTION => {Date :: TIMESTAMP WITH TIME ZONE NOT NULL, Comment :: STRING}]->(:Employee),
-  (:PurchaseOrder)-[:HAS_WAREHOUSE_DELIVERY => {Date :: TIMESTAMP WITH TIME ZONE NOT NULL, Comment :: STRING}]->(:Employee),
-  (:PurchaseOrder)-[:HAS_FINANCE_PAYMENT => {Date :: TIMESTAMP WITH TIME ZONE NOT NULL, Comment :: STRING}]->(:Employee),
+  (:PurchaseOrder)-[:HAS_BUYER_PO_APPROVAL => {Date :: ZONED DATETIME NOT NULL, Comment :: STRING}]->(:Employee),
+  (:PurchaseOrder)-[:HAS_L1_PO_APPROVAL => {Date :: ZONED DATETIME NOT NULL, Comment :: STRING}]->(:Employee),
+  (:PurchaseOrder)-[:HAS_L1_PO_REJECTION => {Date :: ZONED DATETIME NOT NULL, Comment :: STRING}]->(:Employee),
+  (:PurchaseOrder)-[:HAS_L2_PO_APPROVAL => {Date :: ZONED DATETIME NOT NULL, Comment :: STRING}]->(:Employee),
+  (:PurchaseOrder)-[:HAS_L2_PO_REJECTION => {Date :: ZONED DATETIME NOT NULL, Comment :: STRING}]->(:Employee),
+  (:PurchaseOrder)-[:HAS_L3_PO_APPROVAL => {Date :: ZONED DATETIME NOT NULL, Comment :: STRING}]->(:Employee),
+  (:PurchaseOrder)-[:HAS_L3_PO_REJECTION => {Date :: ZONED DATETIME NOT NULL, Comment :: STRING}]->(:Employee),
+  (:PurchaseOrder)-[:HAS_WAREHOUSE_DELIVERY => {Date :: ZONED DATETIME NOT NULL, Comment :: STRING}]->(:Employee),
+  (:PurchaseOrder)-[:HAS_FINANCE_PAYMENT => {Date :: ZONED DATETIME NOT NULL, Comment :: STRING}]->(:Employee),
 
 // Supplier-side PO state
   (:Supplier)-[:HAS_SUPPLIER_NEW_PENDING_POS => {}]->(:SupplierNewPoS),
   (:Supplier)-[:HAS_SUPPLIER_OPEN_POS => {}]->(:SupplierOpenPoS),
   (:Supplier)-[:HAS_SUPPLIER_CLOSED_POS => {}]->(:SupplierClosedPoS),
-  (:SupplierNewPoS)-[:IS_SUPPLIER_NEW_PO_STATE => {Date :: TIMESTAMP WITH TIME ZONE NOT NULL}]->(:PurchaseOrder),
-  (:SupplierOpenPoS)-[:IS_SUPPLIER_OPEN_PO_STATE => {Date :: TIMESTAMP WITH TIME ZONE NOT NULL}]->(:PurchaseOrder),
-  (:SupplierClosedPoS)-[:HAS_SUPPLIER_CLOSED_PO_STATE => {Date :: TIMESTAMP WITH TIME ZONE NOT NULL, Comment :: STRING}]->(:PurchaseOrder),
+  (:SupplierNewPoS)-[:IS_SUPPLIER_NEW_PO_STATE => {Date :: ZONED DATETIME NOT NULL}]->(:PurchaseOrder),
+  (:SupplierOpenPoS)-[:IS_SUPPLIER_OPEN_PO_STATE => {Date :: ZONED DATETIME NOT NULL}]->(:PurchaseOrder),
+  (:SupplierClosedPoS)-[:HAS_SUPPLIER_CLOSED_PO_STATE => {Date :: ZONED DATETIME NOT NULL, Comment :: STRING}]->(:PurchaseOrder),
 
 // RFQ
   (:PurchaseOrder)-[:HAS_SUPPLIER_NEW_RFQ => {}]->(:PoNewRFQ),
   (:PurchaseOrder)-[:HAS_SUPPLIER_REJECTED_RFQ => {}]->(:PoRejectedRFQ),
   (:PoNewRFQ)-[:IS_SUPPLIER_NEW_RFQ => {}]->(:RFQ),
-  (:PoRejectedRFQ)-[:IS_SUPPLIER_REJECTED_RFQ_STATE => {Date :: TIMESTAMP WITH TIME ZONE NOT NULL}]->(:RFQ),
+  (:PoRejectedRFQ)-[:IS_SUPPLIER_REJECTED_RFQ_STATE => {Date :: ZONED DATETIME NOT NULL}]->(:RFQ),
   (:RFQ)-[:IS_RFQ_FOR_PO => {}]->(:PurchaseOrder),
   (:RFQ)-[:RFQ_FROM_SUPPLIER => {}]->(:Supplier),
-  (:RFQ)-[:HAS_RFQ_ITEM => {RFQqt :: FLOAT NOT NULL, RFQcost :: FLOAT NOT NULL}]->(:Product),
+  (:RFQ)-[:HAS_RFQ_ITEM => {RFQqt :: INTEGER NOT NULL, RFQcost :: FLOAT NOT NULL}]->(:Product),
   (:RFQ)-[:HAS_PREVIOUS_RFQ => {Justification :: STRING}]->(:RFQ),
-  (:RFQ)-[:HAS_BUYER_RFQ_APPROVAL => {Date :: TIMESTAMP WITH TIME ZONE NOT NULL, Comment :: STRING}]->(:Employee),
-  (:RFQ)-[:HAS_BUYER_RFQ_REJECTION => {Date :: TIMESTAMP WITH TIME ZONE NOT NULL, Comment :: STRING}]->(:Employee),
-  (:PurchaseOrder)-[:HAS_APPROVED_RFQ => {Date :: TIMESTAMP WITH TIME ZONE NOT NULL}]->(:RFQ),
+  (:RFQ)-[:HAS_BUYER_RFQ_APPROVAL => {Date :: ZONED DATETIME NOT NULL, Comment :: STRING}]->(:Employee),
+  (:RFQ)-[:HAS_BUYER_RFQ_REJECTION => {Date :: ZONED DATETIME NOT NULL, Comment :: STRING}]->(:Employee),
+  (:PurchaseOrder)-[:HAS_APPROVED_RFQ => {Date :: ZONED DATETIME NOT NULL}]->(:RFQ),
 
 // Recommendation Engine -- an optional add-on context layer per the main
 // script's own framing ("does not affect the core model... can be added
