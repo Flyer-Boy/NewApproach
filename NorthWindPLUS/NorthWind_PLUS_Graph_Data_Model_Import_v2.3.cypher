@@ -232,7 +232,7 @@ MERGE (n:Shipper {ShipperID:row.ShipperID, CompanyName:row.CompanyName, Phone:ro
 
 // We will import the Orders into a temporary Node OrderTmp and then we will normalize the OrderDate, RequiredDate and ShippedDate to proper datetime format.
 // We will not have the OrderTmp Node declared on the GRAPH TYPE constraint as it is a temporary node only used during the import process.
-LOAD CSV WITH HEADERS FROM "https://raw.githubusercontent.com/Flyer-Boy/NewApproach/refs/heads/main/NorthWindPLUS/Import/orders_fix.csv" AS row
+LOAD CSV WITH HEADERS FROM "https://raw.githubusercontent.com/Flyer-Boy/NewApproach/refs/heads/main/NorthWindPLUS/Import/orders.csv" AS row
 MERGE (n:OrderTmp {OrderID:row.OrderID})
 SET n += row;
 
@@ -242,7 +242,11 @@ SET o.OrderDate = datetime(left(o.OrderDate, 10)+"T"+right(o.OrderDate, 12)),
 o.RequiredDate = datetime(left(o.RequiredDate, 10)+"T"+right(o.RequiredDate, 12)),
 o.ShippedDate =  datetime(left(o.ShippedDate, 10)+"T"+right(o.ShippedDate, 12)),
 o.Freight = toFloat(o.Freight);
- 
+// We did a tweak on the ShippedDate to set it to 9999-12-31 for all Orders that have not been shipped yet.
+// This will allow us to easily identify the Open Orders and Fulfilled Orders later on in the process.
+// In the original Order.cvs file the ShippedDate is empty (NULL) for all Orders that have not been shipped yet, 
+// we chahge it to 9999-12-31 to avoid NULL values in the ShippedDate property.
+
 // Now that we have normalized the dates, we will create the Order Node and copy the properties from the OrderTmp Node to the Order Node.
 MATCH (n:OrderTmp)
 CREATE (m:Order)
@@ -291,15 +295,16 @@ CREATE (o:OrderS {Name: "OrderS"})-[:HAS_OPEN_ORDER_STATUS]->(:OrderStatusOpeN {
        (o)-[:HAS_FULFILLED_ORDER_STATUS]->(:OrderStatusFulfilleD {Status: "Fulfilled"}),
        (o)-[:HAS_CANCELED_ORDER_STATUS]->(:OrderStatusCanceleD {Status: "Canceled"});
 
-// We will connect the Order to the respective OrderStatus Collection based on the ShippedDate property. If the ShippedDate is not null, the Order is Fulfilled, otherwise it is Open.
+// We will connect the Order to the respective OrderStatus Collection based on the ShippedDate property. If the ShippedDate is not equal to 9999-12-31, the Order is Fulfilled, otherwise it is Open.
 MATCH (f:OrderStatusFulfilleD {Status: "Fulfilled"}), (n:Order)-[:HAS_SHIPMENT_INFO]->(s:ShipInfo)
-WHERE s.ShippedDate IS NOT NULL
+WHERE s.ShippedDate <> datetime("9999-12-31T00:00:00.000")
 CREATE (f)-[:IS_FULFILLED_ORDER_STATE {FulfillDate: datetime() }]->(n); 
 
-// We will connect the Order to the respective OrderStatus Collection based on the ShippedDate property. If the ShippedDate is null, the Order is Open.
+// We will connect the Order to the respective OrderStatus Collection based on the ShippedDate property. If the ShippedDate is equal to 9999-12-31, the Order is Open.
 MATCH (o:OrderStatusOpeN {Status: "Open"}), (n:Order)-[:HAS_SHIPMENT_INFO]->(s:ShipInfo)
-WHERE s.ShippedDate IS NULL 
+WHERE s.ShippedDate = datetime("9999-12-31T00:00:00.000")
 CREATE (o)-[:IS_OPEN_ORDER_STATE]->(n);
+
 
 //-- End of NorthWind Graph Data Model Import --//
 
