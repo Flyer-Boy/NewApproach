@@ -214,16 +214,23 @@ MATCH (t:Territory) REMOVE t.RegionID;
 LOAD CSV WITH HEADERS FROM "https://raw.githubusercontent.com/Flyer-Boy/NewApproach/refs/heads/main/NorthWind/Import/shippers.csv" AS row
 MERGE (n:Shipper {ShipperID:row.ShipperID, CompanyName:row.CompanyName, Phone:row.Phone});
 
-
 LOAD CSV WITH HEADERS FROM "https://raw.githubusercontent.com/Flyer-Boy/NewApproach/refs/heads/main/NorthWind/Import/orders.csv" AS row
-MERGE (n:Order {OrderID:row.OrderID})
+MERGE (n:OrderTmp {OrderID:row.OrderID})
 SET n += row;
 
 // We will normalize the OrderDate, RequiredDate to proper datetime format.
-MATCH (o:Order) 
+MATCH (o:OrderTmp) 
 SET o.OrderDate = datetime(left(o.OrderDate, 10)+"T"+right(o.OrderDate, 12)), 
-o.RequiredDate = datetime(left(o.RequiredDate, 10)+"T"+right(o.RequiredDate, 12)); 
+o.RequiredDate = datetime(left(o.RequiredDate, 10)+"T"+right(o.RequiredDate, 12));
+ 
+MATCH (n:OrderTmp)
+WITH collect(n) AS originalNodes
+CALL apoc.refactor.cloneNodes(originalNodes, false)
+YIELD output AS clonedNode
+SET clonedNode:Order
+RETURN count(clonedNode) AS clonedCount;
 
+MATCH (n:OrderTmp) DETACH DELETE  n;
 
 MATCH (c:Customer),(o:Order)
 WHERE c.CustomerID = o.CustomerID
@@ -425,13 +432,13 @@ ORDER BY rand() LIMIT 1
 MATCH (c:Customer) 
 WITH e, c, op
 ORDER BY rand() LIMIT 1
-CREATE (o:Order {OrderID: "CO-"+left(randomUUID(),3)+right(randomUUID(),3) , OrderDate:date(), RequireDate:date()+duration("P7D")})<-[:IS_OPEN_ORDER_STATE]-(op)
+CREATE (o:Order {OrderID: "CO-"+left(randomUUID(),3)+right(randomUUID(),3) , OrderDate:datetime(), RequiredDate:datetime()+duration("P7D")})<-[:IS_OPEN_ORDER_STATE]-(op)
 CREATE (o)-[:HAS_ORDER_CUSTOMER]->(c) 
 CREATE (o)-[:SOLD_BY]->(e)
 WITH o
 MATCH (p:Product)-[]-(:ProductStatusAvailablE {Status: "Available"}) 
 ORDER BY rand() LIMIT toInteger(round(rand()*10 + 1))
-CREATE (o)-[:HAS_ORDER_PRODUCT {Quantity: round(rand()*19)+1, UnitPrice:p.UnitPrice, Discount:0.0}]->(p)
+CREATE (o)-[:HAS_ORDER_PRODUCT {Quantity: toInteger(round(rand()*19)+1), UnitPrice:p.UnitPrice, Discount:0.0}]->(p)
 };
 
 // ###### Run the **Inventory Level Report** ######  
@@ -481,9 +488,9 @@ CREATE (t:PoS {Name:"PoS"})-[:HAS_NEW_PO_STATE]->(:NewPoS {Name:"NewPoS"}),
 // I will write about this in an article at some point. For now, let's get our model working.
 
 MATCH (s:Supplier)
-CREATE (s)-[:HAS_SUPPLIER_NEW_PENDING_POS]->(:SupplierNewPoS), // Answers to supplier question: Do I have any new PO's  
-       (s)-[:HAS_SUPPLIER_OPEN_POS]->(:SupplierOpenPoS),  // Answers to supplier question: Do I have PO's in progress that require my followup 
-       (s)-[:HAS_SUPPLIER_CLOSED_POS]->(:SupplierClosedPoS);
+CREATE (s)-[:HAS_SUPPLIER_NEW_PENDING_POS]->(:SupplierNewPoS {Name:"SupplierNewPoS"}), // Answers to supplier question: Do I have any new PO's  
+       (s)-[:HAS_SUPPLIER_OPEN_POS]->(:SupplierOpenPoS {Name:"SupplierOpenPoS"}),  // Answers to supplier question: Do I have PO's in progress that require my followup 
+       (s)-[:HAS_SUPPLIER_CLOSED_POS]->(:SupplierClosedPoS {Name:"SupplierClosedPoS"});
 
 // Supplier Perspective: As the Supplier receives POs and start submitting RFQ's we will move (disconnect/connect) the 'POs from the Supplier collections as they are addressed. 
 // We will use the following Ontology for this:
@@ -725,8 +732,8 @@ WITH ap, s, bu, su, po, snp ORDER BY po LIMIT 10
 CREATE (po)-[:HAS_BUYER_PO_APPROVAL {Date:datetime(), Comment:"This PO is approved by Buyer due to..< Approval justification for Decision Traces - for Context Graph > - alternatively this could be placed on a separate Node  >..."}]->(bu),  // We connect the PO to the Buyer that Submitted it. 
        (su)-[:IS_SUBMITTED_PO_STATE {Date:datetime()}]->(po), // We connect the PO to the Submitted state Collection 
        (snp)-[:IS_SUPPLIER_NEW_PO_STATE {Date:datetime()}]->(po),                     // The Buyer places the PO in the Supplier's NewPoS collection 
-       (po)-[:HAS_SUPPLIER_NEW_RFQ]->(:PoNewRFQ),             // The Buyer creats the PO's state collections for upcoming RFQ's vetting process - The firts one is PoNewFRQ - to hold the new RFQ's submitted by the Supplier
-       (po)-[:HAS_SUPPLIER_REJECTED_RFQ]->(:PoRejectedRFQ)    // The second one is the PoRejectedRFQ - to hold the Rejected RFQ's as there could be more than one rejection in the vetting
+       (po)-[:HAS_SUPPLIER_NEW_RFQ]->(:PoNewRFQ {Name:"PoNewRFQ"}),             // The Buyer creats the PO's state collections for upcoming RFQ's vetting process - The firts one is PoNewFRQ - to hold the new RFQ's submitted by the Supplier
+       (po)-[:HAS_SUPPLIER_REJECTED_RFQ]->(:PoRejectedRFQ {Name:"PoRejectedRFQ"})    // The second one is the PoRejectedRFQ - to hold the Rejected RFQ's as there could be more than one rejection in the vetting
                                                               // we don'tt need a collection to hold the Approved RFQ as there will only be one and we can connect it directly to the PO
 DELETE ap;                                                    // We remove the PO from the Approved state as we have connected it to Submitted earlier. 
 

@@ -40,10 +40,12 @@
 #    the Tender Workflow ontology.
 # 4. SupplierNewPoS, SupplierOpenPoS, SupplierClosedPoS, PoNewRFQ,
 #    and PoRejectedRFQ are per-Supplier / per-PurchaseOrder
-#    Collection instances, not singletons, and carry no
-#    identifying property at all -- no owl:hasKey is declared for
-#    these five classes, matching the schema's own choice not to
-#    require one.
+#    Collection instances, not singletons. They carry a :name
+#    property (see its own rdfs:comment for detail), but that value
+#    is identical across every instance of a class, not a unique
+#    identifier -- no owl:hasKey is declared for these five classes,
+#    matching the schema's own choice not to require uniqueness on
+#    a property that isn't actually unique.
 #################################################################
 
 <http://example.org/northwindplus>
@@ -128,8 +130,9 @@
 :name a owl:DatatypeProperty ; rdfs:range xsd:string ;
     rdfs:domain [ a owl:Class ; owl:unionOf ( :CategorieS :RoleS :EmployeeDirectorY :SupplierS
         :PendingSupplierS :ApprovedSupplierS :RejectedSupplierS :PoS :NewPoS :ApprovedPoS
-        :RejectedPoS :SubmittedPoS :ClosedPoS ) ] ;
-    rdfs:comment "The single identifying/hub property for every singleton Collection class." .
+        :RejectedPoS :SubmittedPoS :ClosedPoS :SupplierNewPoS :SupplierOpenPoS
+        :SupplierClosedPoS :PoNewRFQ :PoRejectedRFQ ) ] ;
+    rdfs:comment "For the singleton Collection classes, this is the identifying/hub property. For SupplierNewPoS/SupplierOpenPoS/SupplierClosedPoS/PoNewRFQ/PoRejectedRFQ specifically, it is NOT identifying -- every instance of a given class shares the identical value (e.g. every Supplier's own SupplierNewPoS has name:\"SupplierNewPoS\"), since one instance exists per Supplier/PurchaseOrder, not one per the whole graph. See translation note 4." .
 
 :status a owl:DatatypeProperty ; rdfs:range xsd:string ;
     rdfs:domain [ a owl:Class ; owl:unionOf ( :ProductStatusDiscontinueD :ProductStatusAvailablE

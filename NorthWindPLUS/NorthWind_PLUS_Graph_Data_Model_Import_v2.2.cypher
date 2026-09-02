@@ -477,9 +477,9 @@ CREATE (t:PoS {Name:"PoS"})-[:HAS_NEW_PO_STATE]->(:NewPoS {Name:"NewPoS"}),
 // I will write about this in an article at some point. For now, let's get our model working.
 
 MATCH (s:Supplier)
-CREATE (s)-[:HAS_SUPPLIER_NEW_PENDING_POS]->(:SupplierNewPoS), // Answers to supplier question: Do I have any new PO's  
-       (s)-[:HAS_SUPPLIER_OPEN_POS]->(:SupplierOpenPoS),  // Answers to supplier question: Do I have PO's in progress that require my followup 
-       (s)-[:HAS_SUPPLIER_CLOSED_POS]->(:SupplierClosedPoS);
+CREATE (s)-[:HAS_SUPPLIER_NEW_PENDING_POS]->(:SupplierNewPoS {Name:"SupplierNewPoS"}), // Answers to supplier question: Do I have any new PO's  
+       (s)-[:HAS_SUPPLIER_OPEN_POS]->(:SupplierOpenPoS {Name:"SupplierOpenPoS"}),  // Answers to supplier question: Do I have PO's in progress that require my followup 
+       (s)-[:HAS_SUPPLIER_CLOSED_POS]->(:SupplierClosedPoS {Name:"SupplierClosedPoS"});
 
 // Supplier Perspective: As the Supplier receives POs and start submitting RFQ's we will move (disconnect/connect) the 'POs from the Supplier collections as they are addressed. 
 // We will use the following Ontology for this:
@@ -721,8 +721,8 @@ WITH ap, s, bu, su, po, snp ORDER BY po LIMIT 10
 CREATE (po)-[:HAS_BUYER_PO_APPROVAL {Date:datetime(), Comment:"This PO is approved by Buyer due to..< Approval justification for Decision Traces - for Context Graph > - alternatively this could be placed on a separate Node  >..."}]->(bu),  // We connect the PO to the Buyer that Submitted it. 
        (su)-[:IS_SUBMITTED_PO_STATE {Date:datetime()}]->(po), // We connect the PO to the Submitted state Collection 
        (snp)-[:IS_SUPPLIER_NEW_PO_STATE {Date:datetime()}]->(po),                     // The Buyer places the PO in the Supplier's NewPoS collection 
-       (po)-[:HAS_SUPPLIER_NEW_RFQ]->(:PoNewRFQ),             // The Buyer creats the PO's state collections for upcoming RFQ's vetting process - The firts one is PoNewFRQ - to hold the new RFQ's submitted by the Supplier
-       (po)-[:HAS_SUPPLIER_REJECTED_RFQ]->(:PoRejectedRFQ)    // The second one is the PoRejectedRFQ - to hold the Rejected RFQ's as there could be more than one rejection in the vetting
+       (po)-[:HAS_SUPPLIER_NEW_RFQ]->(:PoNewRFQ {Name:"PoNewRFQ"}),             // The Buyer creats the PO's state collections for upcoming RFQ's vetting process - The firts one is PoNewFRQ - to hold the new RFQ's submitted by the Supplier
+       (po)-[:HAS_SUPPLIER_REJECTED_RFQ]->(:PoRejectedRFQ {Name:"PoRejectedRFQ"})    // The second one is the PoRejectedRFQ - to hold the Rejected RFQ's as there could be more than one rejection in the vetting
                                                               // we don'tt need a collection to hold the Approved RFQ as there will only be one and we can connect it directly to the PO
 DELETE ap;                                                    // We remove the PO from the Approved state as we have connected it to Submitted earlier. 
 
@@ -1338,13 +1338,49 @@ ORDER BY TimesRejectedAndResubmitted DESC;
 MATCH path = (po:PurchaseOrder {PONumber:"PO-XXXXXXX"})-[*1..2]-(connected)
 RETURN path;
 
-// Product Recommendation for Customers Based on the Most-Ordered Products by Other Customers
+// Product Recommendation for Customers Based on the Most-Ordered Products by Other Customers (if you ran the Recommendation Engine commands earlier )
 MATCH (c:Customer)<-[:HAS_ORDER_CUSTOMER]-(o:Order)-[:HAS_ORDER_PRODUCT]->(p:Product)
 <-[:HAS_ORDER_PRODUCT]-(o2:Order)-[:HAS_ORDER_PRODUCT]->(p2:Product)<-[:IS_PRODUCT_CATEGORY_OF]-(:ProductCategorY)-[:IS_PRODUCT_CATEGORY_OF]->(p)
 WHERE c.CustomerID = 'ANTON' and NOT( (c)<-[:HAS_ORDER_CUSTOMER]-(:Order)-[:HAS_ORDER_PRODUCT]->(p2) )
 RETURN c.CompanyName, p.ProductName AS has_purchased, p2.ProductName AS has_also_purchased, count(DISTINCT o2) AS occurrences
 ORDER BY occurrences DESC
 LIMIT 5;
+
+// The Inventory Level Report (again)
+// To visualize the Product's Inventory Levels, Supply Orders (RFQ Approved) pending fulfilment, Stock Threashold, Open Customer Orders and Open PO's to resupply from Today on the Graph console, use the following query:
+  // Product Supply/Demand Dashboard -- one row per Product, ordered by name
+  MATCH ()-[:IS_AVAILABLE_PRODUCT]-(p:Product)-[:HAS_INVENTORY_LEVEL]->(inv:InventoryLevel),
+        (p)-[:HAS_REORDER_LEVEL]->(r:ReorderLevel),
+        (p)-[:HAS_SUPPLY_ORDER]->(suo:OrderLevel)
+  // Open Customer Order demand for this Product
+  OPTIONAL MATCH (:OrderStatusOpeN)-[:IS_OPEN_ORDER_STATE]->(o:Order)-[details:HAS_ORDER_PRODUCT]->(p)
+  WITH p, inv, r, suo,
+       count(DISTINCT o) AS OpenCustomerOrders,
+       coalesce(sum(details.Quantity), 0) AS QtyDemanded
+  // Quantity confirmed by an approved RFQ, not yet delivered by the Warehouse
+  OPTIONAL MATCH (po:PurchaseOrder)-[:HAS_APPROVED_RFQ]->(:RFQ)-[rfi:HAS_RFQ_ITEM]->(p)
+  WHERE NOT (po)-[:HAS_WAREHOUSE_DELIVERY]->()
+  WITH p, inv, r, suo, OpenCustomerOrders, QtyDemanded,
+       coalesce(sum(rfi.RFQqt), 0) AS QtyApprovedRFQPendingDelivery
+  // Quantity requested via an open PO that does NOT yet have an approved RFQ
+  // (excluded here to avoid double-counting the same units already captured above)
+  OPTIONAL MATCH (po2:PurchaseOrder)-[poi2:HAS_PO_ITEM]->(p)
+  WHERE ((po2)<-[:IS_NEW_PO_STATE]-(:NewPoS)
+      OR (po2)<-[:IS_APPROVED_PO_STATE]-(:ApprovedPoS)
+      OR (po2)<-[:IS_SUBMITTED_PO_STATE]-(:SubmittedPoS))
+    AND NOT (po2)-[:HAS_APPROVED_RFQ]->(:RFQ)
+  WITH p, inv, r, suo, OpenCustomerOrders, QtyDemanded, QtyApprovedRFQPendingDelivery,
+       coalesce(sum(poi2.POqt), 0) AS QtyOpenPOsNotYetConfirmed
+  RETURN p.ProductName AS ProductName,
+         inv.UnitsInStock AS UnitsInStock,
+         r.StockThreshold AS StockThreshold,
+         suo.UnitsOnOrder AS UnitsOnOrder_Tracked,
+         QtyApprovedRFQPendingDelivery AS QtyApprovedRFQPendingDelivery,
+         QtyOpenPOsNotYetConfirmed AS QtyOpenPOsNotYetConfirmed,
+         (QtyApprovedRFQPendingDelivery + QtyOpenPOsNotYetConfirmed) AS TotalIncomingQty,
+         OpenCustomerOrders AS OpenCustomerOrders,
+         QtyDemanded AS QtyDemanded
+  ORDER BY ProductName;
 
 //  End of Query Examples  //
 

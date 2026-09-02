@@ -138,14 +138,14 @@ WITH e, c, op ORDER BY rand() LIMIT 1
 CREATE (o:Order {
     OrderID: "CO-" + left(randomUUID(), 3) + right(randomUUID(), 3),
     OrderDate: datetime(),
-    RequireDate: date() + duration("P7D")
+    RequiredDate: datetime() + duration("P7D")
 })<-[:IS_OPEN_ORDER_STATE]-(op)
 CREATE (o)-[:HAS_ORDER_CUSTOMER]->(c)
 CREATE (o)-[:SOLD_BY]->(e)
 WITH o
 MATCH (p:Product)-[]-(:ProductStatusAvailablE {Status: "Available"})
 ORDER BY rand() LIMIT toInteger(round(rand() * 10 + 1))
-WITH o, p, round(rand() * 19) + 1 AS qty
+WITH o, p, toInteger(round(rand() * 19) + 1) AS qty
 CREATE (o)-[:HAS_ORDER_PRODUCT {Quantity: qty, UnitPrice: p.UnitPrice, Discount: 0.0}]->(p)
 RETURN o.OrderID AS OrderID, p.ProductName AS ProductName, qty AS Quantity
 """

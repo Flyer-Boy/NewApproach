@@ -36,9 +36,15 @@
 // 4. SupplierNewPoS, SupplierOpenPoS, SupplierClosedPoS, PoNewRFQ, and
 //    PoRejectedRFQ are NOT singletons like the other Collection nodes --
 //    one instance is created PER Supplier (the first three) or PER
-//    PurchaseOrder (the last two), and none of them carry a Name property
-//    at all. No REQUIRE/KEY is declared for them for that reason -- they
-//    have no identifying property, by design.
+//    PurchaseOrder (the last two). They now carry a Name property (added
+//    later, matching their label as a type descriptor), but that value is
+//    IDENTICAL across every instance -- every Supplier's own SupplierNewPoS
+//    node has Name:"SupplierNewPoS", the same as every other Supplier's.
+//    That's not a unique identifier, so no REQUIRE/KEY is declared on it --
+//    doing so would require uniqueness that doesn't exist. If a genuine
+//    per-instance key is ever wanted, it would need to be generated at
+//    creation time (e.g. Name: s.SupplierID + "-SupplierNewPoS"), which
+//    would also require a matching change in the main import script.
 //
 // 5. RolE.ApprovalBase/ApprovalLimit only exist on Level1/2/3Approver;
 //    every other RolE (including all CSV-imported Northwind titles like
@@ -52,6 +58,8 @@
 //    Order cancellation path exists yet), matching the same "declared but
 //    unused" pattern as the original Northwind model's OrderStatusCanceleD.
 // -----------------------------------------------------------------------
+
+ALTER CURRENT GRAPH TYPE SET {};
 
 ALTER CURRENT GRAPH TYPE SET {
 
@@ -128,19 +136,18 @@ ALTER CURRENT GRAPH TYPE SET {
 // and types. Both declared, both optional.
 (o:Order => {
     OrderID :: STRING NOT NULL,
-    OrderDate :: STRING,
-    RequiredDate :: STRING,
-    RequireDate :: STRING
+    OrderDate :: ZONED DATETIME,
+    RequiredDate :: ZONED DATETIME
      }) REQUIRE (o.OrderID) IS KEY,
 
 (po:PurchaseOrder => {
     PONumber :: STRING NOT NULL,
-    PODate :: STRING
+    PODate :: ZONED DATETIME,
      }) REQUIRE (po.PONumber) IS KEY,
 
 (rfq:RFQ => {
     RFQNumber :: STRING NOT NULL,
-    RFQDate :: STRING,
+    RFQDate :: ZONED DATETIME,
     RFQComments :: STRING
      }) REQUIRE (rfq.RFQNumber) IS KEY,
 
@@ -210,41 +217,38 @@ ALTER CURRENT GRAPH TYPE SET {
 // *******   Collection (Hub) Node Definitions   *******
 // All singleton collections below are keyed on Name (or Status for the
 // Product/Order state hubs, matching the original Northwind convention).
-// See caveat 4 for the non-singleton, no-identity collections
-// (SupplierNewPoS, SupplierOpenPoS, SupplierClosedPoS, PoNewRFQ,
-// PoRejectedRFQ), which are intentionally NOT declared with a REQUIRE
-// clause below.
 
-(:CategorieS => { Name :: STRING NOT NULL }) REQUIRE (Name) IS KEY,
-(:RoleS => { Name :: STRING NOT NULL }) REQUIRE (Name) IS KEY,
-(:EmployeeDirectorY => { Name :: STRING NOT NULL }) REQUIRE (Name) IS KEY,
 
-(:ProductStatusDiscontinueD => { Status :: STRING NOT NULL }) REQUIRE (Status) IS KEY,
-(:ProductStatusAvailablE => { Status :: STRING NOT NULL }) REQUIRE (Status) IS KEY,
+(c1:CategorieS => { Name :: STRING NOT NULL }) REQUIRE (c1.Name) IS KEY,
+(r1:RoleS => { Name :: STRING NOT NULL }) REQUIRE (r1.Name) IS KEY,
+(e1:EmployeeDirectorY => { Name :: STRING NOT NULL }) REQUIRE (e1.Name) IS KEY,
 
-(:OrderStatusOpeN => { Status :: STRING NOT NULL }) REQUIRE (Status) IS KEY,
-(:OrderStatusFulfilleD => { Status :: STRING NOT NULL }) REQUIRE (Status) IS KEY,
-(:OrderStatusCanceleD => { Status :: STRING NOT NULL }) REQUIRE (Status) IS KEY,
-(:OrderS => { Name :: STRING NOT NULL }) REQUIRE (Name) IS KEY,
+(p1:ProductStatusDiscontinueD => { Status :: STRING NOT NULL }) REQUIRE (p1.Status) IS KEY,
+(p2:ProductStatusAvailablE => { Status :: STRING NOT NULL }) REQUIRE (p2.Status) IS KEY,
 
-(:SupplierS => { Name :: STRING NOT NULL }) REQUIRE (Name) IS KEY,
-(:PendingSupplierS => { Name :: STRING NOT NULL }) REQUIRE (Name) IS KEY,
-(:ApprovedSupplierS => { Name :: STRING NOT NULL }) REQUIRE (Name) IS KEY,
-(:RejectedSupplierS => { Name :: STRING NOT NULL }) REQUIRE (Name) IS KEY,
+(o1:OrderStatusOpeN => { Status :: STRING NOT NULL }) REQUIRE (o1.Status) IS KEY,
+(o2:OrderStatusFulfilleD => { Status :: STRING NOT NULL }) REQUIRE (o2.Status) IS KEY,
+(o3:OrderStatusCanceleD => { Status :: STRING NOT NULL }) REQUIRE (o3.Status) IS KEY,
+(o4:OrderS => { Name :: STRING NOT NULL }) REQUIRE (o4.Name) IS KEY,
 
-(:PoS => { Name :: STRING NOT NULL }) REQUIRE (Name) IS KEY,
-(:NewPoS => { Name :: STRING NOT NULL }) REQUIRE (Name) IS KEY,
-(:ApprovedPoS => { Name :: STRING NOT NULL }) REQUIRE (Name) IS KEY,
-(:RejectedPoS => { Name :: STRING NOT NULL }) REQUIRE (Name) IS KEY,
-(:SubmittedPoS => { Name :: STRING NOT NULL }) REQUIRE (Name) IS KEY,
-(:ClosedPoS => { Name :: STRING NOT NULL }) REQUIRE (Name) IS KEY,
+(s1:SupplierS => { Name :: STRING NOT NULL }) REQUIRE (s1.Name) IS KEY,
+(p3:PendingSupplierS => { Name :: STRING NOT NULL }) REQUIRE (p3.Name) IS KEY,
+(a1:ApprovedSupplierS => { Name :: STRING NOT NULL }) REQUIRE (a1.Name) IS KEY,
+(r2:RejectedSupplierS => { Name :: STRING NOT NULL }) REQUIRE (r2.Name) IS KEY,
 
-// No Name property -- see caveat 4.
-(:SupplierNewPoS => {}),
-(:SupplierOpenPoS => {}),
-(:SupplierClosedPoS => {}),
-(:PoNewRFQ => {}),
-(:PoRejectedRFQ => {}),
+(p4:PoS => { Name :: STRING NOT NULL }) REQUIRE (p4.Name) IS KEY,
+(n1:NewPoS => { Name :: STRING NOT NULL }) REQUIRE (n1.Name) IS KEY,
+(a2:ApprovedPoS => { Name :: STRING NOT NULL }) REQUIRE (a2.Name) IS KEY,
+(r3:RejectedPoS => { Name :: STRING NOT NULL }) REQUIRE (r3.Name) IS KEY,
+(s2:SubmittedPoS => { Name :: STRING NOT NULL }) REQUIRE (s2.Name) IS KEY,
+(c2:ClosedPoS => { Name :: STRING NOT NULL }) REQUIRE (c2.Name) IS KEY,
+
+// Name property not Key/Unique -- these are not singletons, one instance per Supplier or PurchaseOrder.
+(:SupplierNewPoS => { Name :: STRING NOT NULL }),
+(:SupplierOpenPoS => { Name :: STRING NOT NULL }),
+(:SupplierClosedPoS => { Name :: STRING NOT NULL }),
+(:PoNewRFQ => { Name :: STRING NOT NULL }),
+(:PoRejectedRFQ => { Name :: STRING NOT NULL }),
 
 
 // *******   Relationship Definitions   *******
@@ -316,7 +320,7 @@ ALTER CURRENT GRAPH TYPE SET {
   (:SubmittedPoS)-[:IS_SUBMITTED_PO_STATE => {Date :: TIMESTAMP WITH TIME ZONE NOT NULL}]->(:PurchaseOrder),
   (:PurchaseOrder)-[:PO_FOR_SUPPLIER => {}]->(:Supplier),
   (:PurchaseOrder)-[:PO_CREATED_BY => {}]->(:Employee),
-  (:PurchaseOrder)-[:HAS_PO_ITEM => {POqt :: FLOAT NOT NULL, POPriceDiscount :: FLOAT NOT NULL}]->(:Product),
+  (:PurchaseOrder)-[:HAS_PO_ITEM => {POqt :: INTEGER NOT NULL, POPriceDiscount :: FLOAT NOT NULL}]->(:Product),
   (:PurchaseOrder)-[:HAS_PREVIOUS_PO => {Resubmission_Justification :: STRING}]->(:PurchaseOrder),
   (:PurchaseOrder)-[:HAS_BUYER_PO_APPROVAL => {Date :: TIMESTAMP WITH TIME ZONE NOT NULL, Comment :: STRING}]->(:Employee),
   (:PurchaseOrder)-[:HAS_L1_PO_APPROVAL => {Date :: TIMESTAMP WITH TIME ZONE NOT NULL, Comment :: STRING}]->(:Employee),

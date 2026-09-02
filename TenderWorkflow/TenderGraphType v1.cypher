@@ -1,379 +1,360 @@
-// This Cypher script v1 uses Neo4j new GRAPH TYPE to defines a Graph Govenance template for the Tender the TenderWorkflow v7.1 Schema. 
-// It defines the Graph Type, its Nodes, Relationships, and Constraints to ensure data integrity and enforce business rules.
+// GRAPH TYPE schema for the NorthWind PLUS Graph Data Model (v2.2).
+// Built directly from NorthWind_PLUS_Graph_Data_Model_Import_v2_2.cypher --
+// every node/relationship below was traced to an actual CREATE/MERGE in
+// that script (plus the confirmed additions from the stress-test harness:
+// HAS_WAREHOUSE_FULFILLMENT on Order, which order-fulfillment creates but
+// the base script's original demo query didn't).
+//
+// -----------------------------------------------------------------------
+// KNOWN ISSUES -- read before using
+// -----------------------------------------------------------------------
+// 1. RESOLVED: HAS_CLOSED_PO_STATE was previously used for two different
+//    edges -- (PoS)->(ClosedPoS) collection membership, and
+//    (ClosedPoS)->(PurchaseOrder) instance state -- confirmed as a naming
+//    collision and resolved: HAS_CLOSED_PO_STATE stays as the
+//    collection-membership edge; the instance-level edge is now declared
+//    below as IS_CLOSED_PO_STATE, matching the source model's own
+//    ontology comment (which already documented this as the intended
+//    name). The main script's PO Payment and Closure section and the
+//    Python stress-test harness's finance_closure action both still need
+//    this same rename applied -- this schema reflects the target state,
+//    not (yet) what those two files currently create.
+//
+// 2. Order.OrderDate/RequiredDate have two shapes depending on creation
+//    path: CSV-imported Orders get explicitly normalized to real
+//    TIMESTAMP WITH TIME ZONE values; Orders created by the "random
+//    Customer order" loop use OrderDate::DATE and a *differently spelled*
+//    RequireDate::DATE (not RequiredDate) -- a leftover typo flagged
+//    earlier and not yet fixed. Both property names are declared below as
+//    optional rather than assuming one is authoritative.
+//
+// 3. ShipInfo has two shapes (bulk import: ShipName/ShippedDate/Freight,
+//    all String, Freight never converted from CSV; "Fulfilling an Order"
+//    example: ShippmentID/ShippedDate). Nothing here is NOT NULL, to
+//    accommodate both.
+//
+// 4. SupplierNewPoS, SupplierOpenPoS, SupplierClosedPoS, PoNewRFQ, and
+//    PoRejectedRFQ are NOT singletons like the other Collection nodes --
+//    one instance is created PER Supplier (the first three) or PER
+//    PurchaseOrder (the last two), and none of them carry a Name property
+//    at all. No REQUIRE/KEY is declared for them for that reason -- they
+//    have no identifying property, by design.
+//
+// 5. RolE.ApprovalBase/ApprovalLimit only exist on Level1/2/3Approver;
+//    every other RolE (including all CSV-imported Northwind titles like
+//    "Sales Representative") has only Title/Description/Rules. Declared
+//    as optional below.
+//
+// 6. PendingSupplierS/RejectedSupplierS (and their IS_SUPPLIER_PENDING_
+//    STATE/IS_SUPPLIER_REJECTED_STATE instance edges) and
+//    OrderStatusCanceleD are declared for completeness -- none are
+//    currently exercised by the script (no Supplier vetting workflow or
+//    Order cancellation path exists yet), matching the same "declared but
+//    unused" pattern as the original Northwind model's OrderStatusCanceleD.
+// -----------------------------------------------------------------------
 
 ALTER CURRENT GRAPH TYPE SET {
 
-// *******   Entity - GRAPH TYPE Definitions   *******
+// *******   Entity (Proper Noun Node) Definitions   *******
 
-// AcceptedInvitationS
-// Define AcceptedInvitationS supertype with its properties and a unique Name key.
-(:AcceptedInvitationS => {    
-    Name :: STRING NOT NULL
-     }),
+(c:ProductCategorY => {
+    CategoryID :: STRING NOT NULL,
+    CategoryName :: STRING NOT NULL,
+    Description :: STRING
+     }) REQUIRE (c.CategoryID) IS KEY,
 
-// ActiveBidS
-// Define ActiveBidS supertype with its properties and a unique Name key.
-(:ActiveBidS => {
-    Name :: STRING NOT NULL
-     }),
+(s:Supplier => {
+    SupplierID :: STRING NOT NULL,
+    CompanyName :: STRING NOT NULL,
+    HomePage :: STRING
+     }) REQUIRE (s.SupplierID) IS KEY,
 
-// AIBidAssessment
-// Define AIBidAssessment with its properties and a unique Name key.
-(:AIBidAssessment => {   
-    Advantages :: STRING NOT NULL,
-    Disadvantages :: STRING NOT NULL,
-    AssessmentSummary :: STRING NOT NULL,
-    Rating :: FLOAT NOT NULL
-     }),
+(p:Product => {
+    ProductID :: STRING NOT NULL,
+    ProductName :: STRING NOT NULL,
+    UnitPrice :: FLOAT,
+    QuantityPerUnit :: STRING
+     }) REQUIRE (p.ProductID) IS KEY,
 
-// AIVendorAssessment
-// Define AIVendorAssessment with its properties and a unique Name key.
-(a:AIVendorAssessment => {   
-    Advantages :: STRING NOT NULL,
-    Disadvantages :: STRING NOT NULL,
-    AssessmentSummary :: STRING NOT NULL,
-    Rating :: FLOAT NOT NULL
-     }),
+// ContactName/ContactTitle optional -- see the main script's own
+// "Add a new Customer" example, which sets them directly on Customer
+// alongside a separate Contact node (a known ontology-purity gap flagged
+// earlier, not fixed here).
+(cu:Customer => {
+    CustomerID :: STRING NOT NULL,
+    CompanyName :: STRING NOT NULL,
+    ContactName :: STRING,
+    ContactTitle :: STRING
+     }) REQUIRE (cu.CustomerID) IS KEY,
 
-// ApprovedTenderS
-// Define ApprovedTenderS subtypes node with a unique Name property and key.
-(t:ApprovedTenderS => {
-    Name :: STRING NOT NULL
-     }) REQUIRE (t.Name) IS UNIQUE,
-
-// ApprovedVendorS
-// Define ApprovedVendorS subtype with its properties and a unique Name key.
-(v: ApprovedVendorS => {
-    Name :: STRING NOT NULL
-     }) REQUIRE (v.Name) IS UNIQUE,  
-
-// AwardedBidS
-// Define AwardedBidS supertype with its properties and a unique Name key.
-(:AwardedBidS => {
-    Name :: STRING NOT NULL
-     }),
-
-// AwardedTenderS
-// Define AwardedTenderS subtypes with a unique Name property and key.
-(t1:AwardedTenderS => {
-    Name :: STRING NOT NULL
-     }) REQUIRE (t1.Name) IS UNIQUE,
-
-// Bid
-// Define Bid and its properties with a unique BidCode key.
-(b:Bid => {
-    BidCode :: STRING NOT NULL,
-    Description :: STRING NOT NULL,
-    CompletionDate :: TIMESTAMP WITH TIME ZONE,
-    Conditions :: STRING NOT NULL,
-    Deliverables :: STRING NOT NULL,
-    Price :: FLOAT NOT NULL,
-    Qualifications :: STRING NOT NULL,
-    Scope :: STRING NOT NULL,
-    Title :: STRING NOT NULL
-     }) REQUIRE (b.BidCode) IS KEY,
-
-// BidDoc
-// Define BidDoc and its properties with a unique DocName key.
-(:BidDoc => {
-    DocName :: STRING NOT NULL,
-    Description :: STRING NOT NULL,
-    Type :: STRING NOT NULL,
-    Date :: TIMESTAMP WITH TIME ZONE,
-    URL :: STRING NOT NULL
-     }),
-
-// BidDocS
-// Define BidDocS supertype with its properties and a unique Name key.
-(:BidDocS => {
-    Name :: STRING NOT NULL
-     }),  
-
-// ClosedTenderS
-// Define ClosedTenderS subtypes with a unique Name property and key.
-(t2:ClosedTenderS => {
-    Name :: STRING NOT NULL
-     }) REQUIRE (t2.Name) IS UNIQUE,
-
-// Conversation
-// Define Conversation supertype and its properties with a unique ID key. 
-(:ConversatioN => {
-      Name :: STRING NOT NULL
-         }),
-
-// Employee
-// Define Employee and its properties with a unique ID key.
+// HireDate/PhotoPath only exist on CSV-imported Employees; Extension
+// exists on both CSV-imported and demo-added Employees (Adam Smith, etc.).
 (e:Employee => {
-    Name :: STRING NOT NULL,
-    ID :: STRING NOT NULL,
+    EmployeeID :: STRING NOT NULL,
+    Email :: STRING NOT NULL,
+    Extension :: STRING,
+    HireDate :: STRING,
+    PhotoPath :: STRING
+     }) REQUIRE (e.EmployeeID) IS KEY,
+
+// No identifying property. TitleOfCourtesy only exists on CSV-imported
+// Employees' Person nodes, not the demo-added ones.
+(:Person => {
+    FirstName :: STRING NOT NULL,
+    LastName :: STRING NOT NULL,
+    TitleOfCourtesy :: STRING,
+    BirthDate :: STRING,
+    PersonalPhone :: STRING,
+    PersonalEmail :: STRING
+     }),
+
+(t:Territory => {
+    TerritoryID :: STRING NOT NULL,
+    TerritoryDescription :: STRING
+     }) REQUIRE (t.TerritoryID) IS KEY,
+
+(rg:Regions => {
+    RegionID :: STRING NOT NULL,
+    RegionDescription :: STRING
+     }) REQUIRE (rg.RegionID) IS KEY,
+
+(sh:Shipper => {
+    ShipperID :: STRING NOT NULL,
+    CompanyName :: STRING NOT NULL,
+    Phone :: STRING
+     }) REQUIRE (sh.ShipperID) IS KEY,
+
+// See caveat 2: two creation paths produce different date property names
+// and types. Both declared, both optional.
+(o:Order => {
+    OrderID :: STRING NOT NULL,
+    OrderDate :: STRING,
+    RequiredDate :: STRING,
+    RequireDate :: STRING
+     }) REQUIRE (o.OrderID) IS KEY,
+
+(po:PurchaseOrder => {
+    PONumber :: STRING NOT NULL,
+    PODate :: STRING
+     }) REQUIRE (po.PONumber) IS KEY,
+
+(rfq:RFQ => {
+    RFQNumber :: STRING NOT NULL,
+    RFQDate :: STRING,
+    RFQComments :: STRING
+     }) REQUIRE (rfq.RFQNumber) IS KEY,
+
+// No identifying property -- shared shape for Supplier, Customer,
+// Employee (via Person), and Order shipment addresses.
+(:Address => {
+    Address :: STRING,
+    City :: STRING,
+    Region :: STRING,
+    PostalCode :: STRING,
+    Country :: STRING
+     }),
+
+// No identifying property. Fax optional -- Supplier-derived Contacts
+// have it (from CSV), Customer-derived ones don't.
+(:Contact => {
+    ContactName :: STRING,
+    ContactTitle :: STRING,
     Phone :: STRING,
-    Email :: STRING NOT NULL,
-    Photo :: STRING 
-         }) REQUIRE (e.ID) IS KEY,
-
-// EmployeeDirectorY
-// Define EmployeeDirectorY and its Name property with a unique Name key.
-(ey:EmployeeDirectorY => {
-    Name :: STRING NOT NULL
-     }) REQUIRE (ey.Name) IS UNIQUE,
-
-// InvitedVendorS
-// Define InvitedVendorS subtype with its properties and a unique Name key.
-(:InvitedVendorS => {
-    Name :: STRING NOT NULL
+    Fax :: STRING,
+    Email :: STRING
      }),
 
-// Message
-// Define Message and its properties with a unique ID key.
-(:Message => { 
-    Text :: STRING NOT NULL
-         }),
-
-// NewTenderS
-// Define NewTenderS subtypes node with a unique Name property and key.
-(t3:NewTenderS => {
-    Name :: STRING NOT NULL
-     }) REQUIRE (t3.Name) IS UNIQUE,
-
-// PastBidS
-// Define PastBidS supertype with its properties and a unique Name key.
-(:PastBidS => {
-    Name :: STRING NOT NULL
+(:Notes => {
+    Notes :: STRING
      }),
 
-// PendingVendorS
-// Define PendingVendorS subtype with its properties and a unique Name key.
-(pv:PendingVendorS => {
-    Name :: STRING NOT NULL
-     }) REQUIRE (pv.Name) IS UNIQUE,
+// No identifying property. See caveat 3 -- two shapes, all optional.
+(:ShipInfo => {
+    ShipName :: STRING,
+    ShippedDate :: STRING,
+    Freight :: STRING,
+    ShippmentID :: STRING
+     }),
 
-// PublishedTenderS
-// Define PublishedTenderS subtypes with a unique Name property and key.
-(pt:PublishedTenderS => {
-    Name :: STRING NOT NULL
-     }) REQUIRE (pt.Name) IS UNIQUE,
+// Isotope nodes -- see the "Read-Only Nodes" exceptions in the main
+// script. No identifying property; UnitsInStock/UnitsOnOrder/
+// StockThreshold are the three properties in this model updated in
+// place via SET rather than superseded by a relationship.
+(:InventoryLevel => {
+    UnitsInStock :: INTEGER NOT NULL,
+    LastUpdate :: TIMESTAMP WITH TIME ZONE
+     }),
 
-// RejectedTenderS
-// Define RejectedTenderS subtypes node with a unique Name property and key.
-(rt:RejectedTenderS => {
-    Name :: STRING NOT NULL
-     }) REQUIRE (rt.Name) IS UNIQUE,
+(:OrderLevel => {
+    UnitsOnOrder :: INTEGER NOT NULL,
+    LastUpdate :: TIMESTAMP WITH TIME ZONE NOT NULL
+     }),
 
-// RejectedVendorS
-// Define RejectedVendorS subtype with its properties and a unique Name key.
-(rv:RejectedVendorS => {
-    Name :: STRING NOT NULL
-     }) REQUIRE (rv.Name) IS UNIQUE,
+(:ReorderLevel => {
+    StockThreshold :: INTEGER NOT NULL,
+    LastUpdate :: TIMESTAMP WITH TIME ZONE NOT NULL
+     }),
 
-// RolE
-// Define RolE subtype and its Name property with a unique Name key.
-(ro:RolE => {
-    Name :: STRING NOT NULL
-     }) REQUIRE (ro.Name) IS UNIQUE,
-
-// RoleS
-// Define RoleS supertype and its Name property with a unique Name key.
-(rs:RoleS => {
-    Name :: STRING NOT NULL
-     }) REQUIRE (rs.Name) IS UNIQUE,
-
-// Tender
-// Define Tender and its properties with a unique TenderCode key.
-(t4:Tender => {  
-    TenderCode :: STRING NOT NULL,
+// Title is the identifying property for every RolE, from the original
+// CSV-imported Northwind titles through the new procurement roles.
+// ApprovalBase/ApprovalLimit only exist on Level1/2/3Approver.
+(r:RolE => {
     Title :: STRING NOT NULL,
-    Description :: STRING NOT NULL,
-    SubmissionDate :: TIMESTAMP WITH TIME ZONE,
-    EndBidingDate :: TIMESTAMP WITH TIME ZONE,
-    Budget :: FLOAT NOT NULL
-     }) REQUIRE (t4.TenderCode) IS KEY,
+    Description :: STRING,
+    Rules :: STRING,
+    ApprovalBase :: FLOAT,
+    ApprovalLimit :: FLOAT
+     }) REQUIRE (r.Title) IS KEY,
 
-// TenderBidS
-// Define TenderBidS supertype with its properties and a unique Name key.
-(:TenderBidS => {
-    Name :: STRING NOT NULL
-     }),
 
-// TenderDoc
-// Define TenderDoc and its properties with a unique DocName key.
-(:TenderDoc => {
-    DocName :: STRING NOT NULL,
-    Description :: STRING NOT NULL,
-    Type :: STRING NOT NULL,
-    Date :: TIMESTAMP WITH TIME ZONE,
-    URL :: STRING NOT NULL
-     }),
+// *******   Collection (Hub) Node Definitions   *******
+// All singleton collections below are keyed on Name (or Status for the
+// Product/Order state hubs, matching the original Northwind convention).
+// See caveat 4 for the non-singleton, no-identity collections
+// (SupplierNewPoS, SupplierOpenPoS, SupplierClosedPoS, PoNewRFQ,
+// PoRejectedRFQ), which are intentionally NOT declared with a REQUIRE
+// clause below.
 
-// TenderDocS
-// Define TenderDocS supertype with its properties and a unique Name key.
-(:TenderDocS => {
-    Name :: STRING NOT NULL
-     }),
+(c1:CategorieS => { Name :: STRING NOT NULL }) REQUIRE (c1.Name) IS KEY,
+(r1:RoleS => { Name :: STRING NOT NULL }) REQUIRE (r1.Name) IS KEY,
+(e1:EmployeeDirectorY => { Name :: STRING NOT NULL }) REQUIRE (e1.Name) IS KEY,
 
-// TenderS
-// Define the TenderS supertype node with a unique Name property and key.
-(t5:TenderS => {
-    Name :: STRING NOT NULL
-     }) REQUIRE (t5.Name) IS UNIQUE,
+(p1:ProductStatusDiscontinueD => { Status :: STRING NOT NULL }) REQUIRE (p1.Status) IS KEY,
+(p2:ProductStatusAvailablE => { Status :: STRING NOT NULL }) REQUIRE (p2.Status) IS KEY,
 
-// TenderType
-// Define TenderType and its Name property with a unique Name key.
-(t6:TenderType => {
-    Name :: STRING NOT NULL
-     }) REQUIRE (t6.Name) IS UNIQUE,
+(o1:OrderStatusOpeN => { Status :: STRING NOT NULL }) REQUIRE (o1.Status) IS KEY,
+(o2:OrderStatusFulfilleD => { Status :: STRING NOT NULL }) REQUIRE (o2.Status) IS KEY,
+(o3:OrderStatusCanceleD => { Status :: STRING NOT NULL }) REQUIRE (o3.Status) IS KEY,
+(o4:OrderS => { Name :: STRING NOT NULL }) REQUIRE (o4.Name) IS KEY,
 
-// TenderTypeS
-// Define TenderTypeS supertype and its Name property with a unique Name key.
-(t7:TenderTypeS => {
-    Name :: STRING NOT NULL
-     }) REQUIRE (t7.Name) IS UNIQUE,
+(s1:SupplierS => { Name :: STRING NOT NULL }) REQUIRE (s1.Name) IS KEY,
+(p3:PendingSupplierS => { Name :: STRING NOT NULL }) REQUIRE (p3.Name) IS KEY,
+(a1:ApprovedSupplierS => { Name :: STRING NOT NULL }) REQUIRE (a1.Name) IS KEY,
+(r2:RejectedSupplierS => { Name :: STRING NOT NULL }) REQUIRE (r2.Name) IS KEY,
 
-// Vendor
-// Define the Vendor with its properties and a unique VendorCode key.
-(v2:Vendor => {
-    VendorCode :: STRING NOT NULL,
-    ShortName :: STRING NOT NULL,
-    LegalName :: STRING NOT NULL,
-    RegistrartionNumber :: STRING NOT NULL,
-    Logo :: STRING 
-     }) REQUIRE (v2.VendorCode) IS KEY,    
+(p4:PoS => { Name :: STRING NOT NULL }) REQUIRE (p4.Name) IS KEY,
+(n1:NewPoS => { Name :: STRING NOT NULL }) REQUIRE (n1.Name) IS KEY,
+(a2:ApprovedPoS => { Name :: STRING NOT NULL }) REQUIRE (a2.Name) IS KEY,
+(r3:RejectedPoS => { Name :: STRING NOT NULL }) REQUIRE (r3.Name) IS KEY,
+(s2:SubmittedPoS => { Name :: STRING NOT NULL }) REQUIRE (s2.Name) IS KEY,
+(c2:ClosedPoS => { Name :: STRING NOT NULL }) REQUIRE (c2.Name) IS KEY,
 
-// VendorContact
-// Define the VendorContact with its properties and a unique Email key.
-(:VendorContact => {
-    Name :: STRING NOT NULL,
-    Phone :: STRING NOT NULL,
-    Email :: STRING NOT NULL,
-    Photo :: STRING 
-     }),
+// No Name property -- see caveat 4.
+(s3:SupplierNewPoS => { Name :: STRING NOT NULL }) REQUIRE (s3.Name) IS KEY,
+(s4:SupplierOpenPoS =>  { Name :: STRING NOT NULL }) REQUIRE (s4.Name) IS KEY,
+(s5:SupplierClosedPoS =>  { Name :: STRING NOT NULL }) REQUIRE (s5.Name) IS KEY,
+(p5:PoNewRFQ =>  { Name :: STRING NOT NULL }) REQUIRE (p5.Name) IS KEY,
+(p6:PoRejectedRFQ =>  { Name :: STRING NOT NULL }) REQUIRE (p6.Name) IS KEY,
 
-// VendorDoc
-// Define the VendorDoc with its properties and a unique Name key.
-(:VendorDoc => {
-    DocName :: STRING NOT NULL,
-    Description :: STRING NOT NULL,
-    Type :: STRING NOT NULL,
-    Date :: TIMESTAMP WITH TIME ZONE,
-    URL :: STRING NOT NULL
-     }),
 
-// VendorDocS
-// Define the VendorDocS supertype with its properties and a unique Name key.
-(:VendorDocS => {
-   Name :: STRING NOT NULL
-     }),
+// *******   Relationship Definitions   *******
 
-// VendorS
-// Define VendorS supertype with its properties and a unique Name key.
-(v3:VendorS => {
-    Name :: STRING NOT NULL
-     }) REQUIRE (v3.Name) IS UNIQUE,
+// Product / Category / Supplier
+  (:ProductCategorY)-[:IS_PRODUCT_CATEGORY_OF => {}]->(:Product),
+  (:CategorieS)-[:HAS_CATEGORY => {}]->(:ProductCategorY),
+  (:Product)-[:HAS_REORDER_LEVEL => {}]->(:ReorderLevel),
+  (:Product)-[:HAS_SUPPLY_ORDER => {}]->(:OrderLevel),
+  (:Product)-[:HAS_INVENTORY_LEVEL => {}]->(:InventoryLevel),
+  (:ProductStatusDiscontinueD)-[:IS_DISCONTINUED_PRODUCT => {}]->(:Product),
+  (:ProductStatusAvailablE)-[:IS_AVAILABLE_PRODUCT => {}]->(:Product),
+  (:Product)-[:HAS_PRODUCT_SUPPLIER => {}]->(:Supplier),
+  (:Supplier)-[:SUPPLIES => {}]->(:Product),
+  (:Supplier)-[:HAS_SUPPLIER_ADDRESS => {}]->(:Address),
+  (:Supplier)-[:HAS_SUPPLIER_CONTACT => {}]->(:Contact),
 
-// ******* Relationships - GRAPH TYPE Definitions *******
+// Customer
+  (:Customer)-[:HAS_CUSTOMER_ADDRESS => {}]->(:Address),
+  (:Customer)-[:HAS_CUSTOMER_CONTACT => {}]->(:Contact),
 
-// Define the EmployeeDirectorY relationship.
-  (:EmployeeDirectorY)-[:HAS_ACTIVE_EMPLOYEE => {StartDate :: TIMESTAMP WITH TIME ZONE NOT NULL, EndDate :: TIMESTAMP WITH TIME ZONE}]->(:Employee),
+// Roles / Employees
+  (:RoleS)-[:HAS_ROLE_TITLE => {}]->(:RolE),
+  (:RolE)-[:IS_ACTIVE_ROLE => {StartDate :: TIMESTAMP WITH TIME ZONE NOT NULL, EndDate :: TIMESTAMP WITH TIME ZONE}]->(:Employee),
+  (:Employee)-[:HAS_PERSON => {}]->(:Person),
+  (:Person)-[:HAS_HOME_ADDRESS => {}]->(:Address),
+  (:Employee)-[:HAS_EMPLOYEE_NOTES => {}]->(:Notes),
+  (:Employee)-[:REPORTS_TO => {}]->(:Employee),
+  (:Territory)-[:HAS_EMPLOYEE => {}]->(:Employee),
+  (:Regions)-[:HAS_TERRITORY => {}]->(:Territory),
+  (:EmployeeDirectorY)-[:HAS_ACTIVE_EMPLOYEE => {StartDate :: TIMESTAMP WITH TIME ZONE NOT NULL}]->(:Employee),
 
-// Define the RoleS relationship.
-  (:RoleS)-[:HAS_ROLE_TYPE => {}]->(:RolE),
+// Supplier state
+  (:SupplierS)-[:HAS_SUPPLIER_PENDING_STATE => {}]->(:PendingSupplierS),
+  (:SupplierS)-[:HAS_SUPPLIER_APPROVED_STATE => {}]->(:ApprovedSupplierS),
+  (:SupplierS)-[:HAS_SUPPLIER_REJECTED_STATE => {}]->(:RejectedSupplierS),
+  (:PendingSupplierS)-[:IS_SUPPLIER_PENDING_STATE => {}]->(:Supplier),
+  (:ApprovedSupplierS)-[:IS_SUPPLIER_APPROVED_STATE => {}]->(:Supplier),
+  (:RejectedSupplierS)-[:IS_SUPPLIER_REJECTED_STATE => {}]->(:Supplier),
 
-// Define the RolE relationship.
-  (:RolE)-[:IS_ACTIVE_ROLE => {StartDate :: TIMESTAMP WITH TIME ZONE NOT NULL}]->(:Employee),
-  (:RolE)-[:WAS_PAST_ROLE => {StartDate :: TIMESTAMP WITH TIME ZONE NOT NULL, EndDate :: TIMESTAMP WITH TIME ZONE NOT NULL}]->(:Employee),
+// Order
+  (:Order)-[:HAS_ORDER_CUSTOMER => {}]->(:Customer),
+  (:Order)-[:HAS_SHIPMENT_INFO => {}]->(:ShipInfo),
+  (:ShipInfo)-[:HAS_SHIPPER => {}]->(:Shipper),
+  (:ShipInfo)-[:HAS_SHIPMENT_ADDRESS => {}]->(:Address),
+  (:Order)-[:SOLD_BY => {}]->(:Employee),
+  (:Order)-[:HAS_ORDER_PRODUCT => {Quantity :: INTEGER NOT NULL, UnitPrice :: FLOAT NOT NULL, Discount :: FLOAT NOT NULL}]->(:Product),
+  (:OrderStatusFulfilleD)-[:IS_FULFILLED_ORDER_STATE => {FulfillDate :: TIMESTAMP WITH TIME ZONE NOT NULL}]->(:Order),
+  (:OrderStatusOpeN)-[:IS_OPEN_ORDER_STATE => {}]->(:Order),
+  (:Order)-[:HAS_WAREHOUSE_FULFILLMENT => {Date :: TIMESTAMP WITH TIME ZONE NOT NULL, Comment :: STRING}]->(:Employee),
+  // Three distinct relationship types, one per subset, matching the
+  // PoS/SupplierS convention -- sidesteps the untested question of
+  // whether GRAPH TYPE permits multiple declarations of one relationship
+  // type with different targets.
+  (:OrderS)-[:HAS_OPEN_ORDER_STATUS => {}]->(:OrderStatusOpeN),
+  (:OrderS)-[:HAS_FULFILLED_ORDER_STATUS => {}]->(:OrderStatusFulfilleD),
+  (:OrderS)-[:HAS_CANCELED_ORDER_STATUS => {}]->(:OrderStatusCanceleD),
 
-// Define the VendorS relationship.
-  (:VendorS)-[:HAS_VENDOR_PENDING_STATE => {}]->(:PendingVendorS),
-  (:VendorS)-[:HAS_VENDOR_APPROVED_STATE => {}]->(:ApprovedVendorS), 
-  (:VendorS)-[:HAS_VENDOR_REJECTED_STATE => {}]->(:RejectedVendorS),
+// PurchaseOrder / PO state
+  (:PoS)-[:HAS_NEW_PO_STATE => {}]->(:NewPoS),
+  (:PoS)-[:HAS_APPROVED_PO_STATE => {}]->(:ApprovedPoS),
+  (:PoS)-[:HAS_REJECTED_PO_STATE => {}]->(:RejectedPoS),
+  (:PoS)-[:HAS_SUBMITTED_PO_STATE => {}]->(:SubmittedPoS),
+  (:PoS)-[:HAS_CLOSED_PO_STATE => {}]->(:ClosedPoS),
+  (:ClosedPoS)-[:IS_CLOSED_PO_STATE => {Date :: TIMESTAMP WITH TIME ZONE NOT NULL, Comment :: STRING}]->(:PurchaseOrder),
+  (:NewPoS)-[:IS_NEW_PO_STATE => {}]->(:PurchaseOrder),
+  (:ApprovedPoS)-[:IS_APPROVED_PO_STATE => {Date :: TIMESTAMP WITH TIME ZONE NOT NULL}]->(:PurchaseOrder),
+  (:RejectedPoS)-[:IS_REJECTED_PO_STATE => {Date :: TIMESTAMP WITH TIME ZONE NOT NULL}]->(:PurchaseOrder),
+  (:SubmittedPoS)-[:IS_SUBMITTED_PO_STATE => {Date :: TIMESTAMP WITH TIME ZONE NOT NULL}]->(:PurchaseOrder),
+  (:PurchaseOrder)-[:PO_FOR_SUPPLIER => {}]->(:Supplier),
+  (:PurchaseOrder)-[:PO_CREATED_BY => {}]->(:Employee),
+  (:PurchaseOrder)-[:HAS_PO_ITEM => {POqt :: FLOAT NOT NULL, POPriceDiscount :: FLOAT NOT NULL}]->(:Product),
+  (:PurchaseOrder)-[:HAS_PREVIOUS_PO => {Resubmission_Justification :: STRING}]->(:PurchaseOrder),
+  (:PurchaseOrder)-[:HAS_BUYER_PO_APPROVAL => {Date :: TIMESTAMP WITH TIME ZONE NOT NULL, Comment :: STRING}]->(:Employee),
+  (:PurchaseOrder)-[:HAS_L1_PO_APPROVAL => {Date :: TIMESTAMP WITH TIME ZONE NOT NULL, Comment :: STRING}]->(:Employee),
+  (:PurchaseOrder)-[:HAS_L1_PO_REJECTION => {Date :: TIMESTAMP WITH TIME ZONE NOT NULL, Comment :: STRING}]->(:Employee),
+  (:PurchaseOrder)-[:HAS_L2_PO_APPROVAL => {Date :: TIMESTAMP WITH TIME ZONE NOT NULL, Comment :: STRING}]->(:Employee),
+  (:PurchaseOrder)-[:HAS_L2_PO_REJECTION => {Date :: TIMESTAMP WITH TIME ZONE NOT NULL, Comment :: STRING}]->(:Employee),
+  (:PurchaseOrder)-[:HAS_L3_PO_APPROVAL => {Date :: TIMESTAMP WITH TIME ZONE NOT NULL, Comment :: STRING}]->(:Employee),
+  (:PurchaseOrder)-[:HAS_L3_PO_REJECTION => {Date :: TIMESTAMP WITH TIME ZONE NOT NULL, Comment :: STRING}]->(:Employee),
+  (:PurchaseOrder)-[:HAS_WAREHOUSE_DELIVERY => {Date :: TIMESTAMP WITH TIME ZONE NOT NULL, Comment :: STRING}]->(:Employee),
+  (:PurchaseOrder)-[:HAS_FINANCE_PAYMENT => {Date :: TIMESTAMP WITH TIME ZONE NOT NULL, Comment :: STRING}]->(:Employee),
 
-// Define the Vendor subtypes relationships with Vendor 
-  (:PendingVendorS)-[:IS_VENDOR_PENDING_STATE => {}]->(:Vendor),
-  (:ApprovedVendorS)-[:IS_VENDOR_APPROVED_STATE => {}]->(:Vendor),
-  (:RejectedVendorS)-[:IS_VENDOR_REJECTED_STATE => {}]->(:Vendor),
+// Supplier-side PO state
+  (:Supplier)-[:HAS_SUPPLIER_NEW_PENDING_POS => {}]->(:SupplierNewPoS),
+  (:Supplier)-[:HAS_SUPPLIER_OPEN_POS => {}]->(:SupplierOpenPoS),
+  (:Supplier)-[:HAS_SUPPLIER_CLOSED_POS => {}]->(:SupplierClosedPoS),
+  (:SupplierNewPoS)-[:IS_SUPPLIER_NEW_PO_STATE => {Date :: TIMESTAMP WITH TIME ZONE NOT NULL}]->(:PurchaseOrder),
+  (:SupplierOpenPoS)-[:IS_SUPPLIER_OPEN_PO_STATE => {Date :: TIMESTAMP WITH TIME ZONE NOT NULL}]->(:PurchaseOrder),
+  (:SupplierClosedPoS)-[:HAS_SUPPLIER_CLOSED_PO_STATE => {Date :: TIMESTAMP WITH TIME ZONE NOT NULL, Comment :: STRING}]->(:PurchaseOrder),
 
-// Define the Generic Conversation relationship (used by Tender, Bid, and Vendor).
-  (:ConversatioN)-[:HAS_MESSAGE => {Date :: TIMESTAMP WITH TIME ZONE NOT NULL}]->(:Message),
+// RFQ
+  (:PurchaseOrder)-[:HAS_SUPPLIER_NEW_RFQ => {}]->(:PoNewRFQ),
+  (:PurchaseOrder)-[:HAS_SUPPLIER_REJECTED_RFQ => {}]->(:PoRejectedRFQ),
+  (:PoNewRFQ)-[:IS_SUPPLIER_NEW_RFQ => {}]->(:RFQ),
+  (:PoRejectedRFQ)-[:IS_SUPPLIER_REJECTED_RFQ_STATE => {Date :: TIMESTAMP WITH TIME ZONE NOT NULL}]->(:RFQ),
+  (:RFQ)-[:IS_RFQ_FOR_PO => {}]->(:PurchaseOrder),
+  (:RFQ)-[:RFQ_FROM_SUPPLIER => {}]->(:Supplier),
+  (:RFQ)-[:HAS_RFQ_ITEM => {RFQqt :: FLOAT NOT NULL, RFQcost :: FLOAT NOT NULL}]->(:Product),
+  (:RFQ)-[:HAS_PREVIOUS_RFQ => {Justification :: STRING}]->(:RFQ),
+  (:RFQ)-[:HAS_BUYER_RFQ_APPROVAL => {Date :: TIMESTAMP WITH TIME ZONE NOT NULL, Comment :: STRING}]->(:Employee),
+  (:RFQ)-[:HAS_BUYER_RFQ_REJECTION => {Date :: TIMESTAMP WITH TIME ZONE NOT NULL, Comment :: STRING}]->(:Employee),
+  (:PurchaseOrder)-[:HAS_APPROVED_RFQ => {Date :: TIMESTAMP WITH TIME ZONE NOT NULL}]->(:RFQ),
 
-// Define Message relationships.
-  (:Message)-[:SENT_BY => {}]->(),
-
-// Define the Vendor relationship.
-  (:Vendor)-[:HAS_CONTACT => {}]->(:VendorContact),
-  (:Vendor)-[:HAS_VENDOR_CHAT => {}]->(:ConversatioN),
-  (:Vendor)-[:HAS_VENDOR_DOCS => {}]->(:VendorDocS),   
-  (:VendorDocS)-[:HAS_VENDOR_DOCUMENT => {}]->(:VendorDoc),
-  (:Vendor)-[:HAS_ACTIVE_BIDS => {}]->(:ActiveBidS),
-    (:ActiveBidS)-[:HAS_ACTIVE_BID => {Date :: TIMESTAMP WITH TIME ZONE NOT NULL}]->(:Bid),
-  (:Vendor)-[:HAS_PAST_BIDS => {}]->(:PastBidS),
-    (:PastBidS)-[:HAS_PAST_BID => {}]->(:Bid),
-  (:Vendor)-[:HAS_AWARDED_BIDS => {}]->(:AwardedBidS),
-    (:AwardedBidS)-[:HAS_AWARDED_TENDER_BID => {}]->(:Bid),
-  (:Vendor)-[:HAS_ACCEPTED_INVITATIONS => {}]->(:AcceptedInvitationS),
-    (:AcceptedInvitationS)-[:HAS_ACCEPTED_TENDER_INVITATION => {Date :: TIMESTAMP WITH TIME ZONE NOT NULL}]->(:Tender),
-  (:Vendor)-[:HAS_L1_VENDOR_APPROVAL => {Date :: TIMESTAMP WITH TIME ZONE NOT NULL , Comment :: STRING NOT NULL }]->(:Employee),
-  (:Vendor)-[:HAS_L1_VENDOR_REJECTION => {Date :: TIMESTAMP WITH TIME ZONE NOT NULL , Comment :: STRING NOT NULL }]->(:Employee),
-  (:Vendor)-[:HAS_AI_AGENT_VENDOR_ASSESSMENT => {Date :: TIMESTAMP WITH TIME ZONE NOT NULL}]->(:AIVendorAssessment),
- 
-// Define the TenderTypeS relationship.
-  (:TenderTypeS)-[:HAS_TENDER_TYPE => {}]->(:TenderType),
-
-// Define the TenderS relationship to its subtypes.
-  (:TenderS)-[:HAS_NEW_TENDER_STATE => {}]->(:NewTenderS),
-  (:TenderS)-[:HAS_APPROVED_TENDER_STATE => {}]->(:ApprovedTenderS),
-  (:TenderS)-[:HAS_REJECTED_TENDER_STATE => {}]->(:RejectedTenderS),
-  (:TenderS)-[:HAS_PUBLISHED_TENDER_STATE => {}]->(:PublishedTenderS),
-  (:TenderS)-[:HAS_CLOSED_TENDER_STATE => {}]->(:ClosedTenderS),
-  (:TenderS)-[:HAS_AWARDED_TENDER_STATE => {}]->(:AwardedTenderS), 
-
-// Define the Tender subtypes relationships with Tender 
-  (:NewTenderS)-[:IS_NEW_TENDER_STATE => {}]->(:Tender),
-  (:ApprovedTenderS)-[:IS_APPROVED_TENDER_STATE => {}]->(:Tender),
-  (:RejectedTenderS)-[:IS_REJECTED_TENDER_STATE => {}]->(:Tender),
-  (:PublishedTenderS)-[:IS_PUBLISHED_TENDER_STATE => {}]->(:Tender),
-  (:ClosedTenderS)-[:IS_CLOSED_TENDER_STATE => {}]->(:Tender),
-  (:AwardedTenderS)-[:IS_AWARDED_TENDER_STATE => {}]->(:Tender),
-
-// Define the Tender relationship.
-  (:Tender)-[:IS_TENDER_TYPE => {}]->(:TenderType),
-  (:Tender)-[:HAS_PREVIOUS_VERSION => {}]->(:Tender),
-  (:Tender)-[:HAS_REQUESTER => {}]->(:Employee),
-  (:Tender)-[:HAS_TENDER_CHAT => {}]->(:ConversatioN),
-  (:Tender)-[:HAS_L1_TENDER_APPROVAL => {Date :: TIMESTAMP WITH TIME ZONE NOT NULL, Comment :: STRING NOT NULL}]->(:Employee),
-  (:Tender)-[:HAS_L2_TENDER_APPROVAL => {Date :: TIMESTAMP WITH TIME ZONE NOT NULL , Comment :: STRING NOT NULL }]->(:Employee),
-  (:Tender)-[:HAS_L3_TENDER_APPROVAL => {Date :: TIMESTAMP WITH TIME ZONE NOT NULL, Comment :: STRING NOT NULL}]->(:Employee),
-  (:Tender)-[:HAS_PUBLISHER_TENDER_APPROVAL => {Date :: TIMESTAMP WITH TIME ZONE NOT NULL, Comment :: STRING NOT NULL}]->(:Employee),
-  (:Tender)-[:HAS_L1_TENDER_REJECTION => {Date :: TIMESTAMP WITH TIME ZONE NOT NULL, Comment :: STRING NOT NULL}]->(:Employee),
-  (:Tender)-[:HAS_L2_TENDER_REJECTION => {Date :: TIMESTAMP WITH TIME ZONE NOT NULL, Comment :: STRING NOT NULL}]->(:Employee),
-  (:Tender)-[:HAS_L3_TENDER_REJECTION => {Date :: TIMESTAMP WITH TIME ZONE NOT NULL, Comment :: STRING NOT NULL}]->(:Employee),
-  (:Tender)-[:HAS_PUBLISHER_TENDER_REJECTION => {Date :: TIMESTAMP WITH TIME ZONE NOT NULL, Comment :: STRING NOT NULL}]->(:Employee),
-  (:Tender)-[:HAS_TENDER_BIDS => {}]->(:TenderBidS),
-    (:TenderBidS)-[:HAS_TENDER_BID => {Date :: TIMESTAMP WITH TIME ZONE NOT NULL}]->(:Bid),
-  (:Tender)-[:HAS_AWARDED_BID => {Date :: TIMESTAMP WITH TIME ZONE NOT NULL}]->(:Bid),
-  (:Tender)-[:HAS_AWARDED_VENDOR => {Date :: TIMESTAMP WITH TIME ZONE NOT NULL}]->(:Vendor),
-  (:Tender)-[:HAS_INVITEES => {}]->(:InvitedVendorS),
-    (:InvitedVendorS)-[:HAS_INVITATION => {Date :: TIMESTAMP WITH TIME ZONE NOT NULL}]->(:Vendor),
-  (:Tender)-[:HAS_TENDER_DOCS => {}]->(:TenderDocS),
-    (:TenderDocS)-[:HAS_TENDER_DOCUMENT => {}]->(:TenderDoc),
-
-// Define Bid relationships.
-  (:Bid)-[:HAS_BID_DOCS => {}]->(:BidDocS),
-    (:BidDocS)-[:HAS_BID_DOCUMENT => {}]->(:BidDoc),
-  (:Bid)-[:HAS_BID_CHAT => {}]->(:ConversatioN),
-  (:Bid)-[:HAS_TENDER_REQUESTER_BID_APPROVAL => {Date :: TIMESTAMP WITH TIME ZONE NOT NULL, Comment :: STRING NOT NULL}]->(:Employee),
-  (:Bid)-[:HAS_TENDER_REQUESTER_BID_REJECTION => {Date :: TIMESTAMP WITH TIME ZONE NOT NULL, Comment :: STRING NOT NULL}]->(:Employee),
-  (:Bid)-[:HAS_L1_BID_APPROVAL => {Date :: TIMESTAMP WITH TIME ZONE NOT NULL, Comment :: STRING NOT NULL}]->(:Employee),
-  (:Bid)-[:HAS_L2_BID_APPROVAL => {Date :: TIMESTAMP WITH TIME ZONE NOT NULL, Comment :: STRING NOT NULL}]->(:Employee),
-  (:Bid)-[:HAS_L3_BID_APPROVAL => {Date :: TIMESTAMP WITH TIME ZONE NOT NULL, Comment :: STRING NOT NULL}]->(:Employee),
-  (:Bid)-[:HAS_PUBLISHER_BID_APPROVAL => {Date :: TIMESTAMP WITH TIME ZONE NOT NULL, Comment :: STRING NOT NULL}]->(:Employee),
-  (:Bid)-[:HAS_L1_BID_REJECTION => {Date :: TIMESTAMP WITH TIME ZONE NOT NULL, Comment :: STRING NOT NULL}]->(:Employee),
-  (:Bid)-[:HAS_L2_BID_REJECTION => {Date :: TIMESTAMP WITH TIME ZONE NOT NULL, Comment :: STRING NOT NULL}]->(:Employee),
-  (:Bid)-[:HAS_L3_BID_REJECTION => {Date :: TIMESTAMP WITH TIME ZONE NOT NULL, Comment :: STRING NOT NULL}]->(:Employee),
-  (:Bid)-[:HAS_AI_AGENT_BID_ASSESSMENT => {Date :: TIMESTAMP WITH TIME ZONE NOT NULL}]->(:AIBidAssessment),
-  (:Bid)-[:HAS_VENDOR => {}]->(:Vendor),
-  (:Bid)-[:HAS_TENDER => {}]->(:Tender)
-
+// Recommendation Engine -- an optional add-on context layer per the main
+// script's own framing ("does not affect the core model... can be added
+// as a new layer of context/semantics/knowledge"). RATED and SIMILARITY
+// introduce no new node types, only relationships between existing
+// Customer/Product entities.
+  (:Customer)-[:RATED => {Rating :: FLOAT NOT NULL}]->(:Product),
+  (:Customer)-[:SIMILARITY => {Similarity :: FLOAT NOT NULL}]->(:Customer)
 
 }
-
-
-
