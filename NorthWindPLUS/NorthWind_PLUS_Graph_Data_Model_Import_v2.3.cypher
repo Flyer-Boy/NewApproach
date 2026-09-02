@@ -232,7 +232,7 @@ MERGE (n:Shipper {ShipperID:row.ShipperID, CompanyName:row.CompanyName, Phone:ro
 
 // We will import the Orders into a temporary Node OrderTmp and then we will normalize the OrderDate, RequiredDate and ShippedDate to proper datetime format.
 // We will not have the OrderTmp Node declared on the GRAPH TYPE constraint as it is a temporary node only used during the import process.
-LOAD CSV WITH HEADERS FROM "https://raw.githubusercontent.com/Flyer-Boy/NewApproach/refs/heads/main/NorthWindPLUS/Import/orders.csv" AS row
+LOAD CSV WITH HEADERS FROM "https://raw.githubusercontent.com/Flyer-Boy/NewApproach/refs/heads/main/NorthWindPLUS/Import/orders_fix.csv" AS row
 MERGE (n:OrderTmp {OrderID:row.OrderID})
 SET n += row;
 
