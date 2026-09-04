@@ -96,6 +96,8 @@
 #################################################################
 
 :CategorieS a owl:Class ; rdfs:subClassOf :Collection .
+:ShipperS a owl:Class ; rdfs:subClassOf :Collection .
+:CustomerS a owl:Class ; rdfs:subClassOf :Collection .
 :RoleS a owl:Class ; rdfs:subClassOf :Collection .
 :EmployeeDirectorY a owl:Class ; rdfs:subClassOf :Collection .
 :ProductStatusDiscontinueD a owl:Class ; rdfs:subClassOf :Collection .
@@ -131,7 +133,7 @@
     rdfs:domain [ a owl:Class ; owl:unionOf ( :CategorieS :RoleS :EmployeeDirectorY :SupplierS
         :PendingSupplierS :ApprovedSupplierS :RejectedSupplierS :PoS :NewPoS :ApprovedPoS
         :RejectedPoS :SubmittedPoS :ClosedPoS :SupplierNewPoS :SupplierOpenPoS
-        :SupplierClosedPoS :PoNewRFQ :PoRejectedRFQ ) ] ;
+        :SupplierClosedPoS :PoNewRFQ :PoRejectedRFQ :ShipperS :CustomerS ) ] ;
     rdfs:comment "For the singleton Collection classes, this is the identifying/hub property. For SupplierNewPoS/SupplierOpenPoS/SupplierClosedPoS/PoNewRFQ/PoRejectedRFQ specifically, it is NOT identifying -- every instance of a given class shares the identical value (e.g. every Supplier's own SupplierNewPoS has name:\"SupplierNewPoS\"), since one instance exists per Supplier/PurchaseOrder, not one per the whole graph. See translation note 4." .
 
 :status a owl:DatatypeProperty ; rdfs:range xsd:string ;
@@ -243,6 +245,8 @@
 
 :isProductCategoryOf a owl:ObjectProperty ; rdfs:domain :ProductCategorY ; rdfs:range :Product .
 :hasCategory a owl:ObjectProperty ; rdfs:domain :CategorieS ; rdfs:range :ProductCategorY .
+:isShipper a owl:ObjectProperty ; rdfs:domain :ShipperS ; rdfs:range :Shipper .
+:isCustomer a owl:ObjectProperty ; rdfs:domain :CustomerS ; rdfs:range :Customer .
 :hasReorderLevel a owl:ObjectProperty ; rdfs:domain :Product ; rdfs:range :ReorderLevel .
 :hasSupplyOrder a owl:ObjectProperty ; rdfs:domain :Product ; rdfs:range :OrderLevel .
 :hasInventoryLevel a owl:ObjectProperty ; rdfs:domain :Product ; rdfs:range :InventoryLevel .
@@ -388,6 +392,8 @@
 # Every singleton Collection class carries the same hasKey/existence
 # pattern on :name (or :status for the Product/Order state hubs).
 :CategorieS owl:hasKey ( :name ) .
+:ShipperS owl:hasKey ( :name ) .
+:CustomerS owl:hasKey ( :name ) .
 :RoleS owl:hasKey ( :name ) .
 :EmployeeDirectorY owl:hasKey ( :name ) .
 :SupplierS owl:hasKey ( :name ) .

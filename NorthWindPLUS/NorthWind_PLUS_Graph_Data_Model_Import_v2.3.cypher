@@ -156,6 +156,11 @@ LOAD CSV WITH HEADERS FROM "https://raw.githubusercontent.com/Flyer-Boy/NewAppro
 MERGE (n:Customer {CustomerID:row.CustomerID})
 SET n += row;
 
+// We will create the CustomerS Superset Collection and the subset Customer Collection Nodes
+CREATE (c:CustomerS {Name:"CustomerS"});
+MATCH (c:CustomerS {Name:"CustomerS"}), (o:Customer)
+CREATE (c)-[:IS_CUSTOMER]->(o);
+
 //  We will normalize the Customers by creating an Address Node and a Contact Node and connecting them to the Customer Node.
 MATCH (n:Customer)
 CREATE (a:Address {Address:n.Address, City:n.City, Region:n.Region, PostalCode:n.PostalCode, Country:n.Country})
@@ -229,6 +234,12 @@ MATCH (t:Territory) REMOVE t.RegionID;
 // We will import the Shippers into the Graph
 LOAD CSV WITH HEADERS FROM "https://raw.githubusercontent.com/Flyer-Boy/NewApproach/refs/heads/main/NorthWindPLUS/Import/shippers.csv" AS row
 MERGE (n:Shipper {ShipperID:row.ShipperID, CompanyName:row.CompanyName, Phone:row.Phone});
+
+// We will create the ShipperS Superset Collection and the subset Shipper Collection Nodes
+CREATE (c:ShipperS {Name:"ShipperS"});
+MATCH (c:ShipperS {Name:"ShipperS"}), (o:Shipper)
+CREATE (c)-[:IS_SHIPPER]->(o);
+
 
 // We will import the Orders into a temporary Node OrderTmp and then we will normalize the OrderDate, RequiredDate and ShippedDate to proper datetime format.
 // We will not have the OrderTmp Node declared on the GRAPH TYPE constraint as it is a temporary node only used during the import process.
@@ -468,7 +479,7 @@ CREATE (o)-[:SOLD_BY]->(e)
 WITH o
 MATCH (p:Product)-[]-(:ProductStatusAvailablE {Status: "Available"}) 
 ORDER BY rand() LIMIT toInteger(round(rand()*10 + 1))
-CREATE (o)-[:HAS_ORDER_PRODUCT {Quantity: toInteger(round(rand()*19)+1), UnitPrice:p.UnitPrice, Discount:0.0}]->(p)
+CREATE (o)-[:HAS_ORDER_PRODUCT {Quantity: toInteger(round(rand()*19)+1), UnitPrice:p.UnitPrice, Discount: rand()*0.07}]->(p)
 };
 
 // ###### Run the **Inventory Level Report** ######  
@@ -1152,8 +1163,8 @@ SET inv.UnitsInStock = inv.UnitsInStock - details.Quantity,
 // It is a dynamic and ever-changing environment that you can keep querying and adjusting.
 
 
-// Notice that by the end of this script, the proportion of nodes to relationships (edges) is roughly 1:3.27, which is a significant characteristic of this graph model.
-// If we create another 50 customer orders, the proportion of nodes to relationships (edges) will roughly grow to 1:3.38.
+// Notice that by the end of this script, the proportion of nodes to relationships (edges) is roughly 1:3.46, which is a significant characteristic of this graph model.
+// If we create another 50 customer orders, the proportion of nodes to relationships (edges) will roughly grow to 1:3.58.
 // The model grows in "knowledge" more than "data", as the relationships between the nodes represent the knowledge.
 // As you keep running the script and creating new Orders, PO and RFQ Vetting, Supplier restock, Order Fulfillment, and Inventory Updates, etc., you will see how the graph grows mostly on the relationships 
 // (edges) than on the nodes themselves. The only nodes that will grow in number are the Customer Orders, PurchaseOrder, and RFQ. The rest of the nodes will remain the same. 
@@ -1275,6 +1286,13 @@ MATCH (p:Person)<-[]-(e:Employee)<-[:SOLD_BY]-(o:Order)
 RETURN e.EmployeeID, p.FirstName, p.LastName, COUNT(o) AS NumberOfOrdersSold
 ORDER BY NumberOfOrdersSold DESC
 LIMIT 10;
+
+// Employees by Average Discount Given
+MATCH (n)<-[:HAS_PERSON]-(e:Employee)<-[:SOLD_BY]-(o:Order)-[details:HAS_ORDER_PRODUCT]->(:Product)
+RETURN n.FirstName, n.LastName,e.EmployeeID AS EmployeeID, 
+       round(avg(details.Discount), 4) AS AverageDiscount, 
+       count(details) AS LinesSold
+ORDER BY AverageDiscount DESC;
 
 // Total Sales by Region
 MATCH (r:Regions)-[:HAS_TERRITORY]->(t:Territory)-[:HAS_EMPLOYEE]->(e:Employee)<-[:SOLD_BY]-(o:Order)-[details:HAS_ORDER_PRODUCT]->(p:Product)

@@ -20,7 +20,7 @@
 //    this same rename applied -- this schema reflects the target state,
 //    not (yet) what those two files currently create.
 //
-// 2. ShipInfo.ShippedDate is NOT NULL, using a far-future sentinel date
+// 2. RESOLVED: ShipInfo.ShippedDate is NOT NULL, using a far-future sentinel date
 //    (9999-12-31) for Orders that haven't shipped -- not left nullable.
 //    Open vs. Fulfilled state is determined once, at import, by which
 //    relationship (IS_OPEN_ORDER_STATE / IS_FULFILLED_ORDER_STATE) gets
@@ -217,6 +217,8 @@ ALTER CURRENT GRAPH TYPE SET {
 
 
 (c1:CategorieS => { Name :: STRING NOT NULL }) REQUIRE (c1.Name) IS KEY,
+(sh1:ShipperS => { Name :: STRING NOT NULL }) REQUIRE (sh1.Name) IS KEY,
+(cu1:CustomerS => { Name :: STRING NOT NULL }) REQUIRE (cu1.Name) IS KEY,
 (r1:RoleS => { Name :: STRING NOT NULL }) REQUIRE (r1.Name) IS KEY,
 (e1:EmployeeDirectorY => { Name :: STRING NOT NULL }) REQUIRE (e1.Name) IS KEY,
 
@@ -253,6 +255,8 @@ ALTER CURRENT GRAPH TYPE SET {
 // Product / Category / Supplier
   (:ProductCategorY)-[:IS_PRODUCT_CATEGORY_OF => {}]->(:Product),
   (:CategorieS)-[:HAS_CATEGORY => {}]->(:ProductCategorY),
+  (:ShipperS)-[:IS_SHIPPER => {}]->(:Shipper),
+  (:CustomerS)-[:IS_CUSTOMER => {}]->(:Customer),
   (:Product)-[:HAS_REORDER_LEVEL => {}]->(:ReorderLevel),
   (:Product)-[:HAS_SUPPLY_ORDER => {}]->(:OrderLevel),
   (:Product)-[:HAS_INVENTORY_LEVEL => {}]->(:InventoryLevel),
