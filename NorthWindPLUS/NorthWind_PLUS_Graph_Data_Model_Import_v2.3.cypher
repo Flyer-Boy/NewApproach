@@ -1,4 +1,4 @@
-// -- NorthWind PLUS Graph Data Model Import v2.2 For Aura --//
+// -- NorthWind PLUS Graph Data Model Import v2.3 --//
 
 // If you find yourself filtering on a Node property that represents state, context, or an entity's relevance to something else, that's a sign the model needs a relationship instead, 
 // as it was most likely built with a table mentality.
