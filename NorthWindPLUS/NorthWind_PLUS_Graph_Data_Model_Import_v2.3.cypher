@@ -330,7 +330,8 @@ CREATE (o)-[:IS_OPEN_ORDER_STATE]->(n);
 
 // First run of the ###### **Inventory Level Report** ######, to see the current Inventory Level of all Products in the system just after the import.
 
-  // To visualize the Product's Inventory Levels, Supply Orders (RFQ Approved) pending fulfilment, Stock Threashold, Open Customer Orders and Open PO's to resupply from Today on the Graph console, use the following query:
+// To visualize the Product's Inventory Levels, Supply Orders (RFQ Approved) pending fulfillment, Stock Threshold, Open Customer Orders, 
+// and Open PO's to resupply from Today on the Graph console, use the following query:
   // Product Supply/Demand Dashboard -- one row per Product, ordered by name
   MATCH ()-[:IS_AVAILABLE_PRODUCT]-(p:Product)-[:HAS_INVENTORY_LEVEL]->(inv:InventoryLevel),
         (p)-[:HAS_REORDER_LEVEL]->(r:ReorderLevel),
@@ -1361,8 +1362,8 @@ RETURN RejectionLevel, count(DISTINCT po) AS RejectedPOs, round(SUM(POCost), 2) 
 ORDER BY TotalRejectedValue DESC;
 
 // Approval Workload by Employee -- who is doing the most PO/RFQ vetting?
-MATCH (e:Employee)<-[r:HAS_L1_PO_APPROVAL|HAS_L2_PO_APPROVAL|HAS_L3_PO_APPROVAL|HAS_L1_PO_REJECTION|HAS_L2_PO_REJECTION|HAS_L3_PO_REJECTION|HAS_BUYER_RFQ_APPROVAL|HAS_BUYER_RFQ_REJECTION]-()
-RETURN e.EmployeeID, count(r) AS ActionsTaken
+MATCH (p)<-[:HAS_PERSON]-(e:Employee)<-[r:HAS_L1_PO_APPROVAL|HAS_L2_PO_APPROVAL|HAS_L3_PO_APPROVAL|HAS_L1_PO_REJECTION|HAS_L2_PO_REJECTION|HAS_L3_PO_REJECTION|HAS_BUYER_RFQ_APPROVAL|HAS_BUYER_RFQ_REJECTION]-()
+RETURN e.EmployeeID, p.FirstName, count(r) AS ActionsTaken
 ORDER BY ActionsTaken DESC;
 
 // Open Customer Orders currently blocked, waiting on Product Inventory to fulfill
@@ -1405,8 +1406,9 @@ RETURN c.CompanyName, p.ProductName AS has_purchased, p2.ProductName AS has_also
 ORDER BY occurrences DESC
 LIMIT 5;
 
-// The Inventory Level Report (again)
-// To visualize the Product's Inventory Levels, Supply Orders (RFQ Approved) pending fulfilment, Stock Threashold, Open Customer Orders and Open PO's to resupply from Today on the Graph console, use the following query:
+// The Inventory Level Report 
+// To visualize the Product's Inventory Levels, Supply Orders (RFQ Approved) pending fulfillment, Stock Threshold, Open Customer Orders, 
+// and Open PO's to resupply from Today on the Graph console, use the following query:
   // Product Supply/Demand Dashboard -- one row per Product, ordered by name
   MATCH ()-[:IS_AVAILABLE_PRODUCT]-(p:Product)-[:HAS_INVENTORY_LEVEL]->(inv:InventoryLevel),
         (p)-[:HAS_REORDER_LEVEL]->(r:ReorderLevel),
@@ -1440,6 +1442,12 @@ LIMIT 5;
          OpenCustomerOrders AS OpenCustomerOrders,
          QtyDemanded AS QtyDemanded
   ORDER BY ProductName;
+
+// Cheat the system  - Increment the stock of all products by 1000 units to simulate a restock event (for demonstration purposes).
+MATCH (p:Product)-[:HAS_INVENTORY_LEVEL]->(i) SET i.UnitsInStock = i.UnitsInStock+1000;
+
+// Visualize the schema
+  CALL db.schema.visualization();
 
 //  End of Query Examples  //
 
