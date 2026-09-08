@@ -1461,9 +1461,8 @@ WITH inv, details, op, p, r, o ORDER BY o.OrderID, o.OrderDate LIMIT 100
 RETURN o.OrderID, o.OrderDate, p.ProductName, inv.UnitsInStock, details.Quantity;
 
 
-
-// Cheat the system  - Increment the stock of all products by 100 units to simulate a restock event (for demonstration purposes).
-MATCH (p:Product)-[:HAS_INVENTORY_LEVEL]->(i) SET i.UnitsInStock = i.UnitsInStock+100;
+// Cheat the system  - Increment the stock of all products by 50 units to simulate a restock event (for demonstration purposes).
+MATCH (p:Product)-[:HAS_INVENTORY_LEVEL]->(i) SET i.UnitsInStock = i.UnitsInStock+50;
 
 // Visualize the schema
   CALL db.schema.visualization();
