@@ -763,13 +763,26 @@ def iterate_po_creation(driver: Driver, stats: RunStats, database: str) -> None:
 # is skipped and stays Open, same as the main script's own design.
 
 ORDER_FULFILLMENT_QUERY = """
+//Order fulfillment — process ONE order per call
 MATCH (wc:Employee)<-[:IS_ACTIVE_ROLE]-(:RolE {Title:"WarehouseClerk"}), (s:Shipper)<-[:HAS_SHIPPER]-(si:ShipInfo)
 WITH wc, si, s ORDER BY rand() LIMIT 1
+
+// Find the oldest Open Order where every line currently has sufficient stock (grouped by Order).
 MATCH (op:OrderStatusOpeN {Status:"Open"})-[r:IS_OPEN_ORDER_STATE]->(o:Order)-[details:HAS_ORDER_PRODUCT]->(p:Product)-[:HAS_INVENTORY_LEVEL]->(inv:InventoryLevel)
-WITH wc, si, s, op, r, o, count(details) AS TotalLines, sum(CASE WHEN inv.UnitsInStock >= details.Quantity THEN 1 ELSE 0 END) AS LinesWithStock
+WITH wc, si, s, op, o, r,
+     count(details)                                                        AS TotalLines,
+     sum(CASE WHEN inv.UnitsInStock >= details.Quantity THEN 1 ELSE 0 END) AS LinesWithStock
 WHERE TotalLines = LinesWithStock
-WITH wc, si, s, op, r, o ORDER BY o.OrderDate LIMIT 5   // oldest Open Orders first; leave the rest Open for later querying
-MATCH (a)<-[:HAS_CUSTOMER_ADDRESS]-(:Customer)<-[:HAS_ORDER_CUSTOMER]-(o), (f:OrderStatusFulfilleD {Status:"Fulfilled"})
+WITH wc, si, s, op, o, r
+ORDER BY o.OrderDate
+LIMIT 1
+
+// Re-collect this order's lines as one list, so shipment creation happens once — not once per line.
+MATCH (o)-[details:HAS_ORDER_PRODUCT]->(p:Product)-[:HAS_INVENTORY_LEVEL]->(inv:InventoryLevel)
+WITH wc, si, s, op, o, r, collect({details: details, inv: inv}) AS lines
+
+MATCH (a)<-[:HAS_CUSTOMER_ADDRESS]-(:Customer)<-[:HAS_ORDER_CUSTOMER]-(o)
+MATCH (f:OrderStatusFulfilleD {Status:"Fulfilled"})
 CREATE (i:ShipInfo {ShippmentID:"SH-"+randomUUID(), ShippedDate:datetime(), ShipName:si.ShipName, Freight:round(rand()*100, 2)}),
        (o)-[:HAS_SHIPMENT_INFO]->(i),
        (i)-[:HAS_SHIPPER]->(s),
@@ -777,10 +790,11 @@ CREATE (i:ShipInfo {ShippmentID:"SH-"+randomUUID(), ShippedDate:datetime(), Ship
        (f)-[:IS_FULFILLED_ORDER_STATE {FulfillDate: datetime()}]->(o),
        (o)-[:HAS_WAREHOUSE_FULFILLMENT {Date:datetime(), Comment:"Order picked, packed, and shipped by the Warehouse Clerk."}]->(wc)
 DELETE r
-WITH o
-MATCH (o)-[details:HAS_ORDER_PRODUCT]->(p:Product)-[:HAS_INVENTORY_LEVEL]->(inv:InventoryLevel)
-SET inv.UnitsInStock = inv.UnitsInStock - details.Quantity,
-    inv.LastUpdate = datetime()
+
+WITH o, lines
+UNWIND lines AS x
+  SET x.inv.UnitsInStock = x.inv.UnitsInStock - x.details.Quantity,
+      x.inv.LastUpdate = datetime()
 RETURN DISTINCT o.OrderID AS OrderID
 """
 

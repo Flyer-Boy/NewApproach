@@ -1064,41 +1064,49 @@ DELETE r1, r2;  // We remove the PO from the Submitted state on the Procurement 
 // Select the Warehouse Clerk and a Shipper who will handle this batch of fulfillments.
 // (Same disconnected-pattern Cartesian product warning noted earlier in the script -- harmless here since we cap it to one Employee and one Shipper via ORDER BY rand() LIMIT 1.)
 MATCH (wc:Employee)<-[:IS_ACTIVE_ROLE]-(:RolE {Title:"WarehouseClerk"}), (s:Shipper)<-[:HAS_SHIPPER]-(si:ShipInfo)
-WITH wc, si, s ORDER BY rand() LIMIT 1  // Select a random Warehouse Clerk and a random Shipper and ShipName for this batch of fulfillments.
+WITH wc, si, s ORDER BY rand() LIMIT 1
 
-// Find Open Orders where every Product line has sufficient stock (all lines must pass, not just some).
+// Find the oldest Open Order where every line currently has sufficient stock (grouped by Order).
 MATCH (op:OrderStatusOpeN {Status:"Open"})-[r:IS_OPEN_ORDER_STATE]->(o:Order)-[details:HAS_ORDER_PRODUCT]->(p:Product)-[:HAS_INVENTORY_LEVEL]->(inv:InventoryLevel)
-WITH wc, si, s, op, r, o, count(details) AS TotalLines, sum(CASE WHEN inv.UnitsInStock >= details.Quantity THEN 1 ELSE 0 END) AS LinesWithStock
+WITH wc, si, s, op, o, r,
+     count(details)                                                        AS TotalLines,
+     sum(CASE WHEN inv.UnitsInStock >= details.Quantity THEN 1 ELSE 0 END) AS LinesWithStock
 WHERE TotalLines = LinesWithStock
-WITH wc, si, s, op, r, o ORDER BY o.OrderDate LIMIT 5   // oldest Open Orders first; leave the rest Open for later querying
+WITH wc, si, s, op, o, r
+ORDER BY o.OrderDate
+LIMIT 1
 
-// Ship and fulfill each selected Order.
-MATCH (a)<-[:HAS_CUSTOMER_ADDRESS]-(:Customer)<-[:HAS_ORDER_CUSTOMER]-(o), (f:OrderStatusFulfilleD {Status:"Fulfilled"})
-CREATE (i:ShipInfo {ShippmentID:"SH-"+randomUUID(), ShippedDate:datetime(), ShipName:si.ShipName, Freight:round(rand()*500, 2)}),
+// Re-collect this order's lines as one list, so shipment creation happens once — not once per line.
+MATCH (o)-[details:HAS_ORDER_PRODUCT]->(p:Product)-[:HAS_INVENTORY_LEVEL]->(inv:InventoryLevel)
+WITH wc, si, s, op, o, r, collect({details: details, inv: inv}) AS lines
+
+MATCH (a)<-[:HAS_CUSTOMER_ADDRESS]-(:Customer)<-[:HAS_ORDER_CUSTOMER]-(o)
+MATCH (f:OrderStatusFulfilleD {Status:"Fulfilled"})
+CREATE (i:ShipInfo {ShippmentID:"SH-"+randomUUID(), ShippedDate:datetime(), ShipName:si.ShipName, Freight:round(rand()*100, 2)}),
        (o)-[:HAS_SHIPMENT_INFO]->(i),
        (i)-[:HAS_SHIPPER]->(s),
        (i)-[:HAS_SHIPMENT_ADDRESS]->(a),
        (f)-[:IS_FULFILLED_ORDER_STATE {FulfillDate: datetime()}]->(o),
        (o)-[:HAS_WAREHOUSE_FULFILLMENT {Date:datetime(), Comment:"Order picked, packed, and shipped by the Warehouse Clerk."}]->(wc)
 DELETE r
-WITH o
 
-// *** Isotope exception (see full rationale at "Updating Inventory After Order Fulfillment" above). ***
-MATCH (o)-[details:HAS_ORDER_PRODUCT]->(p:Product)-[:HAS_INVENTORY_LEVEL]->(inv:InventoryLevel)
-SET inv.UnitsInStock = inv.UnitsInStock - details.Quantity,
-    inv.LastUpdate = datetime();
+WITH o, lines
+UNWIND lines AS x
+  SET x.inv.UnitsInStock = x.inv.UnitsInStock - x.details.Quantity,
+      x.inv.LastUpdate = datetime()
+RETURN DISTINCT o.OrderID AS OrderID;
 
 
 // ###### Run the **Inventory Level Report** ######  
 // You will see how the Inventory Level changes after the Order Fulfillment and the updated Supply Order status for the products.
 
-
+//**************************************************************************************************************************************************************//
 //--------------------------------------------------------------------------------------------------------------------------------------------------------------//
-// And we conclude our 360-degree script initialization process!
+//                                                And we conclude our 360-degree script initialization process!
 // All initial data has been imported from the original NorthWind dataset; it has been normalized to fit this New Graph-Native Approach, and all Domain Collections have been created. 
 // The new NorthWind Graph Data Model has been tested, and it is ready to be stressed  
 //--------------------------------------------------------------------------------------------------------------------------------------------------------------//
-
+//**************************************************************************************************************************************************************//
 
 
 // Now, get the Python script NorthwindPlus_Stress_Test.py and run it to simulate the creation of new Orders, PO and RFQ Vetting, Supplier restock, Order Fulfillment, and Inventory Updates.
@@ -1443,8 +1451,19 @@ LIMIT 5;
          QtyDemanded AS QtyDemanded
   ORDER BY ProductName;
 
-// Cheat the system  - Increment the stock of all products by 1000 units to simulate a restock event (for demonstration purposes).
-MATCH (p:Product)-[:HAS_INVENTORY_LEVEL]->(i) SET i.UnitsInStock = i.UnitsInStock+1000;
+// Check for Open Orders that can be fulfilled (all lines have sufficient stock) and return the first 100 of them, ordered by OrderID and OrderDate. 
+// This is part of the Order Fulfillment process, where the Warehouse Clerk will fulfill Open Customer Orders that have sufficient stock 
+// for every Product line, ship them, and update the Inventory Levels accordingly.
+MATCH (op:OrderStatusOpeN {Status:"Open"})-[r:IS_OPEN_ORDER_STATE]->(o:Order)-[details:HAS_ORDER_PRODUCT]->(p:Product)-[:HAS_INVENTORY_LEVEL]->(inv:InventoryLevel)
+WITH details, inv, op, p, r, o, count(details) AS TotalLines, sum(CASE WHEN inv.UnitsInStock >= details.Quantity THEN 1 ELSE 0 END) AS LinesWithStock
+WHERE TotalLines = LinesWithStock
+WITH inv, details, op, p, r, o ORDER BY o.OrderID, o.OrderDate LIMIT 100  
+RETURN o.OrderID, o.OrderDate, p.ProductName, inv.UnitsInStock, details.Quantity;
+
+
+
+// Cheat the system  - Increment the stock of all products by 100 units to simulate a restock event (for demonstration purposes).
+MATCH (p:Product)-[:HAS_INVENTORY_LEVEL]->(i) SET i.UnitsInStock = i.UnitsInStock+100;
 
 // Visualize the schema
   CALL db.schema.visualization();
