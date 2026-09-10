@@ -1345,6 +1345,11 @@ WHERE i.UnitsInStock <= r.StockThreshold
 RETURN p.ProductName, i.UnitsInStock, r.StockThreshold, s.CompanyName AS Supplier
 ORDER BY i.UnitsInStock ASC;
 
+// All Purchase Orders and their overall details 
+MATCH (po:PurchaseOrder)-[i:HAS_PO_ITEM]-(p) 
+ORDER BY po.PONumber, po.PODate
+RETURN po.PONumber, po.PODate, sum(i.POqt) AS ItemsOrdered, sum(i.POqt * (p.UnitPrice * i.POPriceDiscount)) AS PO_Ammount;
+
 // At-Risk Products -- below Restock Threshold with NO Purchase Order currently in flight to resupply them
 MATCH (p:Product)-[:HAS_INVENTORY_LEVEL]->(i:InventoryLevel), (p)-[:HAS_REORDER_LEVEL]->(r:ReorderLevel)
 WHERE i.UnitsInStock <= r.StockThreshold
