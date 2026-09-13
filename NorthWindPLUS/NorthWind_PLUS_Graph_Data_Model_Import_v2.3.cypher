@@ -428,18 +428,33 @@ MATCH (ed:EmployeeDirectorY {Name:"EmployeeDirectorY"}), (va:RolE {Title:"Suppli
 CREATE  (ed)-[:HAS_ACTIVE_EMPLOYEE {StartDate:datetime()}]->(e1:Employee {Email:"Adam.Smith@northwind.com", EmployeeID: "10", Extension: "1234" } )-[:HAS_PERSON]->(:Person {FirstName:"Adam", LastName:"Smith", BirthDate:"1989-07-02 00:00:00.000", PersonalPhone:"9551062551", PersonalEmail:"Adam@email.com"}), (e1)<-[:IS_ACTIVE_ROLE {StartDate:datetime()}]-(va),
         (ed)-[:HAS_ACTIVE_EMPLOYEE {StartDate:datetime()}]->(e2:Employee {Email:"Mary.Jane@northwind.com", EmployeeID: "11", Extension: "1235" } )-[:HAS_PERSON]->(:Person {FirstName:"Mary", LastName: "Jane", BirthDate:"1995-09-10 00:00:00.000",  PersonalPhone:"909870092", PersonalEmail:"Mary@email.com" }), (e2)<-[:IS_ACTIVE_ROLE {StartDate:datetime()}]-(va);
 
+// Now we will create 2 employees that will be part of the PO vetting workflow with Level 1 approver authority. 
 MATCH   (ed:EmployeeDirectorY {Name:"EmployeeDirectorY"}), (l1:RolE {Title:"Level1Approver"})
 CREATE  (ed)-[:HAS_ACTIVE_EMPLOYEE {StartDate:datetime()}]->(e3:Employee {Email:"Gloria.Gaynor@northwind.com", EmployeeID: "12", Extension: "1236" })-[:HAS_PERSON]->(:Person {FirstName:"Gloria", LastName: "Gaynor", BirthDate:"1983-09-7 00:00:00.000", PersonalPhone:"559831373", PersonalEmail:"Gloria@email.com"}), (e3)<-[:IS_ACTIVE_ROLE {StartDate:datetime()}]-(l1);
 
-MATCH   (ed:EmployeeDirectorY {Name:"EmployeeDirectorY"}), (l2:RolE {Title:"Level2Approver"})       
-CREATE  (ed)-[:HAS_ACTIVE_EMPLOYEE {StartDate:datetime()}]->(e4:Employee {Email:"Sara.Vaughan@northwind.com", EmployeeID: "13", Extension: "1237" })-[:HAS_PERSON]->(:Person {FirstName:"Sara", LastName: "Vaughan", BirthDate:"1984-03-27 00:00:00.000", PersonalPhone:"4849810343", PersonalEmail:"Sara@email.com"}), (e4)<-[:IS_ACTIVE_ROLE {StartDate:datetime()}]-(l2);
+MATCH   (ed:EmployeeDirectorY {Name:"EmployeeDirectorY"}), (l1:RolE {Title:"Level1Approver"})
+CREATE  (ed)-[:HAS_ACTIVE_EMPLOYEE {StartDate:datetime()}]->(e3:Employee {Email:"Gabriel.Garcia@northwind.com", EmployeeID: "21", Extension: "1246" })-[:HAS_PERSON]->(:Person {FirstName:"Gabriel", LastName: "Garcia", BirthDate:"1997-03-6 00:00:00.000", PersonalPhone:"559931373", PersonalEmail:"Gabriel@email.com"}), (e3)<-[:IS_ACTIVE_ROLE {StartDate:datetime()}]-(l1);
 
+// Now we will create 2 employees that will be part of the PO vetting workflow with Level 2 approver authority.
+MATCH   (ed:EmployeeDirectorY {Name:"EmployeeDirectorY"}), (l2:RolE {Title:"Level2Approver"})       
+CREATE  (ed)-[:HAS_ACTIVE_EMPLOYEE {StartDate:datetime()}]->(e4:Employee {Email:"Sara.Vaughan@northwind.com", EmployeeID: "13", Extension: "127" })-[:HAS_PERSON]->(:Person {FirstName:"Sara", LastName: "Vaughan", BirthDate:"1984-03-27 00:00:00.000", PersonalPhone:"4849810343", PersonalEmail:"Sara@email.com"}), (e4)<-[:IS_ACTIVE_ROLE {StartDate:datetime()}]-(l2);
+
+MATCH   (ed:EmployeeDirectorY {Name:"EmployeeDirectorY"}), (l2:RolE {Title:"Level2Approver"})       
+CREATE  (ed)-[:HAS_ACTIVE_EMPLOYEE {StartDate:datetime()}]->(e4:Employee {Email:"Steve.Martin@northwind.com", EmployeeID: "22", Extension: "1247" })-[:HAS_PERSON]->(:Person {FirstName:"Steve", LastName: "Martin", BirthDate:"1984-03-27 00:00:00.000", PersonalPhone:"4849910343", PersonalEmail:"Steve.Martin@email.com"}), (e4)<-[:IS_ACTIVE_ROLE {StartDate:datetime()}]-(l2);
+
+
+// Now we will create 2 employees that will be part of the PO vetting workflow with Level 3 approver authority.
 MATCH   (ed:EmployeeDirectorY {Name:"EmployeeDirectorY"}), (l3:RolE {Title:"Level3Approver"})
 CREATE  (ed)-[:HAS_ACTIVE_EMPLOYEE {StartDate:datetime()}]->(e5:Employee {Email:"Christine.McVie@northwind.com", EmployeeID: "14", Extension: "1238" })-[:HAS_PERSON]->(:Person {FirstName:"Christine", LastName: "McVie",  BirthDate:"1973-07-12 00:00:00.000",  PersonalPhone:"9998344731", PersonalEmail:"Christine@email.com"}), (e5)<-[:IS_ACTIVE_ROLE {StartDate:datetime()}]-(l3);
 
+MATCH   (ed:EmployeeDirectorY {Name:"EmployeeDirectorY"}), (l3:RolE {Title:"Level3Approver"})
+CREATE  (ed)-[:HAS_ACTIVE_EMPLOYEE {StartDate:datetime()}]->(e5:Employee {Email:"Carmen.Miranda@northwind.com", EmployeeID: "23", Extension: "1248" })-[:HAS_PERSON]->(:Person {FirstName:"Carmen", LastName: "Miranda",  BirthDate:"1979-02-09 00:00:00.000",  PersonalPhone:"8898344731", PersonalEmail:"Carmen.Miranda@email.com"}), (e5)<-[:IS_ACTIVE_ROLE {StartDate:datetime()}]-(l3);
+
+// Now we will create 1 employees that will be part of the Procurement team with Buyer and Procurement Assistant roles.
 MATCH   (ed:EmployeeDirectorY {Name:"EmployeeDirectorY"}), (p:RolE {Title:"Buyer"})
 CREATE  (ed)-[:HAS_ACTIVE_EMPLOYEE {StartDate:datetime()}]->(e6:Employee {Email:"Cloe.Bailey@northwind.com", EmployeeID: "15", Extension: "1239" })-[:HAS_PERSON]->(:Person {FirstName:"Cloe", LastName: "Bailey",  BirthDate:"1998-07-01 00:00:00.000", PersonalPhone:"998195044", PersonalEmail:"Cloe@email.com"}), (e6)<-[:IS_ACTIVE_ROLE {StartDate:datetime()}]-(p);
 
+// Now we will create 3 employees that will be part of the Procurement team with Procurement Assistant roles.
 MATCH   (ed:EmployeeDirectorY {Name:"EmployeeDirectorY"}), (pa:RolE {Title:"Procurement Assistant"})
 CREATE  (ed)-[:HAS_ACTIVE_EMPLOYEE {StartDate:datetime()}]->(e7:Employee {Email:"Albert.Camus@northwind.com", EmployeeID: "16", Extension: "1240" })-[:HAS_PERSON]->(:Person {FirstName:"Albert", LastName: "Camus",  BirthDate:"1993-11-07 00:00:00.000", PersonalPhone:"983435644", PersonalEmail:"Albert@email.com"}), (e7)<-[:IS_ACTIVE_ROLE {StartDate:datetime()}]-(pa);
 
@@ -450,16 +465,20 @@ MATCH   (ed:EmployeeDirectorY {Name:"EmployeeDirectorY"}), (pa:RolE {Title:"Proc
 CREATE  (ed)-[:HAS_ACTIVE_EMPLOYEE {StartDate:datetime()}]->(e7:Employee {Email:"Carlos.Santana@northwind.com", EmployeeID: "18", Extension: "1242" })-[:HAS_PERSON]->(:Person {FirstName:"Carlos", LastName: "Santana",  BirthDate:"1987-07-20 00:00:00.000", PersonalPhone:"97853474", PersonalEmail:"Carlos@email.com"}), (e7)<-[:IS_ACTIVE_ROLE {StartDate:datetime()}]-(pa);
 
 
-//We will create a Warehouse Klerk role and one employees to manage the warehouse and the inventory.
+//We will create 2 Employees with a Warehouse Clerk role to manage the warehouse and the inventory.
 MATCH   (ed:EmployeeDirectorY {Name:"EmployeeDirectorY"}), (wk:RolE {Title:"WarehouseClerk"})
 CREATE  (ed)-[:HAS_ACTIVE_EMPLOYEE {StartDate:datetime()}]->(e8:Employee {Email:"John.Doe@northwind.com", EmployeeID: "19", Extension: "1243" })-[:HAS_PERSON]->(:Person {FirstName:"John", LastName: "Doe",  BirthDate:"1990-07-20 00:00:00.000", PersonalPhone:"95644474", PersonalEmail:"John@email.com"}), (e8)<-[:IS_ACTIVE_ROLE {StartDate:datetime()}]-(wk);
+
+MATCH   (ed:EmployeeDirectorY {Name:"EmployeeDirectorY"}), (wk:RolE {Title:"WarehouseClerk"})
+CREATE  (ed)-[:HAS_ACTIVE_EMPLOYEE {StartDate:datetime()}]->(e8:Employee {Email:"James.Ingram@northwind.com", EmployeeID: "24", Extension: "1253" })-[:HAS_PERSON]->(:Person {FirstName:"James", LastName: "Ingram",  BirthDate:"1980-07-20 00:00:00.000", PersonalPhone:"95656774", PersonalEmail:"James.Ingram@email.com"}), (e8)<-[:IS_ACTIVE_ROLE {StartDate:datetime()}]-(wk);
+
 
 // We will create the Finance role and one employee to manage the finance and the payments.
 MATCH   (ed:EmployeeDirectorY {Name:"EmployeeDirectorY"}), (f:RolE {Title:"Finance"})
 CREATE  (ed)-[:HAS_ACTIVE_EMPLOYEE {StartDate:datetime()}]->(e9:Employee {Email:"Jane.Doe@northwind.com", EmployeeID: "20", Extension: "1244" })-[:HAS_PERSON]->(:Person {FirstName:"Jane", LastName: "Doe",  BirthDate:"1985-03-15 00:00:00.000", PersonalPhone:"96755574", PersonalEmail:"Jane@email.com"}), (e9)<-[:IS_ACTIVE_ROLE {StartDate:datetime()}]-(f);  
 
 
-// Lastly, let's create a SYSTEM user in case we need one in our 
+// Lastly, let's create a SYSTEM user in case we need one in our demo. This user will not be part of the Employee Directory and will not have any roles assigned to it. It will be used for system-level operations only.
 MATCH (ed:EmployeeDirectorY {Name:"EmployeeDirectorY"})        
 CREATE (ed)-[:HAS_ACTIVE_EMPLOYEE {StartDate:datetime()}]->(:Employee {Email:"system@northwind.com", EmployeeID: "00", Extension: "0000" });
 
@@ -1345,11 +1364,6 @@ WHERE i.UnitsInStock <= r.StockThreshold
 RETURN p.ProductName, i.UnitsInStock, r.StockThreshold, s.CompanyName AS Supplier
 ORDER BY i.UnitsInStock ASC;
 
-// All Purchase Orders and their overall details 
-MATCH (po:PurchaseOrder)-[i:HAS_PO_ITEM]-(p) 
-ORDER BY po.PONumber, po.PODate
-RETURN po.PONumber, po.PODate, sum(i.POqt) AS ItemsOrdered, sum(i.POqt * (p.UnitPrice * i.POPriceDiscount)) AS PO_Ammount;
-
 // At-Risk Products -- below Restock Threshold with NO Purchase Order currently in flight to resupply them
 MATCH (p:Product)-[:HAS_INVENTORY_LEVEL]->(i:InventoryLevel), (p)-[:HAS_REORDER_LEVEL]->(r:ReorderLevel)
 WHERE i.UnitsInStock <= r.StockThreshold
@@ -1465,13 +1479,49 @@ WHERE TotalLines = LinesWithStock
 WITH inv, details, op, p, r, o ORDER BY o.OrderID, o.OrderDate LIMIT 100  
 RETURN o.OrderID, o.OrderDate, p.ProductName, inv.UnitsInStock, details.Quantity;
 
+//** Invemtory concurrency test **
+// Run the Python script that fulfills Open Customer Orders (python NorthwindPlus_Stress_Test.py --loop order-fulfillment --rate 4 &) in multiple windows to see how the system handles concurrent fulfillment of the same Order.
+// As it runs, run the following query to see if the stock levels are being updated correctly and no one goes below zero.
 
+//Products with Low (<10) Inventory 
+MATCH (p:Product)-[:HAS_INVENTORY_LEVEL]->(i) WHERE i.UnitsInStock < 10 RETURN p.ProductName, i.UnitsInStock;
+
+// If too many products are below 10 units in stock, you can run the following query to restock them (for demonstration purposes only).
 // Cheat the system  - Increment the stock of all products by 50 units to simulate a restock event (for demonstration purposes).
 MATCH (p:Product)-[:HAS_INVENTORY_LEVEL]->(i) SET i.UnitsInStock = i.UnitsInStock+50;
+
 
 // Visualize the schema
   CALL db.schema.visualization();
 
+//**PO Vetting concurency test**
+// Try running multiple instances of the PO Vetting process (the Python script) at the same time to see how the system handles concurrent vetting of the same PO.
+
+// Before you begin, run this query to see how many PO's are on each state:
+MATCH p=(n:PoS)-[]->()-[]->() RETURN p;
+
+// Run the Vetting process (python NorthwindPlus_Stress_Test.py --loop po-vetting --rate 4 &) in multiple windows 
+// While it runs, run the following query to see the PO's and their Approve/Rejection state -  
+// there should not be any PO's that are in the same or conflicting state (Approved or Rejected) at the same time.   
+
+// PO Vetting status by PONumber and Vetting Date
+MATCH (po:PurchaseOrder)-[r]->(e:Employee)<-[:IS_ACTIVE_ROLE]-(role)
+WHERE type(r) IN [
+  'HAS_L1_PO_REJECTION','HAS_L2_PO_REJECTION','HAS_L3_PO_REJECTION',
+  'HAS_L1_PO_APPROVAL','HAS_L2_PO_APPROVAL','HAS_L3_PO_APPROVAL'
+]
+RETURN po.PONumber AS PONumber,
+       CASE WHEN type(r) ENDS WITH 'REJECTION' THEN 'Rejected on' ELSE 'Approved on' END AS State,
+       r.Date AS VettingDate,
+       ' by ' AS Who,
+       e.Email AS Employee,
+       role.Title
+ORDER BY PONumber, VettingDate ASC;
+
+
+
 //  End of Query Examples  //
 
-// I invite you to explore the NorthWind Graph Data Model and create your own queries to extract insights from the data.
+// I invite you to explore the NorthWind Graph Data Model and create your own queries to extract insights and stress test the model (and the Graph Database).
+
+
