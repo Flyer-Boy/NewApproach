@@ -66,8 +66,8 @@
 
 //--------------------------------------------------------------------------------------------------------------------------------------------------------------//
 //                                                                    ** Quick Run Instructions: **
-// Copy this script from line 73 to 1078. Paste it into the Neo4j Aura Query console. Execute and wait. Optionally, you can run the Recommendation Engine - Lines 1173 through 1240.
-// Follow the instructions from line 1087 to 1132 to run the Python simulation loops.  Run the Queries on line 1242 onwards as the Python loops run. Enjoy!! 
+// Copy this script from line 73 to 1129. Paste it into the Neo4j Aura Query console. Execute and wait. Optionally, you can run the Recommendation Engine - Lines 1217 through 1283.
+// Follow the instructions from line 1130 to 1175 to run the Python simulation loops.  Run the Queries on line 1286 onwards as the Python loops run. Enjoy!! 
 //--------------------------------------------------------------------------------------------------------------------------------------------------------------//
 
 
