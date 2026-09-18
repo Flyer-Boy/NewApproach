@@ -1518,7 +1518,16 @@ RETURN po.PONumber AS PONumber,
        role.Title
 ORDER BY PONumber, VettingDate ASC;
 
-
+// Outgoing vs. Incoming edges for all nodes in the graph, ordered by IncomingCount descending. 
+// This is a good way to see which nodes are the most connected and which nodes are the most important in the graph. Supernodes
+MATCH (n)
+OPTIONAL MATCH (n)-[r_out]->()
+OPTIONAL MATCH (n)<-[r_in]-()
+RETURN n AS Node,
+       properties(n),
+       count(DISTINCT r_out) AS OutgoingCount,
+       count(DISTINCT r_in) AS IncomingCount
+ORDER BY IncomingCount DESC;
 
 //  End of Query Examples  //
 
