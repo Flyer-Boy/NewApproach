@@ -406,9 +406,9 @@ CREATE (ed)-[:HAS_ACTIVE_EMPLOYEE {StartDate:datetime()}]->(e);
 MATCH (r:RoleS {Name:"RoleS"})
 	CREATE (r)-[:HAS_ROLE_TITLE]->(:RolE {Title:"Procurement Assistant", Description:"Procurement Assistant / Coordinator", Rules:"Submits purchase orders based on inventory level and demand, tracks deliveries, and coordinates day-to-day tactical tasks"}),
       (r)-[:HAS_ROLE_TITLE]->(:RolE {Title:"SupplierApprover", Description:"Supplier Approver", Rules:"Approves Suppliers in the System"}),
-      (r)-[:HAS_ROLE_TITLE]->(:RolE {Title:"Level1Approver", ApprovalBase:0.00, ApprovalLimit:2000.00, Description:"Level 1 Approver", Rules:"Approves PO with a Budget < 2000.00"}),
-      (r)-[:HAS_ROLE_TITLE]->(:RolE {Title:"Level2Approver", ApprovalBase:2001.00, ApprovalLimit:4000.00, Description:"Level 2 Approver", Rules:"Approves PO with a Budget > 2001.00 and < 4000.00"}),
-      (r)-[:HAS_ROLE_TITLE]->(:RolE {Title:"Level3Approver", ApprovalBase:4001.00,ApprovalLimit:20000.00, Description:"Level 3 Approver", Rules:"Approves PO with a Budget > 4001.00 and < 20000.00"}),
+      (r)-[:HAS_ROLE_TITLE]->(:RolE {Title:"Level1Approver", ApprovalBase:0.00, ApprovalLimit:5000.00, Description:"Level 1 Approver", Rules:"Approves PO with a Budget < 5000.00"}),
+      (r)-[:HAS_ROLE_TITLE]->(:RolE {Title:"Level2Approver", ApprovalBase:5000.01, ApprovalLimit:25000.00, Description:"Level 2 Approver", Rules:"Approves PO with a Budget > 5000.01 and < 25000.00"}),
+      (r)-[:HAS_ROLE_TITLE]->(:RolE {Title:"Level3Approver", ApprovalBase:25000.01,ApprovalLimit:100000.00, Description:"Level 3 Approver", Rules:"Approves PO with a Budget > 25000.01 and < 100000.00"}),
       (r)-[:HAS_ROLE_TITLE]->(:RolE {Title:"Buyer" , Description:"Buyer / Purchasing Officer", Rules:"Manages specific product categories, handles routine vendor discovery, and executes purchase transactions."}),
       (r)-[:HAS_ROLE_TITLE]->(:RolE {Title:"WarehouseClerk", Description:"Warehouse Clerk", Rules:"Receives and inspects incoming shipments, updates inventory records, and ensures proper storage of goods."} ),
       (r)-[:HAS_ROLE_TITLE]->(:RolE {Title:"Finance", Description:"Finance Officer", Rules:"Manages financial transactions, processes payments, and maintains financial records."} );

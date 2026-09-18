@@ -144,6 +144,7 @@ CREATE (o)-[:HAS_ORDER_CUSTOMER]->(c)
 CREATE (o)-[:SOLD_BY]->(e)
 WITH o
 MATCH (p:Product)-[]-(:ProductStatusAvailablE {Status: "Available"})
+WITH o, p
 ORDER BY rand() LIMIT toInteger(round(rand() * 10 + 1))
 WITH o, p, toInteger(round(rand() * 19) + 1) AS qty
 CREATE (o)-[:HAS_ORDER_PRODUCT {Quantity: qty, UnitPrice: p.UnitPrice, Discount: rand()*0.07}]->(p)
