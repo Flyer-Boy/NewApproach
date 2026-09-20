@@ -136,14 +136,14 @@ WITH e, op ORDER BY rand() LIMIT 1
 MATCH (c:Customer)
 WITH e, c, op ORDER BY rand() LIMIT 1
 CREATE (o:Order {
-    OrderID: "CO-" + left(randomUUID(), 3) + right(randomUUID(), 3),
+    OrderID: "CO-" + left(randomUUID(), 5) + right(randomUUID(), 5),
     OrderDate: datetime(),
     RequiredDate: datetime() + duration("P7D")
 })<-[:IS_OPEN_ORDER_STATE]-(op)
 CREATE (o)-[:HAS_ORDER_CUSTOMER]->(c)
 CREATE (o)-[:SOLD_BY]->(e)
 WITH o
-MATCH (p:Product)-[]-(:ProductStatusAvailablE {Status: "Available"})
+MATCH (p:Product)<-[]-(:ProductStatusAvailablE {Status: "Available"})
 WITH o, p
 ORDER BY rand() LIMIT toInteger(round(rand() * 10 + 1))
 WITH o, p, toInteger(round(rand() * 19) + 1) AS qty
@@ -358,29 +358,45 @@ PO_VETTING_ACTIONS: list[VettingAction] = [
     VettingAction(
         "po_resubmit", 4,
         """
-        MATCH (:RejectedPoS)-[:IS_REJECTED_PO_STATE]->(rpo:PurchaseOrder)
+        MATCH (:RejectedPoS)-[:IS_REJECTED_PO_STATE]->(rpo:PurchaseOrder)-[:PO_FOR_SUPPLIER]->(s:Supplier)
         WHERE NOT ()-[:HAS_PREVIOUS_PO]->(rpo)
-        MATCH (rpo)-[:HAS_PO_ITEM]->(p),(s:Supplier)-[:SUPPLIES]->(p)
-          <-[:IS_AVAILABLE_PRODUCT]-(:ProductStatusAvailablE),
-          (r:ReorderLevel)<-[:HAS_REORDER_LEVEL]-(p)-[:HAS_INVENTORY_LEVEL]->(i:InventoryLevel)
-        WHERE i.UnitsInStock - (r.StockThreshold * 0.5) <= r.StockThreshold
+        MATCH (rpo)-[:HAS_PO_ITEM]->(p)<-[:SUPPLIES]-(s),
+              (p)<-[:IS_AVAILABLE_PRODUCT]-(:ProductStatusAvailablE),
+              (r:ReorderLevel)<-[:HAS_REORDER_LEVEL]-(p)-[:HAS_INVENTORY_LEVEL]->(i:InventoryLevel)
+        OPTIONAL MATCH (activePO:PurchaseOrder)-[poi2:HAS_PO_ITEM]->(p)
+        WHERE (activePO)<-[:IS_NEW_PO_STATE]-(:NewPoS)
+           OR (activePO)<-[:IS_APPROVED_PO_STATE]-(:ApprovedPoS)
+           OR (activePO)<-[:IS_SUBMITTED_PO_STATE]-(:SubmittedPoS)
+        WITH rpo, p, s, r, i, SUM(coalesce(poi2.POqt, 0)) AS AlreadyPendingQty
+        OPTIONAL MATCH (p)<-[op:HAS_ORDER_PRODUCT]-(:Order)<-[:IS_OPEN_ORDER_STATE]-()
+        WITH rpo, p, s, r, i, AlreadyPendingQty, SUM(coalesce(op.Quantity, 0)) AS OpenOrderQty
+        WHERE i.UnitsInStock + AlreadyPendingQty - OpenOrderQty - (r.StockThreshold * 0.5) <= r.StockThreshold
         RETURN count(DISTINCT rpo) AS EligibleCount
         """,
         """
-        MATCH (re:RejectedPoS)-[:IS_REJECTED_PO_STATE]->(rpo:PurchaseOrder)-[:PO_CREATED_BY]->(e:Employee), (n:NewPoS {Name:"NewPoS"})
+        MATCH (re:RejectedPoS)-[:IS_REJECTED_PO_STATE]->(rpo:PurchaseOrder)-[:PO_CREATED_BY]->(e:Employee),
+              (rpo)-[:PO_FOR_SUPPLIER]->(s:Supplier),
+              (n:NewPoS {Name:"NewPoS"})
         WHERE NOT ()-[:HAS_PREVIOUS_PO]->(rpo)
-        WITH n, rpo, e ORDER BY rand() LIMIT 1
-        MATCH (rpo)-[:HAS_PO_ITEM]->(p),(s:Supplier)-[:SUPPLIES]->(p)
-          <-[:IS_AVAILABLE_PRODUCT]-(:ProductStatusAvailablE),
-          (r:ReorderLevel)<-[:HAS_REORDER_LEVEL]-(p)-[:HAS_INVENTORY_LEVEL]->(i:InventoryLevel)
-        WHERE i.UnitsInStock - (r.StockThreshold * 0.5) <= r.StockThreshold
+        WITH n, rpo, e, s ORDER BY rand() LIMIT 1
+        MATCH (rpo)-[:HAS_PO_ITEM]->(p)<-[:SUPPLIES]-(s),
+              (p)<-[:IS_AVAILABLE_PRODUCT]-(:ProductStatusAvailablE),
+              (r:ReorderLevel)<-[:HAS_REORDER_LEVEL]-(p)-[:HAS_INVENTORY_LEVEL]->(i:InventoryLevel)
+        OPTIONAL MATCH (activePO:PurchaseOrder)-[poi2:HAS_PO_ITEM]->(p)
+        WHERE (activePO)<-[:IS_NEW_PO_STATE]-(:NewPoS)
+           OR (activePO)<-[:IS_APPROVED_PO_STATE]-(:ApprovedPoS)
+           OR (activePO)<-[:IS_SUBMITTED_PO_STATE]-(:SubmittedPoS)
+        WITH rpo, e, n, s, p, r, i, SUM(coalesce(poi2.POqt, 0)) AS AlreadyPendingQty
+        OPTIONAL MATCH (p)<-[op:HAS_ORDER_PRODUCT]-(:Order)<-[:IS_OPEN_ORDER_STATE]-()
+        WITH rpo, e, n, s, p, r, i, AlreadyPendingQty, SUM(coalesce(op.Quantity, 0)) AS OpenOrderQty
+        WHERE i.UnitsInStock + AlreadyPendingQty - OpenOrderQty - (r.StockThreshold * 0.5) <= r.StockThreshold
         WITH rpo, e, n, s, COLLECT({
             Product: p,
-            qty: (r.StockThreshold) - i.UnitsInStock + (r.StockThreshold / 2)
+            qty: (r.StockThreshold) - (i.UnitsInStock + AlreadyPendingQty - OpenOrderQty) + (r.StockThreshold / 2)
         }) AS orderItems
         WHERE size(orderItems) > 0
         CREATE (n)-[:IS_NEW_PO_STATE]->(po:PurchaseOrder {
-            PONumber: "PO-" + left(randomUUID(), 3) + right(randomUUID(), 3),
+            PONumber: "PO-" + left(randomUUID(), 5) + right(randomUUID(), 5),
             PODate: datetime()
         })
         CREATE (s)<-[:PO_FOR_SUPPLIER]-(po)
@@ -501,7 +517,7 @@ RFQ_VETTING_ACTIONS: list[VettingAction] = [
             cost: p.UnitPrice * 0.7
         }) AS rfqItems
         CREATE (rfq:RFQ {
-            RFQNumber: "RFQ-" + left(randomUUID(), 3) + right(randomUUID(), 3),
+            RFQNumber: "RFQ-" + left(randomUUID(), 5) + right(randomUUID(), 5),
             RFQDate: datetime(),
             RFQComments: "Thanks for your order, we are able to supply the full PO product request at the discounted price negotiated on our master agreement (stress test)."
         })-[:IS_RFQ_FOR_PO]->(po),
@@ -577,7 +593,7 @@ RFQ_VETTING_ACTIONS: list[VettingAction] = [
             cost: p.UnitPrice * 0.65
         }) AS rfqItems
         CREATE (rfq:RFQ {
-            RFQNumber: "RFQ-" + left(randomUUID(), 3) + right(randomUUID(), 3),
+            RFQNumber: "RFQ-" + left(randomUUID(), 5) + right(randomUUID(), 5),
             RFQDate: datetime(),
             RFQComments: "Thanks for your order, we are resubmitting our RFQ with updated pricing (stress test)."
         })-[:IS_RFQ_FOR_PO]->(po),
@@ -703,21 +719,22 @@ def iterate_warehouse_finance(driver: Driver, stats: RunStats, database: str) ->
 PO_CREATION_QUERY = """
 MATCH (pa:RolE {Title: "Procurement Assistant"})-[:IS_ACTIVE_ROLE]->(e:Employee), (n:NewPoS {Name:"NewPoS"})
 WITH n, e ORDER BY rand() LIMIT 1
-MATCH (s:Supplier)-[:SUPPLIES]->(p:Product)
-  <-[:IS_AVAILABLE_PRODUCT]-(a:ProductStatusAvailablE),
+MATCH (s:Supplier)-[:SUPPLIES]->(p:Product)<-[:IS_AVAILABLE_PRODUCT]-(a:ProductStatusAvailablE),
   (r:ReorderLevel)<-[:HAS_REORDER_LEVEL]-(p)-[:HAS_INVENTORY_LEVEL]->(i:InventoryLevel)
 OPTIONAL MATCH (activePO:PurchaseOrder)-[poi2:HAS_PO_ITEM]->(p)
 WHERE (activePO)<-[:IS_NEW_PO_STATE]-(:NewPoS)
    OR (activePO)<-[:IS_APPROVED_PO_STATE]-(:ApprovedPoS)
    OR (activePO)<-[:IS_SUBMITTED_PO_STATE]-(:SubmittedPoS)
 WITH e, n, s, p, r, i, SUM(coalesce(poi2.POqt, 0)) AS AlreadyPendingQty
-WHERE i.UnitsInStock + AlreadyPendingQty - (r.StockThreshold * 0.5) <= r.StockThreshold
+OPTIONAL MATCH (p)<-[op:HAS_ORDER_PRODUCT]-(:Order)<-[:IS_OPEN_ORDER_STATE]-()
+WITH e, n, s, p, r, i, AlreadyPendingQty, SUM(coalesce(op.Quantity, 0)) AS OpenOrderQty
+WHERE i.UnitsInStock + AlreadyPendingQty - OpenOrderQty - (r.StockThreshold * 0.5) <= r.StockThreshold
 WITH e, n, s, COLLECT({
     Product: p,
-    qty: (r.StockThreshold) - (i.UnitsInStock + AlreadyPendingQty) + (r.StockThreshold * 2)
+    qty: (r.StockThreshold) - (i.UnitsInStock + AlreadyPendingQty - OpenOrderQty) + (r.StockThreshold * 2)
 }) AS orderItems
 CREATE (n)-[:IS_NEW_PO_STATE]->(po:PurchaseOrder {
-    PONumber: "PO-" + left(randomUUID(), 3) + right(randomUUID(), 3),
+    PONumber: "PO-" + left(randomUUID(), 5) + right(randomUUID(), 5),
     PODate: datetime()
 })
 CREATE (s)<-[:PO_FOR_SUPPLIER]-(po)

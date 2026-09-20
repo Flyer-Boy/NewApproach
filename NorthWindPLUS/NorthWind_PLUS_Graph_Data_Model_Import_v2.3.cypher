@@ -493,7 +493,7 @@ ORDER BY rand() LIMIT 1
 MATCH (c:Customer) 
 WITH e, c, op
 ORDER BY rand() LIMIT 1
-CREATE (o:Order {OrderID: "CO-"+left(randomUUID(),3)+right(randomUUID(),3) , OrderDate:datetime(), RequiredDate:datetime()+duration("P7D")})<-[:IS_OPEN_ORDER_STATE]-(op)
+CREATE (o:Order {OrderID: "CO-"+left(randomUUID(),5)+right(randomUUID(),5) , OrderDate:datetime(), RequiredDate:datetime()+duration("P7D")})<-[:IS_OPEN_ORDER_STATE]-(op)
 CREATE (o)-[:HAS_ORDER_CUSTOMER]->(c) 
 CREATE (o)-[:SOLD_BY]->(e)
 WITH o
@@ -567,30 +567,31 @@ CREATE (s)-[:HAS_SUPPLIER_NEW_PENDING_POS]->(:SupplierNewPoS {Name:"SupplierNewP
 // The Procurement Assistant will create POs for Suppliers whose Products have low Inventory Levels (nearing restock threashold level).  
 // Select a random Employee with the role "Procurement Assistant".
 MATCH (pa:RolE {Title: "Procurement Assistant"})-[:IS_ACTIVE_ROLE]->(e:Employee), (n:NewPoS {Name:"NewPoS"})
-WITH n, e ORDER BY rand() LIMIT 1
-MATCH (s:Supplier)-[:SUPPLIES]->(p:Product)
-  <-[:IS_AVAILABLE_PRODUCT]-(a:ProductStatusAvailablE),
-  (r:ReorderLevel)<-[:HAS_REORDER_LEVEL]-(p)-[:HAS_INVENTORY_LEVEL]->(i:InventoryLevel)     // Find Products with low inventory (Inventory Level <= Restock Threshold). 
-OPTIONAL MATCH (activePO:PurchaseOrder)-[poi2:HAS_PO_ITEM]->(p)
+WITH n, e ORDER BY rand() LIMIT 1                // Select a random Procurement Assistant to create the POs for the Suppliers whose Products have low Inventory Levels (nearing restock threashold level).
+MATCH (s:Supplier)-[:SUPPLIES]->(p:Product)<-[:IS_AVAILABLE_PRODUCT]-(a:ProductStatusAvailablE),  // Make sure the Product is available for sale and is supplied by the Supplier.
+  (r:ReorderLevel)<-[:HAS_REORDER_LEVEL]-(p)-[:HAS_INVENTORY_LEVEL]->(i:InventoryLevel)
+OPTIONAL MATCH (activePO:PurchaseOrder)-[poi2:HAS_PO_ITEM]->(p)      // Check if there are any open POs for this Product that have not yet been fulfilled.
 WHERE (activePO)<-[:IS_NEW_PO_STATE]-(:NewPoS)
-   OR (activePO)<-[:IS_APPROVED_PO_STATE]-(:ApprovedPoS)       // Check if there are any active POs for this product that are either New or Approved (not yet submitted to Supplier)
+   OR (activePO)<-[:IS_APPROVED_PO_STATE]-(:ApprovedPoS)
    OR (activePO)<-[:IS_SUBMITTED_PO_STATE]-(:SubmittedPoS)
 WITH e, n, s, p, r, i, SUM(coalesce(poi2.POqt, 0)) AS AlreadyPendingQty
-WHERE i.UnitsInStock + AlreadyPendingQty - (r.StockThreshold * 0.5) <= r.StockThreshold
+OPTIONAL MATCH (p)<-[op:HAS_ORDER_PRODUCT]-(:Order)<-[:IS_OPEN_ORDER_STATE]-()    // Check if there are any open Customer Orders for this Product that have not yet been fulfilled.
+WITH e, n, s, p, r, i, AlreadyPendingQty, SUM(coalesce(op.Quantity, 0)) AS OpenOrderQty
+WHERE i.UnitsInStock + AlreadyPendingQty - OpenOrderQty - (r.StockThreshold * 0.5) <= r.StockThreshold   // Check if the Product's Inventory Level is below the Reorder Threshold level, taking into account any open POs and open Customer Orders.
 WITH e, n, s, COLLECT({
     Product: p,
-    qty: (r.StockThreshold) - (i.UnitsInStock + AlreadyPendingQty) + (r.StockThreshold * 2)
+    qty: (r.StockThreshold) - (i.UnitsInStock + AlreadyPendingQty - OpenOrderQty) + (r.StockThreshold * 2)
 }) AS orderItems
-CREATE (n)-[:IS_NEW_PO_STATE]->(po:PurchaseOrder {
-    PONumber: "PO-" + left(randomUUID(), 3) + right(randomUUID(), 3),
+CREATE (n)-[:IS_NEW_PO_STATE]->(po:PurchaseOrder {            // Create a new Purchase Order for the Supplier with the Products that have low Inventory Levels (nearing restock threashold level).
+    PONumber: "PO-" + left(randomUUID(), 5) + right(randomUUID(), 5),
     PODate: datetime()
 })
-CREATE (s)<-[:PO_FOR_SUPPLIER]-(po)     // Connect the PO to the respective Supplier
-CREATE (po)-[:PO_CREATED_BY]->(e)       // Connect the PO to the employee that created it
-WITH po, orderItems, s                  // Unwind the collected products to create the items for this specific PO
+CREATE (s)<-[:PO_FOR_SUPPLIER]-(po)    // Connect the new Purchase Order to the Supplier.
+CREATE (po)-[:PO_CREATED_BY]->(e)      // Connect the new Purchase Order to the Procurement Assistant who created it.
+WITH po, orderItems, s
 UNWIND orderItems AS item
 MATCH (p:Product {ProductID: item.Product.ProductID})
-MERGE (po)-[:HAS_PO_ITEM {POqt: item.qty, POPriceDiscount: 0.7}]->(p)   // We add the PO items and their order quantity, in this demo we will get the unit cost as a % of the Product price 
+MERGE (po)-[:HAS_PO_ITEM {POqt: item.qty, POPriceDiscount: 0.7}]->(p)   // Connect the new Purchase Order to the Products that have low Inventory Levels (nearing restock threashold level) with a 30% discount applied to the UnitPrice.
 RETURN DISTINCT po.PONumber AS PONumber, s.SupplierID AS SupplierID, size(orderItems) AS ItemCount;
 
 
@@ -746,30 +747,39 @@ DELETE np;
 
 // Remember those PO's that were rejected, well, we will now act as one of the Procurement Assistants that had one PO rejected and have him/her resubmit the PO
 // Notice that the New PO will point back to the Rejected one for auditing and added context 
-MATCH (re:RejectedPoS)-[:IS_REJECTED_PO_STATE]->(rpo:PurchaseOrder)-[:PO_CREATED_BY]->(e:Employee), (n:NewPoS {Name:"NewPoS"})
-WITH n, rpo, e ORDER BY rpo LIMIT 1
-MATCH (rpo)-[:HAS_PO_ITEM]->(p),(s:Supplier)-[:SUPPLIES]->(p)
-  <-[:IS_AVAILABLE_PRODUCT]-(a:ProductStatusAvailablE),
-  (r:ReorderLevel)<-[:HAS_REORDER_LEVEL]-(p)-[:HAS_INVENTORY_LEVEL]->(i:InventoryLevel) 
-WHERE i.UnitsInStock-(r.StockThreshold*0.5) <= r.StockThreshold
-     // Group the low-stock products and calculations by Supplier.
+MATCH (re:RejectedPoS)-[:IS_REJECTED_PO_STATE]->(rpo:PurchaseOrder)-[:PO_CREATED_BY]->(e:Employee),
+      (rpo)-[:PO_FOR_SUPPLIER]->(s:Supplier),
+      (n:NewPoS {Name:"NewPoS"})
+WHERE NOT ()-[:HAS_PREVIOUS_PO]->(rpo)
+WITH n, rpo, e, s ORDER BY rand() LIMIT 1
+MATCH (rpo)-[:HAS_PO_ITEM]->(p)<-[:SUPPLIES]-(s),
+      (p)<-[:IS_AVAILABLE_PRODUCT]-(:ProductStatusAvailablE),
+      (r:ReorderLevel)<-[:HAS_REORDER_LEVEL]-(p)-[:HAS_INVENTORY_LEVEL]->(i:InventoryLevel)
+OPTIONAL MATCH (activePO:PurchaseOrder)-[poi2:HAS_PO_ITEM]->(p)
+WHERE (activePO)<-[:IS_NEW_PO_STATE]-(:NewPoS)
+OR (activePO)<-[:IS_APPROVED_PO_STATE]-(:ApprovedPoS)
+OR (activePO)<-[:IS_SUBMITTED_PO_STATE]-(:SubmittedPoS)
+WITH rpo, e, n, s, p, r, i, SUM(coalesce(poi2.POqt, 0)) AS AlreadyPendingQty
+OPTIONAL MATCH (p)<-[op:HAS_ORDER_PRODUCT]-(:Order)<-[:IS_OPEN_ORDER_STATE]-()
+WITH rpo, e, n, s, p, r, i, AlreadyPendingQty, SUM(coalesce(op.Quantity, 0)) AS OpenOrderQty
+WHERE i.UnitsInStock + AlreadyPendingQty - OpenOrderQty - (r.StockThreshold * 0.5) <= r.StockThreshold
 WITH rpo, e, n, s, COLLECT({
-    Product: p, 
-    qty: (r.StockThreshold) - i.UnitsInStock + (r.StockThreshold / 2)
+     Product: p,
+     qty: (r.StockThreshold) - (i.UnitsInStock + AlreadyPendingQty - OpenOrderQty) + (r.StockThreshold / 2)
 }) AS orderItems
-    // Create ONE Purchase Order per Supplier, linking it to the Employee
+WHERE size(orderItems) > 0
 CREATE (n)-[:IS_NEW_PO_STATE]->(po:PurchaseOrder {
-    PONumber: "PO-" + left(randomUUID(), 3) + right(randomUUID(), 3), 
-    PODate: datetime() 
+       PONumber: "PO-" + left(randomUUID(), 5) + right(randomUUID(), 5),
+       PODate: datetime()
 })
-CREATE (s)<-[:PO_FOR_SUPPLIER]-(po)    // Connect the PO to the respective Supplier
-CREATE (po)-[:PO_CREATED_BY]->(e)      // Connect the PO to the employee that created it
-CREATE (po)-[:HAS_PREVIOUS_PO {Resubmission_Justification: "Reason for resubmission. What changed. What was missing or not accurate in the previous one. Comments, etc. "}]->(rpo) // As this is a PO resubmission, we connect the new PO to the previous PO version for auditing 
-WITH po, orderItems
-    // Unwind the collected products to create the items for this specific PO
+CREATE (s)<-[:PO_FOR_SUPPLIER]-(po)
+CREATE (po)-[:PO_CREATED_BY]->(e)
+CREATE (po)-[:HAS_PREVIOUS_PO {Resubmission_Justification: "Reason for resubmission. What changed. What was missing or not accurate in the previous one. Comments, etc. "}]->(rpo)
+WITH po, orderItems, rpo
 UNWIND orderItems AS item
 MATCH (p:Product {ProductID: item.Product.ProductID})
-MERGE (po)-[:HAS_PO_ITEM {POqt: item.qty, POPriceDiscount: 0.7 }]->(p);  // We add the PO items and their order quantity 
+MERGE (po)-[:HAS_PO_ITEM {POqt: item.qty, POPriceDiscount: 0.7}]->(p)
+RETURN DISTINCT po.PONumber AS PONumber, rpo.PONumber AS ResubmittedFrom;
  
 
 // You can add as many vetting levels as you want, following the same pattern. Simple, isn't it? 
@@ -819,7 +829,7 @@ WITH su, r, po, snr, sop, COLLECT({
     cost: p.UnitPrice * 0.7    // The Supplier will enter the discount they will provide in their RFQ
 }) AS rfqItems
 CREATE (rfq:RFQ {
-    RFQNumber: "RFQ-" + left(randomUUID(), 3) + right(randomUUID(), 3), 
+    RFQNumber: "RFQ-" + left(randomUUID(), 5) + right(randomUUID(), 5), 
     RFQDate: datetime(), 
     RFQComments: "Thanks for your order, we are able to supply the full PO product request at the discounted price negotiated on our master agreement"})-[:IS_RFQ_FOR_PO]->(po), // We create the RFQ
 (rfq)-[:RFQ_FROM_SUPPLIER]->(su),    // We connect the RFQ to the Suppier 
@@ -868,7 +878,7 @@ WITH su, r, po, snr, sop, COLLECT({
     cost: p.UnitPrice * 0.7    // The Supplier will enter the discount they will provide in their RFQ
 }) AS rfqItems
 CREATE (rfq:RFQ {
-    RFQNumber: "RFQ-" + left(randomUUID(), 3) + right(randomUUID(), 3), 
+    RFQNumber: "RFQ-" + left(randomUUID(), 5) + right(randomUUID(), 5), 
     RFQDate: datetime(), 
     RFQComments: "Thanks for your order, we are able to supply the full PO product request at the discounted price negotiated on our master agreement"})-[:IS_RFQ_FOR_PO]->(po), // We create the RFQ
 (rfq)-[:RFQ_FROM_SUPPLIER]->(su),    // We connect the RFQ to the Suppier 
@@ -941,7 +951,7 @@ WITH rrfq, su, po, snr, COLLECT({
     cost: p.UnitPrice * 0.65   // The Supplier will enter the discount they will provide in their RFQ. As this is a resubmission, the Supplier will provide a better discount than the previous RFQ
 }) AS rfqItems ORDER BY rand() LIMIT 1  
 CREATE (rfq:RFQ {
-    RFQNumber: "RFQ-" + left(randomUUID(), 3) + right(randomUUID(), 3), 
+    RFQNumber: "RFQ-" + left(randomUUID(), 5) + right(randomUUID(), 5), 
     RFQDate: datetime(), 
     RFQComments: "Thanks for your order, we resubmitting our RFQ and hope weare able to supply the full PO product request at the discounted price negotiated on our master agreement"})-[:IS_RFQ_FOR_PO]->(po), // We create the RFQ
 (rfq)-[:RFQ_FROM_SUPPLIER]->(su),    // We connect the RFQ to the Suppier 
@@ -1018,7 +1028,7 @@ WITH e, n, s, COLLECT({
     qty: (r.StockThreshold) - (i.UnitsInStock + AlreadyPendingQty) + (r.StockThreshold * 2)
 }) AS orderItems
 CREATE (n)-[:IS_NEW_PO_STATE]->(po:PurchaseOrder {
-    PONumber: "PO-" + left(randomUUID(), 3) + right(randomUUID(), 3),
+    PONumber: "PO-" + left(randomUUID(), 5) + right(randomUUID(), 5),
     PODate: datetime()
 })
 CREATE (s)<-[:PO_FOR_SUPPLIER]-(po)     // Connect the PO to the respective Supplier
@@ -1398,11 +1408,19 @@ MATCH (:OrderStatusOpeN)-[:IS_OPEN_ORDER_STATE]->(o:Order)-[details:HAS_ORDER_PR
 WITH c, o, collect({ProductName: p.ProductName, Ordered: details.Quantity, InStock: inv.UnitsInStock, Shortfall: details.Quantity - inv.UnitsInStock}) AS lines
 WITH c, o, [line IN lines WHERE line.Shortfall > 0] AS blockingProducts
 WHERE size(blockingProducts) > 0
-RETURN c.CompanyName AS Customer, o.OrderID, o.OrderDate, blockingProducts
+RETURN c.CompanyName AS Customer, o.OrderID, o.OrderDate, duration_between(DateTime(),o.OrderDate) AS TimeWaiting ,blockingProducts
 ORDER BY o.OrderDate ASC;
 
-// Products Urgently Needed to Fulfill Blocked Customer Orders (Might influence vetting proecess of new Purchase Orders and/or RFQ's)
-MATCH (:OrderStatusOpeN)-[:IS_OPEN_ORDER_STATE]->(o:Order)-[details:HAS_ORDER_PRODUCT]->(p:Product)-[:HAS_INVENTORY_LEVEL]->(inv:InventoryLevel)
+// Open Customer Orders waiting time (short query to see how long Orders have been waiting to be fulfilled)
+MATCH (:OrderStatusOpeN)-[]->(o:Order)-[]->(c:Customer) 
+RETURN o.OrderID,c.CompanyName AS Customer , o.OrderDate AS OrderDate, duration_between(DateTime(),o.OrderDate) AS TimeWaiting;
+
+// Fulfilled Customer Orders - Time to Fulfill 
+MATCH (:OrderStatusFulfilleD)-[f]->(o:Order)-[]->(c:Customer) 
+RETURN o.OrderID,c.CompanyName AS Customer , o.OrderDate AS OrderDate, duration_between(f.FulfillDate,o.OrderDate) AS TimeToFulfill ORDER BY TimeToFulfill DESC;
+
+// Available Products Urgently Needed to Fulfill Blocked Customer Orders (Might influence vetting proecess of new Purchase Orders and/or RFQ's)
+MATCH (:OrderStatusOpeN)-[:IS_OPEN_ORDER_STATE]->(o:Order)-[details:HAS_ORDER_PRODUCT]->(p:Product)-[:HAS_INVENTORY_LEVEL]->(inv:InventoryLevel), (p)<-[:IS_AVAILABLE_PRODUCT]-(a:ProductStatusAvailablE)
 WHERE details.Quantity > inv.UnitsInStock
 WITH p, inv, count(DISTINCT o) AS BlockedOrders, sum(details.Quantity - inv.UnitsInStock) AS TotalUnitsShort
 OPTIONAL MATCH (po:PurchaseOrder)-[:HAS_PO_ITEM]->(p)
@@ -1437,7 +1455,7 @@ LIMIT 5;
 // To visualize the Product's Inventory Levels, Supply Orders (RFQ Approved) pending fulfillment, Stock Threshold, Open Customer Orders, 
 // and Open PO's to resupply from Today on the Graph console, use the following query:
   // Product Supply/Demand Dashboard -- one row per Product, ordered by name
-  MATCH ()-[:IS_AVAILABLE_PRODUCT]-(p:Product)-[:HAS_INVENTORY_LEVEL]->(inv:InventoryLevel),
+  MATCH ()-[:IS_AVAILABLE_PRODUCT]->(p:Product)-[:HAS_INVENTORY_LEVEL]->(inv:InventoryLevel),
         (p)-[:HAS_REORDER_LEVEL]->(r:ReorderLevel),
         (p)-[:HAS_SUPPLY_ORDER]->(suo:OrderLevel)
   // Open Customer Order demand for this Product
@@ -1479,16 +1497,42 @@ WHERE TotalLines = LinesWithStock
 WITH inv, details, op, p, r, o ORDER BY o.OrderID, o.OrderDate LIMIT 100  
 RETURN o.OrderID, o.OrderDate, p.ProductName, inv.UnitsInStock, details.Quantity;
 
-//** Invemtory concurrency test **
+// PO Creation - TEST QUERY — no writes, inspect the reorder logic per product
+// This is the logic that the PO Creation process uses to determine if a Product needs to be reordered and how much to order.
+MATCH (s:Supplier)-[:SUPPLIES]->(p:Product)<-[:IS_AVAILABLE_PRODUCT]-(a:ProductStatusAvailablE),
+  (r:ReorderLevel)<-[:HAS_REORDER_LEVEL]-(p)-[:HAS_INVENTORY_LEVEL]->(i:InventoryLevel)
+OPTIONAL MATCH (activePO:PurchaseOrder)-[poi2:HAS_PO_ITEM]->(p)
+WHERE (activePO)<-[:IS_NEW_PO_STATE]-(:NewPoS)
+   OR (activePO)<-[:IS_APPROVED_PO_STATE]-(:ApprovedPoS)
+   OR (activePO)<-[:IS_SUBMITTED_PO_STATE]-(:SubmittedPoS)
+WITH s, p, r, i, SUM(coalesce(poi2.POqt, 0)) AS AlreadyPendingQty
+OPTIONAL MATCH (p)<-[op:HAS_ORDER_PRODUCT]-(:Order)<-[:IS_OPEN_ORDER_STATE]-()
+WITH s, p, r, i, AlreadyPendingQty, SUM(coalesce(op.Quantity, 0)) AS OpenOrderQty
+WITH s, p, r, i, AlreadyPendingQty, OpenOrderQty,
+     i.UnitsInStock + AlreadyPendingQty - OpenOrderQty AS EffectiveAvailable
+RETURN
+  p.ProductID AS ProductID,
+  p.ProductName AS ProductName,
+  s.SupplierID AS SupplierID,
+  i.UnitsInStock AS UnitsInStock,
+  AlreadyPendingQty,
+  OpenOrderQty,
+  EffectiveAvailable,
+  r.StockThreshold AS StockThreshold,
+  (EffectiveAvailable - (r.StockThreshold * 0.5) <= r.StockThreshold) AS WouldTriggerReorder,
+  (r.StockThreshold - EffectiveAvailable + (r.StockThreshold * 2)) AS WouldOrderQty
+ORDER BY WouldTriggerReorder DESC, ProductID;
+
+//** Inventory concurrency test **
 // Run the Python script that fulfills Open Customer Orders (python NorthwindPlus_Stress_Test.py --loop order-fulfillment --rate 4 &) in multiple windows to see how the system handles concurrent fulfillment of the same Order.
 // As it runs, run the following query to see if the stock levels are being updated correctly and no one goes below zero.
 
 //Products with Low (<10) Inventory 
-MATCH (p:Product)-[:HAS_INVENTORY_LEVEL]->(i) WHERE i.UnitsInStock < 10 RETURN p.ProductName, i.UnitsInStock;
+MATCH ()-[:IS_AVAILABLE_PRODUCT]->(p:Product)-[:HAS_INVENTORY_LEVEL]->(i) WHERE i.UnitsInStock < 10 RETURN p.ProductName, i.UnitsInStock;
 
 // If too many products are below 10 units in stock, you can run the following query to restock them (for demonstration purposes only).
 // Cheat the system  - Increment the stock of all products by 50 units to simulate a restock event (for demonstration purposes).
-MATCH (p:Product)-[:HAS_INVENTORY_LEVEL]->(i) SET i.UnitsInStock = i.UnitsInStock+50;
+MATCH ()-[:IS_AVAILABLE_PRODUCT]->(p:Product)-[:HAS_INVENTORY_LEVEL]->(i) SET i.UnitsInStock = i.UnitsInStock+50;
 
 
 // Visualize the schema
