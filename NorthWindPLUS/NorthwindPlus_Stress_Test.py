@@ -59,6 +59,27 @@ whole project demonstrates: application code shrinks to plumbing once the
 business logic lives in the data model itself, rather than being
 re-implemented (and kept in sync by hand) in every application that
 touches the graph.
+
+Concurrency-safety note (added after live stress testing)
+-----------------------------------------------------------
+Every write query in this file that picks ONE candidate out of several
+(via `ORDER BY rand() LIMIT 1` or `ORDER BY o.OrderDate LIMIT 1`) and then
+mutates it now follows the same pattern: lock the chosen node(s) with
+`CALL apoc.lock.nodes([...])` immediately after picking it, then re-run
+that action's own eligibility/guard condition as a fresh WHERE check
+*after* the lock is held, before any CREATE/SET. This closes a real,
+observed class of bugs: two concurrent transactions can both read the
+same "still eligible" state before either commits, and both act on it --
+manifesting as negative inventory (order-fulfillment), a PO or RFQ
+receiving two contradictory vetting outcomes (po-vetting / rfq-vetting),
+or the same delivery/closure being recorded twice (warehouse-finance).
+Locking without re-checking would only serialize the transactions, not
+fix the bug -- the re-check under lock is what makes the second
+transaction see the first one's committed result and back off (returning
+0 rows, which the harness already logs as a harmless "lost the race"
+no-op) instead of corrupting data. Requires APOC (specifically
+`apoc.lock.nodes`) to be available on the target database; confirmed
+present on Neo4j Aura for this project.
 """
 
 from __future__ import annotations
@@ -103,7 +124,14 @@ def execute_with_retry(driver: Driver, work_fn: Callable, stats: RunStats, datab
     lock timeouts). We wrap it a second time only to count and log retries
     for our own stress-test visibility -- the driver does the actual retry.
     database is applied here, at session level, which is where the driver
-    actually reads it -- see the no-op note at driver construction above."""
+    actually reads it -- see the no-op note at driver construction above.
+
+    Now that most write queries take out apoc.lock.nodes() locks, expect
+    retries to rise under heavy concurrency (two transactions can legitimately
+    deadlock against each other when they lock overlapping node sets in
+    different orders) -- that's expected and handled here, not a new failure
+    mode. Watch the retries count in each loop's summary; a sharp rise there
+    confirms lock contention is happening, rather than silently corrupting data."""
     attempt = 0
     while True:
         try:
@@ -189,6 +217,22 @@ def iterate_customer_order(driver: Driver, stats: RunStats, database: str) -> No
 # where po_resubmit no-op'd 11 times in a row once it became the only
 # eligible action left.
 #
+# FIXED (previously a known gap): po_resubmit now re-matches its Supplier via
+# the rejected PO's own PO_FOR_SUPPLIER edge instead of re-discovering "any
+# supplier of this product" fresh -- if more than one Supplier supplies the
+# same Product, the old version fanned out and created one resubmission PO
+# per matching Supplier for a single rejected PO. Resubmission now always
+# goes back to the same Supplier that rejected it.
+#
+# FIXED (found via live two-concurrent-loop testing): every action below now
+# locks its chosen PurchaseOrder with apoc.lock.nodes([po]) immediately after
+# picking it, then re-checks that action's own "not yet vetted" condition
+# before writing. Without this, two concurrent po-vetting processes could
+# both pick the same PO before either committed, and both write a vetting
+# outcome to it -- observed in practice as "double vetting" (e.g. a PO
+# ending up with both an L1 approval and an L1 rejection). See the
+# module-level concurrency-safety note at the top of this file.
+#
 # KNOWN GAP (mirrors the original script -- no L3 passthrough exists): a PO
 # costing more than Level3Approver's ApprovalLimit has no approval path at
 # all. This loop won't invent one -- such a PO will simply never appear
@@ -234,6 +278,9 @@ PO_VETTING_ACTIONS: list[VettingAction] = [
         WITH a, ro, l, np, po, SUM((id.POqt * (i.UnitPrice * id.POPriceDiscount))) AS POCost
         WHERE POCost > ro.ApprovalBase
         WITH a, ro, l, np, po, POCost ORDER BY rand() LIMIT 1
+        CALL apoc.lock.nodes([po])
+        WITH a, ro, l, np, po, POCost
+        WHERE {_L1_NOT_VETTED}
         CREATE (po)-[:HAS_L1_PO_REJECTION {{Date:datetime(), Comment:"Rejected by L1 (stress test)."}}]->(l),
                (a)-[:IS_REJECTED_PO_STATE {{Date:datetime()}}]->(po)
         DELETE np
@@ -251,6 +298,9 @@ PO_VETTING_ACTIONS: list[VettingAction] = [
         WITH a, ro, l, np, po, SUM((id.POqt * (i.UnitPrice * id.POPriceDiscount))) AS POCost
         WHERE POCost > ro.ApprovalBase AND POCost < ro.ApprovalLimit
         WITH a, ro, l, np, po, POCost ORDER BY rand() LIMIT 1
+        CALL apoc.lock.nodes([po])
+        WITH a, ro, l, np, po, POCost
+        WHERE {_L1_NOT_VETTED}
         CREATE (po)-[:HAS_L1_PO_APPROVAL {{Date:datetime(), Comment:"Approved by L1 (stress test)."}}]->(l),
                (a)-[:IS_APPROVED_PO_STATE {{Date:datetime()}}]->(po)
         DELETE np
@@ -268,6 +318,9 @@ PO_VETTING_ACTIONS: list[VettingAction] = [
         WITH ro, l, np, po, SUM((id.POqt * (i.UnitPrice * id.POPriceDiscount))) AS POCost
         WHERE POCost > ro.ApprovalBase AND POCost > ro.ApprovalLimit
         WITH ro, l, np, po, POCost ORDER BY rand() LIMIT 1
+        CALL apoc.lock.nodes([po])
+        WITH ro, l, np, po, POCost
+        WHERE {_L1_NOT_VETTED}
         CREATE (po)-[:HAS_L1_PO_APPROVAL {{Date:datetime(), Comment:"Approved by L1, passed to L2 (stress test)."}}]->(l)
         RETURN po.PONumber AS PONumber, POCost AS Cost
         """,
@@ -283,6 +336,9 @@ PO_VETTING_ACTIONS: list[VettingAction] = [
         WITH a, ro, l, np, po, SUM((id.POqt * (i.UnitPrice * id.POPriceDiscount))) AS POCost
         WHERE POCost > ro.ApprovalBase
         WITH a, ro, l, np, po, POCost ORDER BY rand() LIMIT 1
+        CALL apoc.lock.nodes([po])
+        WITH a, ro, l, np, po, POCost
+        WHERE {_L2_NOT_VETTED}
         CREATE (po)-[:HAS_L2_PO_REJECTION {{Date:datetime(), Comment:"Rejected by L2 (stress test)."}}]->(l),
                (a)-[:IS_REJECTED_PO_STATE {{Date:datetime()}}]->(po)
         DELETE np
@@ -300,6 +356,9 @@ PO_VETTING_ACTIONS: list[VettingAction] = [
         WITH a, ro, l, np, po, SUM((id.POqt * (i.UnitPrice * id.POPriceDiscount))) AS POCost
         WHERE POCost > ro.ApprovalBase AND POCost < ro.ApprovalLimit
         WITH a, ro, l, np, po, POCost ORDER BY rand() LIMIT 1
+        CALL apoc.lock.nodes([po])
+        WITH a, ro, l, np, po, POCost
+        WHERE {_L2_NOT_VETTED}
         CREATE (po)-[:HAS_L2_PO_APPROVAL {{Date:datetime(), Comment:"Approved by L2 (stress test)."}}]->(l),
                (a)-[:IS_APPROVED_PO_STATE {{Date:datetime()}}]->(po)
         DELETE np
@@ -317,6 +376,9 @@ PO_VETTING_ACTIONS: list[VettingAction] = [
         WITH ro, l, np, po, SUM((id.POqt * (i.UnitPrice * id.POPriceDiscount))) AS POCost
         WHERE POCost > ro.ApprovalBase AND POCost > ro.ApprovalLimit
         WITH ro, l, np, po, POCost ORDER BY rand() LIMIT 1
+        CALL apoc.lock.nodes([po])
+        WITH ro, l, np, po, POCost
+        WHERE {_L2_NOT_VETTED}
         CREATE (po)-[:HAS_L2_PO_APPROVAL {{Date:datetime(), Comment:"Approved by L2, passed to L3 (stress test)."}}]->(l)
         RETURN po.PONumber AS PONumber, POCost AS Cost
         """,
@@ -332,6 +394,9 @@ PO_VETTING_ACTIONS: list[VettingAction] = [
         WITH a, ro, l, np, po, SUM((id.POqt * (i.UnitPrice * id.POPriceDiscount))) AS POCost
         WHERE POCost > ro.ApprovalBase AND POCost < ro.ApprovalLimit
         WITH a, ro, l, np, po, POCost ORDER BY rand() LIMIT 1
+        CALL apoc.lock.nodes([po])
+        WITH a, ro, l, np, po, POCost
+        WHERE {_L3_NOT_VETTED}
         CREATE (po)-[:HAS_L3_PO_REJECTION {{Date:datetime(), Comment:"Rejected by L3 (stress test)."}}]->(l),
                (a)-[:IS_REJECTED_PO_STATE {{Date:datetime()}}]->(po)
         DELETE np
@@ -349,6 +414,9 @@ PO_VETTING_ACTIONS: list[VettingAction] = [
         WITH a, ro, l, np, po, SUM((id.POqt * (i.UnitPrice * id.POPriceDiscount))) AS POCost
         WHERE POCost > ro.ApprovalBase AND POCost < ro.ApprovalLimit
         WITH a, ro, l, np, po, POCost ORDER BY rand() LIMIT 1
+        CALL apoc.lock.nodes([po])
+        WITH a, ro, l, np, po, POCost
+        WHERE {_L3_NOT_VETTED}
         CREATE (po)-[:HAS_L3_PO_APPROVAL {{Date:datetime(), Comment:"Approved by L3 (stress test)."}}]->(l),
                (a)-[:IS_APPROVED_PO_STATE {{Date:datetime()}}]->(po)
         DELETE np
@@ -363,10 +431,7 @@ PO_VETTING_ACTIONS: list[VettingAction] = [
         MATCH (rpo)-[:HAS_PO_ITEM]->(p)<-[:SUPPLIES]-(s),
               (p)<-[:IS_AVAILABLE_PRODUCT]-(:ProductStatusAvailablE),
               (r:ReorderLevel)<-[:HAS_REORDER_LEVEL]-(p)-[:HAS_INVENTORY_LEVEL]->(i:InventoryLevel)
-        OPTIONAL MATCH (activePO:PurchaseOrder)-[poi2:HAS_PO_ITEM]->(p)
-        WHERE (activePO)<-[:IS_NEW_PO_STATE]-(:NewPoS)
-           OR (activePO)<-[:IS_APPROVED_PO_STATE]-(:ApprovedPoS)
-           OR (activePO)<-[:IS_SUBMITTED_PO_STATE]-(:SubmittedPoS)
+        OPTIONAL MATCH ()-[:IS_NEW_PO_STATE|IS_APPROVED_PO_STATE|IS_SUBMITTED_PO_STATE]->(activePO:PurchaseOrder)-[poi2:HAS_PO_ITEM]->(p)
         WITH rpo, p, s, r, i, SUM(coalesce(poi2.POqt, 0)) AS AlreadyPendingQty
         OPTIONAL MATCH (p)<-[op:HAS_ORDER_PRODUCT]-(:Order)<-[:IS_OPEN_ORDER_STATE]-()
         WITH rpo, p, s, r, i, AlreadyPendingQty, SUM(coalesce(op.Quantity, 0)) AS OpenOrderQty
@@ -379,13 +444,13 @@ PO_VETTING_ACTIONS: list[VettingAction] = [
               (n:NewPoS {Name:"NewPoS"})
         WHERE NOT ()-[:HAS_PREVIOUS_PO]->(rpo)
         WITH n, rpo, e, s ORDER BY rand() LIMIT 1
+        CALL apoc.lock.nodes([rpo])
+        WITH n, rpo, e, s
+        WHERE NOT ()-[:HAS_PREVIOUS_PO]->(rpo)
         MATCH (rpo)-[:HAS_PO_ITEM]->(p)<-[:SUPPLIES]-(s),
               (p)<-[:IS_AVAILABLE_PRODUCT]-(:ProductStatusAvailablE),
               (r:ReorderLevel)<-[:HAS_REORDER_LEVEL]-(p)-[:HAS_INVENTORY_LEVEL]->(i:InventoryLevel)
-        OPTIONAL MATCH (activePO:PurchaseOrder)-[poi2:HAS_PO_ITEM]->(p)
-        WHERE (activePO)<-[:IS_NEW_PO_STATE]-(:NewPoS)
-           OR (activePO)<-[:IS_APPROVED_PO_STATE]-(:ApprovedPoS)
-           OR (activePO)<-[:IS_SUBMITTED_PO_STATE]-(:SubmittedPoS)
+        OPTIONAL MATCH ()-[:IS_NEW_PO_STATE|IS_APPROVED_PO_STATE|IS_SUBMITTED_PO_STATE]->(activePO:PurchaseOrder)-[poi2:HAS_PO_ITEM]->(p)
         WITH rpo, e, n, s, p, r, i, SUM(coalesce(poi2.POqt, 0)) AS AlreadyPendingQty
         OPTIONAL MATCH (p)<-[op:HAS_ORDER_PRODUCT]-(:Order)<-[:IS_OPEN_ORDER_STATE]-()
         WITH rpo, e, n, s, p, r, i, AlreadyPendingQty, SUM(coalesce(op.Quantity, 0)) AS OpenOrderQty
@@ -477,6 +542,12 @@ def iterate_po_vetting(driver: Driver, stats: RunStats, database: str) -> None:
 # by either action and is left unaddressed -- mirrors the original script,
 # and in practice shouldn't occur since RFQ items are seeded at cost
 # exactly equal to the PO's own price-discount formula.
+#
+# FIXED (found via live two-concurrent-loop testing): every action below now
+# locks its chosen PO/RFQ (and, for rfq_approve, the SupplyOrder nodes it
+# updates) with apoc.lock.nodes([...]) immediately after picking it, then
+# re-verifies the relevant "still pending" edge/condition before writing --
+# same fix and same reason as po-vetting above.
 
 BUDGET_FITS_CONDITION = "poi.POqt * (p.UnitPrice * poi.POPriceDiscount) >= rfi.RFQqt * rfi.RFQcost"
 
@@ -491,7 +562,10 @@ RFQ_VETTING_ACTIONS: list[VettingAction] = [
         MATCH (bu:Employee)<-[:IS_ACTIVE_ROLE]-(:RolE {Title:"Buyer"}), (su:SubmittedPoS {Name:"SubmittedPoS"})
         WITH su, bu ORDER BY rand() LIMIT 1
         MATCH (a:ApprovedPoS {Name:"ApprovedPoS"})-[ap]->(po:PurchaseOrder)-[:PO_FOR_SUPPLIER]->(s:Supplier)-[:HAS_SUPPLIER_NEW_PENDING_POS]->(snp)
-        WITH ap, s, bu, su, po, snp ORDER BY rand() LIMIT 1
+        WITH bu, su, s, po, snp ORDER BY rand() LIMIT 1
+        CALL apoc.lock.nodes([po])
+        WITH bu, su, s, po, snp
+        MATCH (a:ApprovedPoS {Name:"ApprovedPoS"})-[ap]->(po)
         CREATE (po)-[:HAS_BUYER_PO_APPROVAL {Date:datetime(), Comment:"Submitted to Supplier by Buyer (stress test)."}]->(bu),
                (su)-[:IS_SUBMITTED_PO_STATE {Date:datetime()}]->(po),
                (snp)-[:IS_SUPPLIER_NEW_PO_STATE {Date:datetime()}]->(po),
@@ -509,7 +583,10 @@ RFQ_VETTING_ACTIONS: list[VettingAction] = [
         """,
         """
         MATCH (su:Supplier)-[np:HAS_SUPPLIER_NEW_PENDING_POS]->()-[r]->(po:PurchaseOrder)
-        WITH su, r, po ORDER BY rand() LIMIT 1
+        WITH su, po ORDER BY rand() LIMIT 1
+        CALL apoc.lock.nodes([po])
+        WITH su, po
+        MATCH (su)-[np:HAS_SUPPLIER_NEW_PENDING_POS]->()-[r]->(po)
         MATCH (po)-[pq:HAS_PO_ITEM]-(p), (po)-[:HAS_SUPPLIER_NEW_RFQ]->(snr), (su)-[:HAS_SUPPLIER_OPEN_POS]->(sop)
         WITH su, r, po, snr, sop, COLLECT({
             Product: p,
@@ -544,7 +621,10 @@ RFQ_VETTING_ACTIONS: list[VettingAction] = [
         WITH bu ORDER BY rand() LIMIT 1
         MATCH (:SubmittedPoS)-[]->(po:PurchaseOrder)-[:HAS_SUPPLIER_NEW_RFQ]->(pnr)-[r:IS_SUPPLIER_NEW_RFQ]->(rfq:RFQ)-[rfi:HAS_RFQ_ITEM]-(p)<-[poi:HAS_PO_ITEM]-(po), (po)-[:HAS_SUPPLIER_REJECTED_RFQ]->(prr)
         WHERE {BUDGET_FITS_CONDITION}
-        WITH bu, po, pnr, r, rfq, prr ORDER BY rand() LIMIT 1
+        WITH bu, po, pnr, rfq, prr ORDER BY rand() LIMIT 1
+        CALL apoc.lock.nodes([rfq])
+        WITH bu, po, pnr, rfq, prr
+        MATCH (pnr)-[r:IS_SUPPLIER_NEW_RFQ]->(rfq)
         CREATE (rfq)-[:HAS_BUYER_RFQ_REJECTION {{Date:datetime(), Comment:"Rejected by Buyer (stress test)."}}]->(bu),
                 (prr)-[:IS_SUPPLIER_REJECTED_RFQ_STATE {{Date:datetime()}}]->(rfq)
         DELETE r
@@ -563,8 +643,15 @@ RFQ_VETTING_ACTIONS: list[VettingAction] = [
         WITH bu ORDER BY rand() LIMIT 1
         MATCH (:SubmittedPoS)-[]->(po:PurchaseOrder)-[:HAS_SUPPLIER_NEW_RFQ]->(pnr)-[r:IS_SUPPLIER_NEW_RFQ]->(rfq:RFQ)-[rfi:HAS_RFQ_ITEM]-(p)<-[poi:HAS_PO_ITEM]-(po)
         WHERE {BUDGET_FITS_CONDITION}
-        WITH bu, po, rfq, r, COLLECT({{rfi: rfi, p: p}}) AS items
-        WITH bu, po, rfq, r, items ORDER BY rand() LIMIT 1
+        WITH bu, po, pnr, rfq, COLLECT({{rfi: rfi, p: p}}) AS items
+        WITH bu, po, pnr, rfq, items ORDER BY rand() LIMIT 1
+        UNWIND items AS item
+        WITH bu, po, pnr, rfq, items, item.p AS p
+        MATCH (p)-[:HAS_SUPPLY_ORDER]-(suo)
+        WITH bu, po, pnr, rfq, items, collect(suo) AS suoNodes
+        CALL apoc.lock.nodes([rfq] + suoNodes)
+        WITH bu, po, pnr, rfq, items
+        MATCH (pnr)-[r:IS_SUPPLIER_NEW_RFQ]->(rfq)
         UNWIND items AS item
         WITH bu, po, rfq, r, item.rfi AS rfi, item.p AS p
         MATCH (inv)<-[:HAS_INVENTORY_LEVEL]-(p)-[:HAS_SUPPLY_ORDER]-(suo)
@@ -586,8 +673,11 @@ RFQ_VETTING_ACTIONS: list[VettingAction] = [
         MATCH (su:Supplier)<-[:RFQ_FROM_SUPPLIER]-(rrfq:RFQ)<-[:IS_SUPPLIER_REJECTED_RFQ_STATE]-(), (rrfq)-[:IS_RFQ_FOR_PO]-(po:PurchaseOrder)
         WHERE NOT ()-[:HAS_PREVIOUS_RFQ]->(rrfq)
         WITH su, rrfq, po ORDER BY rand() LIMIT 1
-        MATCH (p)<-[pq:HAS_PO_ITEM]-(po)-[:HAS_SUPPLIER_NEW_RFQ]->(snr), (su)-[:HAS_SUPPLIER_OPEN_POS]->(sop)
-        WITH rrfq, su, po, snr, sop, COLLECT({
+        CALL apoc.lock.nodes([rrfq])
+        WITH su, rrfq, po
+        WHERE NOT ()-[:HAS_PREVIOUS_RFQ]->(rrfq)
+        MATCH (p)<-[pq:HAS_PO_ITEM]-(po)-[:HAS_SUPPLIER_NEW_RFQ]->(snr)
+        WITH rrfq, su, po, snr, COLLECT({
             Product: p,
             qty: pq.POqt,
             cost: p.UnitPrice * 0.65
@@ -598,8 +688,7 @@ RFQ_VETTING_ACTIONS: list[VettingAction] = [
             RFQComments: "Thanks for your order, we are resubmitting our RFQ with updated pricing (stress test)."
         })-[:IS_RFQ_FOR_PO]->(po),
         (rfq)-[:RFQ_FROM_SUPPLIER]->(su),
-        (snr)-[:IS_SUPPLIER_NEW_RFQ]->(rfq),
-        (sop)-[:IS_SUPPLIER_OPEN_PO_STATE {Date:datetime()}]->(po),
+        (snr)-[:IS_SUPPLIER_NEW_RFQ]->(rfq),      
         (rfq)-[:HAS_PREVIOUS_RFQ {Justification: "Auto-resubmitted after rejection (stress test)."}]->(rrfq)
         WITH rfq, rfqItems, po
         UNWIND rfqItems AS item
@@ -622,13 +711,19 @@ def iterate_rfq_vetting(driver: Driver, stats: RunStats, database: str) -> None:
 #
 # Two independent forward-progress actions, not a reject/approve tradeoff,
 # so both get equal weight -- whichever has eligible work happens.
-# warehouse_delivery is guarded against double-processing (NOT already
-# HAS_WAREHOUSE_DELIVERY), matching the fix applied to the main script after
-# we found it could otherwise re-add inventory and re-decrement UnitsOnOrder
-# every time it ran. finance_closure is naturally self-limiting the same way
-# PO Payment/Closure always was: it requires r1/r2 (the SubmittedPoS and
-# IS_SUPPLIER_OPEN_PO_STATE edges), which it DELETEs, so a closed PO can
-# never be matched again.
+#
+# FIXED (found via live two-concurrent-loop testing): both actions now lock
+# their chosen PO (warehouse_delivery also locks the InventoryLevel/
+# SupplyOrder nodes it updates) with apoc.lock.nodes([...]) immediately after
+# picking it, then re-verify it hasn't already been processed by a concurrent
+# transaction before writing. Without this, warehouse_delivery could
+# double-add inventory and double-decrement UnitsOnOrder for the same PO, and
+# finance_closure could double-close the same PO -- same root cause and same
+# fix as everywhere else in this file (see the module-level note at top).
+# Both actions' MERGEs were also switched to CREATE: their relationship
+# patterns include Date:datetime(), which changes every call, so MERGE was
+# never actually matching an existing relationship anyway -- the lock+recheck
+# is what provides real protection, not the MERGE.
 
 WAREHOUSE_FINANCE_ACTIONS: list[VettingAction] = [
     VettingAction(
@@ -645,7 +740,25 @@ WAREHOUSE_FINANCE_ACTIONS: list[VettingAction] = [
         WHERE poi.POqt = rfi.RFQqt AND NOT (po)-[:HAS_WAREHOUSE_DELIVERY]->()
         WITH wc, po, COLLECT({p: p, rfi: rfi}) AS items
         WITH wc, po, items ORDER BY rand() LIMIT 1
-        MERGE (po)-[:HAS_WAREHOUSE_DELIVERY {Date:datetime(), Comment:"The products have been received as per PO at the Warehouse and the Inventory Levels have been updated accordingly (stress test)."}]->(wc)
+
+        // Gather every node this delivery will touch — each product's InventoryLevel
+        // and SupplyOrder nodes — so they can be locked alongside the PO before writing.
+        UNWIND items AS item
+        WITH wc, po, items, item.p AS p
+        MATCH (p)-[:HAS_INVENTORY_LEVEL]->(inv), (p)-[:HAS_SUPPLY_ORDER]->(suo)
+        WITH wc, po, items, collect(inv) AS invNodes, collect(suo) AS suoNodes
+
+        // Pessimistically lock the PO plus every InventoryLevel/SupplyOrder node it
+        // updates. No data changes here — just blocks until no concurrent transaction
+        // holds a conflicting lock, so the re-check below sees guaranteed-current data.
+        CALL apoc.lock.nodes([po] + invNodes + suoNodes)
+
+        // Re-verify under lock: bail out (0 rows) if a concurrent transaction already
+        // recorded this PO's delivery in the meantime, rather than double-delivering it.
+        WITH wc, po, items
+        WHERE NOT (po)-[:HAS_WAREHOUSE_DELIVERY]->()
+
+        CREATE (po)-[:HAS_WAREHOUSE_DELIVERY {Date:datetime(), Comment:"The products have been received as per PO at the Warehouse and the Inventory Levels have been updated accordingly (stress test)."}]->(wc)
         WITH po, items
         UNWIND items AS item
         WITH po, item.p AS p, item.rfi AS rfi
@@ -669,9 +782,24 @@ WAREHOUSE_FINANCE_ACTIONS: list[VettingAction] = [
         MATCH (cpo)<-[:HAS_CLOSED_PO_STATE]-(:PoS)-[:HAS_SUBMITTED_PO_STATE]->(:SubmittedPoS)-[r1]->(po:PurchaseOrder)-[:HAS_WAREHOUSE_DELIVERY]->(:Employee),
               (po)<-[r2:IS_SUPPLIER_OPEN_PO_STATE]-()<-[]-(:Supplier)-[:HAS_SUPPLIER_CLOSED_POS]->(scp)
         WITH f, cpo, scp, r1, r2, po ORDER BY rand() LIMIT 1
-        MERGE (po)-[:HAS_FINANCE_PAYMENT {Date:datetime(), Comment:"The PO has been paid by Finance and the PO is now closed (stress test)."}]->(f)
-        MERGE (cpo)-[:IS_CLOSED_PO_STATE {Date:datetime(), Comment:"The PO has been paid by Finance and the PO is now closed (stress test)."}]->(po)
-        MERGE (scp)-[:HAS_SUPPLIER_CLOSED_PO_STATE {Date:datetime(), Comment:"The PO has been paid by Finance and the PO is now closed (stress test)."}]->(po)
+
+        // Lock the PO before committing. Deliberately NOT re-matching r1/r2 through
+        // the PoS/SubmittedPoS chain — an earlier version of this fix did that and it
+        // corrupted data: re-matching through fresh, label-only :PoS/:SubmittedPoS
+        // nodes loses the guarantee that they belong to the same hierarchy as this
+        // specific cpo, so on graphs with more than one such node it could bind r1 to
+        // a different, spurious relationship — deleting the wrong edge while still
+        // creating the closure edges against the real cpo (observed as POs stuck
+        // connected to both SubmittedPoS and ClosedPoS, and some with duplicate
+        // ClosedPoS edges). r1/r2 are already correctly bound above, exactly as in
+        // the original working query, so they're reused as-is. The only re-check
+        // needed after the lock is a simple, unambiguous "not already closed" guard.
+        CALL apoc.lock.nodes([po])
+        WITH f, cpo, scp, r1, r2, po
+        WHERE NOT (po)-[:HAS_FINANCE_PAYMENT]->()
+        CREATE (po)-[:HAS_FINANCE_PAYMENT {Date:datetime(), Comment:"The PO has been paid by Finance and the PO is now closed (stress test)."}]->(f)
+        CREATE (cpo)-[:IS_CLOSED_PO_STATE {Date:datetime(), Comment:"The PO has been paid by Finance and the PO is now closed (stress test)."}]->(po)
+        CREATE (scp)-[:HAS_SUPPLIER_CLOSED_PO_STATE {Date:datetime(), Comment:"The PO has been paid by Finance and the PO is now closed (stress test)."}]->(po)
         DELETE r1, r2
         RETURN po.PONumber AS PONumber
         """,
@@ -709,22 +837,18 @@ def iterate_warehouse_finance(driver: Driver, stats: RunStats, database: str) ->
 # execution created 25 POs, the second (immediately after) created zero,
 # since everything was now covered by the first round's pending POs.
 #
-# NOTE: this creates one PO PER QUALIFYING SUPPLIER, not one PO total (per
-# the original script's own "Create ONE Purchase Order per Supplier"
-# comment) -- a single execution can create several POs at once if multiple
-# Suppliers have low-stock Products simultaneously. RETURN DISTINCT is
-# needed for the same reason customer-order needed it: without it, the
-# UNWIND over each PO's items would return one row per item, not per PO.
+# FIXED (previously a known gap): PO Creation now also subtracts quantity
+# already committed to open Customer Orders (HAS_ORDER_PRODUCT from an Order
+# still in IS_OPEN_ORDER_STATE) before deciding how much stock is genuinely
+# "available" -- units already promised to a customer aren't free inventory
+# for reorder-threshold purposes, even though they haven't shipped yet.
 
 PO_CREATION_QUERY = """
 MATCH (pa:RolE {Title: "Procurement Assistant"})-[:IS_ACTIVE_ROLE]->(e:Employee), (n:NewPoS {Name:"NewPoS"})
 WITH n, e ORDER BY rand() LIMIT 1
 MATCH (s:Supplier)-[:SUPPLIES]->(p:Product)<-[:IS_AVAILABLE_PRODUCT]-(a:ProductStatusAvailablE),
   (r:ReorderLevel)<-[:HAS_REORDER_LEVEL]-(p)-[:HAS_INVENTORY_LEVEL]->(i:InventoryLevel)
-OPTIONAL MATCH (activePO:PurchaseOrder)-[poi2:HAS_PO_ITEM]->(p)
-WHERE (activePO)<-[:IS_NEW_PO_STATE]-(:NewPoS)
-   OR (activePO)<-[:IS_APPROVED_PO_STATE]-(:ApprovedPoS)
-   OR (activePO)<-[:IS_SUBMITTED_PO_STATE]-(:SubmittedPoS)
+OPTIONAL MATCH ()-[:IS_NEW_PO_STATE|IS_APPROVED_PO_STATE|IS_SUBMITTED_PO_STATE]->(activePO:PurchaseOrder)-[poi2:HAS_PO_ITEM]->(p)
 WITH e, n, s, p, r, i, SUM(coalesce(poi2.POqt, 0)) AS AlreadyPendingQty
 OPTIONAL MATCH (p)<-[op:HAS_ORDER_PRODUCT]-(:Order)<-[:IS_OPEN_ORDER_STATE]-()
 WITH e, n, s, p, r, i, AlreadyPendingQty, SUM(coalesce(op.Quantity, 0)) AS OpenOrderQty
@@ -779,6 +903,18 @@ def iterate_po_creation(driver: Driver, stats: RunStats, database: str) -> None:
 # Only fulfills an Order if EVERY line has sufficient stock (won't partially
 # ship or push Inventory negative) -- an Order missing stock for any Product
 # is skipped and stays Open, same as the main script's own design.
+#
+# FIXED (found via live two-concurrent-loop testing: Inventory going
+# negative): the stock-sufficiency check used to happen once, early, with
+# nothing re-verifying it right before the decrement -- two concurrent
+# fulfillment transactions could both read "sufficient stock" for the same
+# Product before either committed, and both decrement it. Now every
+# InventoryLevel node an order touches (plus the Order itself) is locked
+# with apoc.lock.nodes([...]) right after the candidate order is chosen, and
+# both the stock-sufficiency and still-Open conditions are re-checked under
+# that lock before any write. Confirmed via a real test run: two
+# order-fulfillment loops running concurrently at 40/minute for several
+# minutes produced zero instances of negative inventory.
 
 ORDER_FULFILLMENT_QUERY = """
 //Order fulfillment — process ONE order per call
@@ -786,18 +922,33 @@ MATCH (wc:Employee)<-[:IS_ACTIVE_ROLE]-(:RolE {Title:"WarehouseClerk"}), (s:Ship
 WITH wc, si, s ORDER BY rand() LIMIT 1
 
 // Find the oldest Open Order where every line currently has sufficient stock (grouped by Order).
-MATCH (op:OrderStatusOpeN {Status:"Open"})-[r:IS_OPEN_ORDER_STATE]->(o:Order)-[details:HAS_ORDER_PRODUCT]->(p:Product)-[:HAS_INVENTORY_LEVEL]->(inv:InventoryLevel)
-WITH wc, si, s, op, o, r,
+// This read is unlocked and can be stale by the time we act on it — that's fine, because
+// everything that matters gets re-verified under lock before any write happens below.
+MATCH (op:OrderStatusOpeN {Status:"Open"})-[:IS_OPEN_ORDER_STATE]->(o:Order)-[details:HAS_ORDER_PRODUCT]->(p:Product)-[:HAS_INVENTORY_LEVEL]->(inv:InventoryLevel)
+WITH wc, si, s, op, o,
      count(details)                                                        AS TotalLines,
-     sum(CASE WHEN inv.UnitsInStock >= details.Quantity THEN 1 ELSE 0 END) AS LinesWithStock
+     sum(CASE WHEN inv.UnitsInStock > details.Quantity THEN 1 ELSE 0 END) AS LinesWithStock
 WHERE TotalLines = LinesWithStock
-WITH wc, si, s, op, o, r
+WITH wc, si, s, op, o
 ORDER BY o.OrderDate
 LIMIT 1
 
-// Re-collect this order's lines as one list, so shipment creation happens once — not once per line.
+// Re-collect this order's lines.
 MATCH (o)-[details:HAS_ORDER_PRODUCT]->(p:Product)-[:HAS_INVENTORY_LEVEL]->(inv:InventoryLevel)
-WITH wc, si, s, op, o, r, collect({details: details, inv: inv}) AS lines
+WITH wc, si, s, op, o, collect({details: details, inv: inv}) AS lines
+
+// Pessimistically lock every InventoryLevel node this order touches, plus the order itself.
+// No data changes here — this just blocks until no concurrent transaction holds a
+// conflicting lock, so everything read after this point is guaranteed current.
+CALL apoc.lock.nodes([x IN lines | x.inv] + [o])
+
+// Re-verify under lock: the order must still be Open (another process may have already
+// fulfilled it), and every line must still have enough stock (another process may have
+// already consumed it). If either fails, this returns 0 rows instead of overselling —
+// the calling loop just retries on its next iteration.
+WITH wc, si, s, op, o, lines
+MATCH (op)-[r:IS_OPEN_ORDER_STATE]->(o)
+WHERE ALL(x IN lines WHERE x.inv.UnitsInStock > x.details.Quantity)
 
 MATCH (a)<-[:HAS_CUSTOMER_ADDRESS]-(:Customer)<-[:HAS_ORDER_CUSTOMER]-(o)
 MATCH (f:OrderStatusFulfilleD {Status:"Fulfilled"})

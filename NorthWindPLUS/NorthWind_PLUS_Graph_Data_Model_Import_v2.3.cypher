@@ -272,6 +272,7 @@ WHERE c.CustomerID = o.CustomerID
 MERGE (o)-[:HAS_ORDER_CUSTOMER]->(c);
 
 // We will create a ShipInfo Node to hold the shipment information and connect it to the Order and Shipper
+//** NOTE **:  We could have normalized the ShipName into a separate Node, but we will keep it as a property of the ShipInfo Node for simplicity.
 MATCH (n:Order), (s:Shipper)
 WHERE n.ShipVia = s.ShipperID 
 CREATE (n)-[:HAS_SHIPMENT_INFO]->(i:ShipInfo {ShippmentID:"SH-"+randomUUID(), ShipName:n.ShipName, ShippedDate:n.ShippedDate, Freight:n.Freight })
@@ -316,6 +317,10 @@ MATCH (o:OrderStatusOpeN {Status: "Open"}), (n:Order)-[:HAS_SHIPMENT_INFO]->(s:S
 WHERE s.ShippedDate = datetime("9999-12-31T00:00:00.000")
 CREATE (o)-[:IS_OPEN_ORDER_STATE]->(n);
 
+
+// Increment the stock of all products by 150 units to simulate a restock event before the simulation begins.
+// This should be done after the import to avoid any issues with the initial stock levels being too low for the simulation, resulting in old (original) Order backlogs and PO generation.
+MATCH (p:Product)-[:HAS_INVENTORY_LEVEL]->(i) SET i.UnitsInStock = i.UnitsInStock+150;
 
 //-- End of NorthWind Graph Data Model Import --//
 
@@ -407,8 +412,8 @@ MATCH (r:RoleS {Name:"RoleS"})
 	CREATE (r)-[:HAS_ROLE_TITLE]->(:RolE {Title:"Procurement Assistant", Description:"Procurement Assistant / Coordinator", Rules:"Submits purchase orders based on inventory level and demand, tracks deliveries, and coordinates day-to-day tactical tasks"}),
       (r)-[:HAS_ROLE_TITLE]->(:RolE {Title:"SupplierApprover", Description:"Supplier Approver", Rules:"Approves Suppliers in the System"}),
       (r)-[:HAS_ROLE_TITLE]->(:RolE {Title:"Level1Approver", ApprovalBase:0.00, ApprovalLimit:5000.00, Description:"Level 1 Approver", Rules:"Approves PO with a Budget < 5000.00"}),
-      (r)-[:HAS_ROLE_TITLE]->(:RolE {Title:"Level2Approver", ApprovalBase:5000.01, ApprovalLimit:25000.00, Description:"Level 2 Approver", Rules:"Approves PO with a Budget > 5000.01 and < 25000.00"}),
-      (r)-[:HAS_ROLE_TITLE]->(:RolE {Title:"Level3Approver", ApprovalBase:25000.01,ApprovalLimit:100000.00, Description:"Level 3 Approver", Rules:"Approves PO with a Budget > 25000.01 and < 100000.00"}),
+      (r)-[:HAS_ROLE_TITLE]->(:RolE {Title:"Level2Approver", ApprovalBase:5000.01, ApprovalLimit:12500.00, Description:"Level 2 Approver", Rules:"Approves PO with a Budget > 5000.01 and < 12500.00"}),
+      (r)-[:HAS_ROLE_TITLE]->(:RolE {Title:"Level3Approver", ApprovalBase:12500.01,ApprovalLimit:500000.00, Description:"Level 3 Approver", Rules:"Approves PO with a Budget > 12500.01 and < 500000.00"}),
       (r)-[:HAS_ROLE_TITLE]->(:RolE {Title:"Buyer" , Description:"Buyer / Purchasing Officer", Rules:"Manages specific product categories, handles routine vendor discovery, and executes purchase transactions."}),
       (r)-[:HAS_ROLE_TITLE]->(:RolE {Title:"WarehouseClerk", Description:"Warehouse Clerk", Rules:"Receives and inspects incoming shipments, updates inventory records, and ensures proper storage of goods."} ),
       (r)-[:HAS_ROLE_TITLE]->(:RolE {Title:"Finance", Description:"Finance Officer", Rules:"Manages financial transactions, processes payments, and maintains financial records."} );
@@ -570,17 +575,14 @@ MATCH (pa:RolE {Title: "Procurement Assistant"})-[:IS_ACTIVE_ROLE]->(e:Employee)
 WITH n, e ORDER BY rand() LIMIT 1                // Select a random Procurement Assistant to create the POs for the Suppliers whose Products have low Inventory Levels (nearing restock threashold level).
 MATCH (s:Supplier)-[:SUPPLIES]->(p:Product)<-[:IS_AVAILABLE_PRODUCT]-(a:ProductStatusAvailablE),  // Make sure the Product is available for sale and is supplied by the Supplier.
   (r:ReorderLevel)<-[:HAS_REORDER_LEVEL]-(p)-[:HAS_INVENTORY_LEVEL]->(i:InventoryLevel)
-OPTIONAL MATCH (activePO:PurchaseOrder)-[poi2:HAS_PO_ITEM]->(p)      // Check if there are any open POs for this Product that have not yet been fulfilled.
-WHERE (activePO)<-[:IS_NEW_PO_STATE]-(:NewPoS)
-   OR (activePO)<-[:IS_APPROVED_PO_STATE]-(:ApprovedPoS)
-   OR (activePO)<-[:IS_SUBMITTED_PO_STATE]-(:SubmittedPoS)
+OPTIONAL MATCH ()-[:IS_NEW_PO_STATE | IS_APPROVED_PO_STATE | IS_SUBMITTED_PO_STATE]->(activePO:PurchaseOrder)-[poi2:HAS_PO_ITEM]->(p)      // Check if there are any open POs for this Product that have not yet been fulfilled.
 WITH e, n, s, p, r, i, SUM(coalesce(poi2.POqt, 0)) AS AlreadyPendingQty
 OPTIONAL MATCH (p)<-[op:HAS_ORDER_PRODUCT]-(:Order)<-[:IS_OPEN_ORDER_STATE]-()    // Check if there are any open Customer Orders for this Product that have not yet been fulfilled.
 WITH e, n, s, p, r, i, AlreadyPendingQty, SUM(coalesce(op.Quantity, 0)) AS OpenOrderQty
 WHERE i.UnitsInStock + AlreadyPendingQty - OpenOrderQty - (r.StockThreshold * 0.5) <= r.StockThreshold   // Check if the Product's Inventory Level is below the Reorder Threshold level, taking into account any open POs and open Customer Orders.
 WITH e, n, s, COLLECT({
     Product: p,
-    qty: (r.StockThreshold) - (i.UnitsInStock + AlreadyPendingQty - OpenOrderQty) + (r.StockThreshold * 2)
+    qty: (r.StockThreshold) - (i.UnitsInStock + AlreadyPendingQty - OpenOrderQty) + (r.StockThreshold * 2) + 1  // Calculate the minimum order quantity based on the current stock level, the reorder threshold, and any open POs and open Customer Orders, plus 1 (minimum order quantity).
 }) AS orderItems
 CREATE (n)-[:IS_NEW_PO_STATE]->(po:PurchaseOrder {            // Create a new Purchase Order for the Supplier with the Products that have low Inventory Levels (nearing restock threashold level).
     PONumber: "PO-" + left(randomUUID(), 5) + right(randomUUID(), 5),
@@ -755,10 +757,7 @@ WITH n, rpo, e, s ORDER BY rand() LIMIT 1
 MATCH (rpo)-[:HAS_PO_ITEM]->(p)<-[:SUPPLIES]-(s),
       (p)<-[:IS_AVAILABLE_PRODUCT]-(:ProductStatusAvailablE),
       (r:ReorderLevel)<-[:HAS_REORDER_LEVEL]-(p)-[:HAS_INVENTORY_LEVEL]->(i:InventoryLevel)
-OPTIONAL MATCH (activePO:PurchaseOrder)-[poi2:HAS_PO_ITEM]->(p)
-WHERE (activePO)<-[:IS_NEW_PO_STATE]-(:NewPoS)
-OR (activePO)<-[:IS_APPROVED_PO_STATE]-(:ApprovedPoS)
-OR (activePO)<-[:IS_SUBMITTED_PO_STATE]-(:SubmittedPoS)
+OPTIONAL MATCH ()-[:IS_NEW_PO_STATE | IS_APPROVED_PO_STATE | IS_SUBMITTED_PO_STATE]->(activePO:PurchaseOrder)-[poi2:HAS_PO_ITEM]->(p)
 WITH rpo, e, n, s, p, r, i, SUM(coalesce(poi2.POqt, 0)) AS AlreadyPendingQty
 OPTIONAL MATCH (p)<-[op:HAS_ORDER_PRODUCT]-(:Order)<-[:IS_OPEN_ORDER_STATE]-()
 WITH rpo, e, n, s, p, r, i, AlreadyPendingQty, SUM(coalesce(op.Quantity, 0)) AS OpenOrderQty
@@ -869,8 +868,6 @@ DELETE r;
 
 // The Supplier can then submit another FRQ and just as we did with the PO, the new RFQ will point back to the rejected one for tracking.
 // For this demo we will have one radom suppier resubmit one RFQ and we will leave the other in the Rejected state pending resubmisson (so we caq query and find it)
-
-
 MATCH (su:Supplier)-[np:HAS_SUPPLIER_NEW_PENDING_POS]->()-[r]->(po)-[pq:HAS_PO_ITEM]-(p), (po)-[:HAS_SUPPLIER_NEW_RFQ]->(snr), (su)-[:HAS_SUPPLIER_OPEN_POS]->(sop) 
 WITH su, r, po, snr, sop, COLLECT({
     Product: p, 
@@ -944,23 +941,31 @@ RETURN po.PONumber, rfq.RFQNumber ,p.ProductID, poi.POqt, poi.POqt * (p.UnitPric
 //--------------------------------------------------------------------------------------------------------------------------------------------------------------//
 
 // For our Demo we will have one Supplier resubmit one RFQ that was rejected by the Buyer.
-MATCH (su:Supplier)<-[:RFQ_FROM_SUPPLIER]-(rrfq:RFQ)<-[:IS_SUPPLIER_REJECTED_RFQ_STATE]-(), (rrfq)-[:IS_RFQ_FOR_PO]-(po), (p)<-[pq:HAS_PO_ITEM]-(po)-[:HAS_SUPPLIER_NEW_RFQ]->(snr) 
-WITH rrfq, su, po, snr, COLLECT({
-    Product: p, 
-    qty: pq.POqt,              // The Supplier will enter the Quantity of products they will supply in the RFQ
-    cost: p.UnitPrice * 0.65   // The Supplier will enter the discount they will provide in their RFQ. As this is a resubmission, the Supplier will provide a better discount than the previous RFQ
-}) AS rfqItems ORDER BY rand() LIMIT 1  
-CREATE (rfq:RFQ {
-    RFQNumber: "RFQ-" + left(randomUUID(), 5) + right(randomUUID(), 5), 
-    RFQDate: datetime(), 
-    RFQComments: "Thanks for your order, we resubmitting our RFQ and hope weare able to supply the full PO product request at the discounted price negotiated on our master agreement"})-[:IS_RFQ_FOR_PO]->(po), // We create the RFQ
-(rfq)-[:RFQ_FROM_SUPPLIER]->(su),    // We connect the RFQ to the Suppier 
-(snr)-[:IS_SUPPLIER_NEW_RFQ]->(rfq),  // We place the RFQ in the PO's new RFQ state collection 
-(rfq)-[:HAS_PREVIOUS_RFQ {Justification: "This RFQ is a resubmission of the previous rejected RFQ. The Supplier has provided additional justification and/or updated pricing and/or updated product availability."}]->(rrfq)  // We connect the new RFQ to the previous rejected RFQ for tracking and auditing 
-WITH rfq, rfqItems
-UNWIND rfqItems AS item
-MATCH (p:Product {ProductID: item.Product.ProductID})
-MERGE (rfq)-[:HAS_RFQ_ITEM {RFQqt: item.qty, RFQcost: item.cost}]->(p);  // We add the RFQ data (product quantity and unit cost) in the Relationship of the RFQ
+        MATCH (su:Supplier)<-[:RFQ_FROM_SUPPLIER]-(rrfq:RFQ)<-[:IS_SUPPLIER_REJECTED_RFQ_STATE]-(), (rrfq)-[:IS_RFQ_FOR_PO]-(po:PurchaseOrder)
+        WHERE NOT ()-[:HAS_PREVIOUS_RFQ]->(rrfq)
+        WITH su, rrfq, po ORDER BY rand() LIMIT 1
+        CALL apoc.lock.nodes([rrfq])
+        WITH su, rrfq, po
+        WHERE NOT ()-[:HAS_PREVIOUS_RFQ]->(rrfq)
+        MATCH (p)<-[pq:HAS_PO_ITEM]-(po)-[:HAS_SUPPLIER_NEW_RFQ]->(snr)
+        WITH rrfq, su, po, snr, COLLECT({
+            Product: p,
+            qty: pq.POqt,             // The Supplier will enter the Quantity of products they will supply in the RFQ
+            cost: p.UnitPrice * 0.65  // The Supplier will enter the discount they will provide in their RFQ. As this is a resubmission, the Supplier will provide a better discount than the previous RFQ
+        }) AS rfqItems
+        CREATE (rfq:RFQ {
+            RFQNumber: "RFQ-" + left(randomUUID(), 5) + right(randomUUID(), 5),
+            RFQDate: datetime(),
+            RFQComments: "Thanks for your order, we resubmitting our RFQ and hope weare able to supply the full PO product request at the discounted price negotiated on our master agreement"
+        })-[:IS_RFQ_FOR_PO]->(po),
+        (rfq)-[:RFQ_FROM_SUPPLIER]->(su),         // We connect the RFQ to the Suppier 
+        (snr)-[:IS_SUPPLIER_NEW_RFQ]->(rfq),      // We place the RFQ in the PO's new RFQ state collection 
+        (rfq)-[:HAS_PREVIOUS_RFQ {Justification: "This RFQ is a resubmission of the previous rejected RFQ. The Supplier has provided additional justification and/or updated pricing and/or updated product availability."}]->(rrfq)
+        WITH rfq, rfqItems, po
+        UNWIND rfqItems AS item
+        MATCH (p:Product {ProductID: item.Product.ProductID})
+        MERGE (rfq)-[:HAS_RFQ_ITEM {RFQqt: item.qty, RFQcost: item.cost}]->(p)  // We add the RFQ data (product quantity and unit cost) in the Relationship of the RFQ
+        RETURN DISTINCT rfq.RFQNumber AS RFQNumber, po.PONumber AS PONumber;
 
 // We will not vet it yet so we can query it later and see that it is pending vetting. We can vet it in a later step.
 
@@ -977,10 +982,12 @@ MERGE (rfq)-[:HAS_RFQ_ITEM {RFQqt: item.qty, RFQcost: item.cost}]->(p);  // We a
 MATCH ()-[:IS_AVAILABLE_PRODUCT]->(p:Product)-[:HAS_INVENTORY_LEVEL]-(in), (p)-[:HAS_SUPPLY_ORDER]->(so), (p)-[:HAS_REORDER_LEVEL]->(re), (p)<-[oi:HAS_ORDER_PRODUCT]-(or)
 RETURN p.ProductName, in.UnitsInStock, so.UnitsOnOrder, re.StockThreshold, toInteger((avg(oi.Quantity))) AS AverageQuantityPerOrder, min(oi.Quantity), max(oi.Quantity),count(DISTINCT (toString(or.OrderDate.year) + "-" + toString(or.OrderDate.month))) AS OrdersPerMonth ORDER BY  p.ProductName;
 
+// ** IMPORTANT NOTE **: The Stock Threshold is a critical parameter in inventory management that determines when to reorder products.
+//    It is essential to keep it updated based on the latest order data to ensure that it reflects current demand patterns and helps in maintaining optimal inventory levels.
+//    The Python Simulation does not update this value, so you will have to update it from time to time depending on the Order volume you define.
 
-// Update the Stock Threshold based on the average quantity ordered per month for each product. 
+// The following query will update the Stock Threshold to 150% of the average monthly order volume for each Product, based on the average quantity ordered per month for each product.
 // This will help in maintaining optimal inventory levels and ensuring that products are reordered in a timely manner to meet customer demand.
-// The following query updates the Stock Threshold to 150% of the average monthly order volume for each Product.
 // From time to time, the Stock Threshold can be recalculated based on the latest order data to ensure that it reflects current demand patterns and helps in maintaining optimal inventory levels.
 
 MATCH ()-[:IS_AVAILABLE_PRODUCT]->(p:Product)-[:HAS_REORDER_LEVEL]->(re)
@@ -1017,10 +1024,8 @@ WITH n, e ORDER BY rand() LIMIT 1
 MATCH (s:Supplier)-[:SUPPLIES]->(p:Product)
   <-[:IS_AVAILABLE_PRODUCT]-(a:ProductStatusAvailablE),
   (r:ReorderLevel)<-[:HAS_REORDER_LEVEL]-(p)-[:HAS_INVENTORY_LEVEL]->(i:InventoryLevel)     // Find Products with low inventory (Inventory Level <= Restock Threshold). 
-OPTIONAL MATCH (activePO:PurchaseOrder)-[poi2:HAS_PO_ITEM]->(p)
-WHERE (activePO)<-[:IS_NEW_PO_STATE]-(:NewPoS)
-   OR (activePO)<-[:IS_APPROVED_PO_STATE]-(:ApprovedPoS)       // Check if there are any active POs for this product that are either New or Approved (not yet submitted to Supplier)
-   OR (activePO)<-[:IS_SUBMITTED_PO_STATE]-(:SubmittedPoS)
+// Check if there are any active POs for this product that are either New or Approved (not yet submitted to Supplier)
+OPTIONAL MATCH  ()-[:IS_NEW_PO_STATE | IS_APPROVED_PO_STATE | IS_SUBMITTED_PO_STATE]->(activePO:PurchaseOrder)-[poi2:HAS_PO_ITEM]->(p)
 WITH e, n, s, p, r, i, SUM(coalesce(poi2.POqt, 0)) AS AlreadyPendingQty
 WHERE i.UnitsInStock + AlreadyPendingQty - (r.StockThreshold * 0.5) <= r.StockThreshold
 WITH e, n, s, COLLECT({
@@ -1099,7 +1104,7 @@ WITH wc, si, s ORDER BY rand() LIMIT 1
 MATCH (op:OrderStatusOpeN {Status:"Open"})-[r:IS_OPEN_ORDER_STATE]->(o:Order)-[details:HAS_ORDER_PRODUCT]->(p:Product)-[:HAS_INVENTORY_LEVEL]->(inv:InventoryLevel)
 WITH wc, si, s, op, o, r,
      count(details)                                                        AS TotalLines,
-     sum(CASE WHEN inv.UnitsInStock >= details.Quantity THEN 1 ELSE 0 END) AS LinesWithStock
+     sum(CASE WHEN inv.UnitsInStock > details.Quantity THEN 1 ELSE 0 END) AS LinesWithStock
 WHERE TotalLines = LinesWithStock
 WITH wc, si, s, op, o, r
 ORDER BY o.OrderDate
@@ -1118,7 +1123,6 @@ CREATE (i:ShipInfo {ShippmentID:"SH-"+randomUUID(), ShippedDate:datetime(), Ship
        (f)-[:IS_FULFILLED_ORDER_STATE {FulfillDate: datetime()}]->(o),
        (o)-[:HAS_WAREHOUSE_FULFILLMENT {Date:datetime(), Comment:"Order picked, packed, and shipped by the Warehouse Clerk."}]->(wc)
 DELETE r
-
 WITH o, lines
 UNWIND lines AS x
   SET x.inv.UnitsInStock = x.inv.UnitsInStock - x.details.Quantity,
@@ -1572,6 +1576,128 @@ RETURN n AS Node,
        count(DISTINCT r_out) AS OutgoingCount,
        count(DISTINCT r_in) AS IncomingCount
 ORDER BY IncomingCount DESC;
+
+// Nodes to Edges ratio
+MATCH (n)
+WITH count(n) AS totalNodes
+MATCH ()-[r]->()
+WITH totalNodes, count(r) AS totalEdges
+RETURN 
+  totalNodes, 
+  totalEdges, 
+  CASE 
+    WHEN totalEdges = 0 THEN null 
+    ELSE "1:" + toString(totalEdges / toFloat(totalNodes))
+  END AS NodesToEdgesRatio;
+
+
+//--------------------------------------------------------------------------------------------------------------------------------------------------------------//
+// ** Inconsistencies and Data Quality Checks after the simulation **
+//--------------------------------------------------------------------------------------------------------------------------------------------------------------//
+
+// Find duplicate relationships between nodes (same type of relationship between the same two nodes - should not happen)
+// This is a good way to find inconsistencies in the graph data model after the simulation of the NorthWind Application Graph Data Model.
+MATCH (a)-[r]->(b)
+WITH a, b, type(r) AS relType, count(r) AS cnt, collect(r) AS rels
+WHERE cnt > 1
+RETURN a, b, relType, cnt, rels
+ORDER BY cnt DESC;
+
+// Find Purchase Orders that have more than one active state (should not happen) - alternative query
+UNWIND ["IS_NEW_PO_STATE","IS_APPROVED_PO_STATE","IS_SUBMITTED_PO_STATE","IS_REJECTED_PO_STATE",
+        "IS_CLOSED_PO_STATE","IS_SUPPLIER_OPEN_PO_STATE","IS_SUPPLIER_NEW_PO_STATE",
+        "HAS_WAREHOUSE_DELIVERY","HAS_FINANCE_PAYMENT","IS_OPEN_ORDER_STATE",
+        "IS_FULFILLED_ORDER_STATE","HAS_SHIPMENT_INFO","IS_SUPPLIER_NEW_RFQ",
+        "IS_SUPPLIER_REJECTED_RFQ_STATE"] AS relType
+CALL (relType) {
+    MATCH (a)-[r]->(b) WHERE type(r) = relType
+    WITH a, b, count(r) AS cnt
+    WHERE cnt > 1
+    RETURN a, b, cnt
+}
+RETURN a, b, relType, cnt
+ORDER BY cnt DESC;
+
+// Find Purchase Orders that have more than one active state (should not happen) - alternative query
+MATCH (a)-[r:IS_NEW_PO_STATE]->(b) WITH a, b, "IS_NEW_PO_STATE" AS relType, count(r) AS cnt WHERE cnt > 1 RETURN a, b, relType, cnt
+UNION ALL
+MATCH (a)-[r:IS_APPROVED_PO_STATE]->(b) WITH a, b, "IS_APPROVED_PO_STATE" AS relType, count(r) AS cnt WHERE cnt > 1 RETURN a, b, relType, cnt
+UNION ALL
+MATCH (a)-[r:IS_SUBMITTED_PO_STATE]->(b) WITH a, b, "IS_SUBMITTED_PO_STATE" AS relType, count(r) AS cnt WHERE cnt > 1 RETURN a, b, relType, cnt
+UNION ALL
+MATCH (a)-[r:IS_REJECTED_PO_STATE]->(b) WITH a, b, "IS_REJECTED_PO_STATE" AS relType, count(r) AS cnt WHERE cnt > 1 RETURN a, b, relType, cnt
+UNION ALL
+MATCH (a)-[r:IS_CLOSED_PO_STATE]->(b) WITH a, b, "IS_CLOSED_PO_STATE" AS relType, count(r) AS cnt WHERE cnt > 1 RETURN a, b, relType, cnt
+UNION ALL
+MATCH (a)-[r:IS_SUPPLIER_OPEN_PO_STATE]->(b) WITH a, b, "IS_SUPPLIER_OPEN_PO_STATE" AS relType, count(r) AS cnt WHERE cnt > 1 RETURN a, b, relType, cnt
+UNION ALL
+MATCH (a)-[r:IS_SUPPLIER_NEW_PO_STATE]->(b) WITH a, b, "IS_SUPPLIER_NEW_PO_STATE" AS relType, count(r) AS cnt WHERE cnt > 1 RETURN a, b, relType, cnt
+UNION ALL
+MATCH (a)-[r:HAS_WAREHOUSE_DELIVERY]->(b) WITH a, b, "HAS_WAREHOUSE_DELIVERY" AS relType, count(r) AS cnt WHERE cnt > 1 RETURN a, b, relType, cnt
+UNION ALL
+MATCH (a)-[r:HAS_FINANCE_PAYMENT]->(b) WITH a, b, "HAS_FINANCE_PAYMENT" AS relType, count(r) AS cnt WHERE cnt > 1 RETURN a, b, relType, cnt
+UNION ALL
+MATCH (a)-[r:IS_OPEN_ORDER_STATE]->(b) WITH a, b, "IS_OPEN_ORDER_STATE" AS relType, count(r) AS cnt WHERE cnt > 1 RETURN a, b, relType, cnt
+UNION ALL
+MATCH (a)-[r:IS_FULFILLED_ORDER_STATE]->(b) WITH a, b, "IS_FULFILLED_ORDER_STATE" AS relType, count(r) AS cnt WHERE cnt > 1 RETURN a, b, relType, cnt
+UNION ALL
+MATCH (a)-[r:HAS_SHIPMENT_INFO]->(b) WITH a, b, "HAS_SHIPMENT_INFO" AS relType, count(r) AS cnt WHERE cnt > 1 RETURN a, b, relType, cnt
+UNION ALL
+MATCH (a)-[r:IS_SUPPLIER_NEW_RFQ]->(b) WITH a, b, "IS_SUPPLIER_NEW_RFQ" AS relType, count(r) AS cnt WHERE cnt > 1 RETURN a, b, relType, cnt
+UNION ALL
+MATCH (a)-[r:IS_SUPPLIER_REJECTED_RFQ_STATE]->(b) WITH a, b, "IS_SUPPLIER_REJECTED_RFQ_STATE" AS relType, count(r) AS cnt WHERE cnt > 1 RETURN a, b, relType, cnt
+ORDER BY cnt DESC;
+
+// Find Purchase Orders that have been approved and rejected at the same time by the same Employee (should not happen)
+MATCH pathl1 = (e)<-[:HAS_L1_PO_APPROVAL]-(po:PurchaseOrder)-[:HAS_L1_PO_REJECTION]->(e2)
+RETURN "L1" AS Level, po.PONumber AS PONumber, pathl1 AS InconsistentPath
+UNION ALL
+MATCH pathl2 = (e)<-[:HAS_L2_PO_APPROVAL]-(po:PurchaseOrder)-[:HAS_L2_PO_REJECTION]->(e2)
+RETURN "L2" AS Level, po.PONumber AS PONumber, pathl2 AS InconsistentPath
+UNION ALL
+MATCH pathl3 = (e)<-[:HAS_L3_PO_APPROVAL]-(po:PurchaseOrder)-[:HAS_L3_PO_REJECTION]->(e2)
+RETURN "L3" AS Level, po.PONumber AS PONumber, pathl3 AS InconsistentPath;
+
+// Find Purchase Orders that have more than one active state (should not happen)
+MATCH (po:PurchaseOrder)
+WITH po,
+     count{ (po)<-[:IS_NEW_PO_STATE]-() }       AS isNew,
+     count{ (po)<-[:IS_APPROVED_PO_STATE]-() }  AS isApproved,
+     count{ (po)<-[:IS_SUBMITTED_PO_STATE]-() } AS isSubmitted,
+     count{ (po)<-[:IS_REJECTED_PO_STATE]-() }  AS isRejected,
+     count{ (po)<-[:IS_CLOSED_PO_STATE]-() }    AS isClosed
+WITH po, isNew, isApproved, isSubmitted, isRejected, isClosed,
+     (CASE WHEN isNew>0 THEN 1 ELSE 0 END + CASE WHEN isApproved>0 THEN 1 ELSE 0 END
+    + CASE WHEN isSubmitted>0 THEN 1 ELSE 0 END + CASE WHEN isRejected>0 THEN 1 ELSE 0 END
+    + CASE WHEN isClosed>0 THEN 1 ELSE 0 END) AS activeStates
+WHERE activeStates <> 1
+RETURN po.PONumber AS PONumber, isNew, isApproved, isSubmitted, isRejected, isClosed, activeStates
+ORDER BY activeStates DESC;
+
+// Find Inventory Levels that are below zero (should not happen)
+MATCH (i:InventoryLevel) WHERE i.UnitsInStock < 0
+RETURN i.UnitsInStock AS UnitsInStock, i;
+
+// Find Supply Orders that are below zero (should not happen)
+MATCH (p:Product)-[:HAS_SUPPLY_ORDER]-(suo)
+WHERE suo.UnitsOnOrder < 0
+RETURN p.ProductID AS ProductID, suo.UnitsOnOrder AS UnitsOnOrder;
+
+// Find Open Orders that have been fulfilled (should not happen)
+MATCH (o:Order)
+WITH o,
+     count{ (o)<-[:IS_OPEN_ORDER_STATE]-() }      AS isOpen,
+     count{ (o)<-[:IS_FULFILLED_ORDER_STATE]-() } AS isFulfilled
+WHERE (isOpen > 0 AND isFulfilled > 0) OR isFulfilled > 1
+RETURN o.OrderID AS OrderID, isOpen, isFulfilled;
+
+// Find Purchase Orders that have been paid but not yet delivered (should not happen)
+MATCH (po:PurchaseOrder)-[:HAS_FINANCE_PAYMENT]->()
+WHERE NOT (po)-[:HAS_WAREHOUSE_DELIVERY]->()
+RETURN po.PONumber AS PONumber;
+
+
+
 
 //  End of Query Examples  //
 
