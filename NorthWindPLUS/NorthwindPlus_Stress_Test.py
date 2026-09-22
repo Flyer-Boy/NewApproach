@@ -569,8 +569,8 @@ RFQ_VETTING_ACTIONS: list[VettingAction] = [
         CREATE (po)-[:HAS_BUYER_PO_APPROVAL {Date:datetime(), Comment:"Submitted to Supplier by Buyer (stress test)."}]->(bu),
                (su)-[:IS_SUBMITTED_PO_STATE {Date:datetime()}]->(po),
                (snp)-[:IS_SUPPLIER_NEW_PO_STATE {Date:datetime()}]->(po),
-               (po)-[:HAS_SUPPLIER_NEW_RFQ]->(:PoNewRFQ),
-               (po)-[:HAS_SUPPLIER_REJECTED_RFQ]->(:PoRejectedRFQ)
+               (po)-[:HAS_SUPPLIER_NEW_RFQ]->(:PoNewRFQ {Name:"PoNewRFQ"}),
+               (po)-[:HAS_SUPPLIER_REJECTED_RFQ]->(:PoRejectedRFQ {Name:"PoRejectedRFQ"})
         DELETE ap
         RETURN po.PONumber AS PONumber
         """,
