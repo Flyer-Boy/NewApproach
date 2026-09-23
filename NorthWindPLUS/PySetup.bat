@@ -7,7 +7,7 @@ SET NEO4J_USER=
 
 :: Open 8 windows, each running a paused command prompt session waiting for user to start them
 start "Customer Order Loop" cmd /k "set /p =Press ENTER to start the Customer Order Loop (Press Ctrl+C to stop the Loop): & python NorthwindPlus_Stress_Test.py --loop customer-order --rate 60 & "
-start "PO Creation Loop" cmd /k "set /p =Press ENTER to start the PO Createion Loop (Press Ctrl+C to stop the Loop): & python NorthwindPlus_Stress_Test.py --loop po-creation --rate 1 &"
+start "PO Creation Loop" cmd /k "set /p =Press ENTER to start the PO Createion Loop (Press Ctrl+C to stop the Loop): & python NorthwindPlus_Stress_Test.py --loop po-creation --rate 0.5 &"
 start "PO Vetting Loop #1" cmd /k "set /p =Press ENTER to start the PO Vetting Loop (Press Ctrl+C to stop the Loop): & python NorthwindPlus_Stress_Test.py --loop po-vetting --rate 30 & "
 start "PO Vetting Loop #2" cmd /k "set /p =Press ENTER to start the PO Vetting Loop (Press Ctrl+C to stop the Loop): & python NorthwindPlus_Stress_Test.py --loop po-vetting --rate 30 & "
 start "RFQ Creation and Vetting Loop" cmd /k "set /p =Press ENTER to start the RFQ creation and Vetting Loop (Press Ctrl+C to stop the Loop): & python NorthwindPlus_Stress_Test.py --loop rfq-vetting --rate 30 &"
