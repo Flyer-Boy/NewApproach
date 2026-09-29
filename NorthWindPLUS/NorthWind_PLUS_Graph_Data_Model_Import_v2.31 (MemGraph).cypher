@@ -1,4 +1,4 @@
-// -- NorthWind PLUS Graph Data Model Import v2.3 --//
+// -- NorthWind PLUS Graph Data Model Import v2.2 For Aura --//
 
 // If you find yourself filtering on a Node property that represents state, context, or an entity's relevance to something else, that's a sign the model needs a relationship instead, 
 // as it was most likely built with a table mentality.
@@ -56,9 +56,9 @@
 // ------------------------------------------------------------------------------------ //
 
 
-// This script will create the NorthWind Graph Data Model in Neo4j
+// This script will create the NorthWind Graph Data Model in MemGraph
 // It will load data from CSV files and create Nodes, Relationships, Indexes, and Constraints    
-// Use the CSV provided in the import folder (https://raw.githubusercontent.com/Flyer-Boy/NewApproach/refs/heads/main/NorthWind/Import/), as they have been fixed. 
+// Use the CSV provided in the import folder (https://github.com/Flyer-Boy/NewApproach/tree/main/NorthWindPLUS/Import), as they have been fixed. 
 // The original NorthWind CSV files (https://github.com/neo4j-graph-examples/northwind) have some issues with commas in the data fields, mainly in the Address fields (for Brazil, France, and Belgium) and some Description fields (Notes).
 // These issues can cause problems during import, resulting in misplaced fields and compromising data integrity.
 
@@ -66,8 +66,8 @@
 
 //--------------------------------------------------------------------------------------------------------------------------------------------------------------//
 //                                                                    ** Quick Run Instructions: **
-// Copy this script from line 73 to 1129. Paste it into the Neo4j Aura Query console. Execute and wait. Optionally, you can run the Recommendation Engine - Lines 1217 through 1283.
-// Follow the instructions from line 1130 to 1175 to run the Python simulation loops.  Run the Queries on line 1286 onwards as the Python loops run. Enjoy!! 
+// Copy this script from line 73 to 1078. Paste it into the MemGraph Query console. Execute and wait. Optionally, you can run the Recommendation Engine - Lines 1173 through 1240.
+// Follow the instructions from line 1087 to 1132 to run the Python simulation loops.  Run the Queries on line 1242 onwards as the Python loops run. Enjoy!! 
 //--------------------------------------------------------------------------------------------------------------------------------------------------------------//
 
 
@@ -76,7 +76,7 @@ MATCH (n) DETACH DELETE n;
 
 //-- Loading Data from CSV files --//
 // We start by importing the Product Categories 
-LOAD CSV WITH HEADERS FROM "https://raw.githubusercontent.com/Flyer-Boy/NewApproach/refs/heads/main/NorthWindPLUS/Import/categories.csv" AS row
+LOAD CSV FROM "https://raw.githubusercontent.com/Flyer-Boy/NewApproach/refs/heads/main/NorthWindPLUS/Import/categories.csv" WITH HEADER AS row
 MERGE (n:ProductCategorY {CategoryID:row.CategoryID, CategoryName:row.CategoryName, Description:row.Description}); 
 
 // Let's create the Product availability Status as Collections where we will connect the products later and the SuperSet CategorieS
@@ -85,7 +85,7 @@ CREATE (:ProductStatusDiscontinueD {Status: "Discontinued"});
 CREATE (:ProductStatusAvailablE {Status: "Available"}); 
 
 // We import the Suppliers
-LOAD CSV WITH HEADERS FROM "https://raw.githubusercontent.com/Flyer-Boy/NewApproach/refs/heads/main/NorthWindPLUS/Import/suppliers.csv" AS row
+LOAD CSV FROM "https://raw.githubusercontent.com/Flyer-Boy/NewApproach/refs/heads/main/NorthWindPLUS/Import/suppliers.csv" WITH HEADER AS row
 MERGE (n:Supplier {SupplierID:row.SupplierID, CompanyName:row.CompanyName, ContactName:row.ContactName, ContactTitle:row.ContactTitle, Address:row.Address, City:row.City, Region:row.Region, PostalCode:row.PostalCode, Country:row.Country, Phone:row.Phone, Fax:row.Fax, HomePage:"https://www." + replace(replace(replace(row.CompanyName," ",""),"'",""),".","") + ".com"});
 
 // We do our first Graph normalization extracting the Address and Contact from the Supplier and placing them in different Nodes with a proper relationship
@@ -108,7 +108,7 @@ CREATE (n)-[:HAS_SUPPLIER_CONTACT]->(c);
 //    We will keep the Price though, for simplicity. In an ideal model we should place it in a separate Node as the Price is not part of the Product Identity but an attribute that might change over time. 
 
 //    We will connect the Product to its respective Product Category
-LOAD CSV WITH HEADERS FROM "https://raw.githubusercontent.com/Flyer-Boy/NewApproach/refs/heads/main/NorthWindPLUS/Import/products.csv" AS row
+LOAD CSV FROM "https://raw.githubusercontent.com/Flyer-Boy/NewApproach/refs/heads/main/NorthWindPLUS/Import/products.csv" WITH HEADER AS row
 MERGE (n:Product {ProductID:row.ProductID, ProductName:row.ProductName, UnitPrice:toFloat(row.UnitPrice), ReorderLevel:toInteger(row.ReorderLevel), QuantityPerUnit:row.QuantityPerUnit, Discontinued:toInteger(row.Discontinued), SupplierID:row.SupplierID})
 CREATE (i:InventoryLevel {UnitsInStock:toInteger(row.UnitsInStock), LastUpdate: datetime()})             // Here is the InventoryLevel.UnitsInStock as a separate Node, as it is a state that will change over time.
 CREATE (reorder:ReorderLevel {StockThreshold:toInteger(row.UnitsInStock) + 10, LastUpdate: datetime()})  // Here is the ReorderLevel.StockThreshold as a separate Node. The StockThreshold is intentionally set to the UnitsInStock + 10 for this Demo. This number will allow the script to generate more PO's later and subsequently more RFQ's in the process creating a richer dataset for us to play with 
@@ -152,7 +152,7 @@ MATCH (k:CategorieS {Name: "CategorieS"}), (c:ProductCategorY)
 MERGE (k)-[:HAS_CATEGORY]->(c);
 
 // We will import the Customers into the Graph and normalize them by creating an Address Node and a Contact Node and connecting them to the Customer Node.
-LOAD CSV WITH HEADERS FROM "https://raw.githubusercontent.com/Flyer-Boy/NewApproach/refs/heads/main/NorthWindPLUS/Import/customers.csv" AS row
+LOAD CSV FROM "https://raw.githubusercontent.com/Flyer-Boy/NewApproach/refs/heads/main/NorthWindPLUS/Import/customers.csv" WITH HEADER AS row
 MERGE (n:Customer {CustomerID:row.CustomerID})
 SET n += row;
 
@@ -176,14 +176,14 @@ REMOVE n.Address, n.City, n.Region, n.PostalCode, n.Country, n.ContactName, n.Co
 CREATE (:RoleS {Name: "RoleS"});
 
 // We will normalize the Employees by creating a Role Node and connecting it to the Employee Node.
-LOAD CSV WITH HEADERS FROM "https://raw.githubusercontent.com/Flyer-Boy/NewApproach/refs/heads/main/NorthWindPLUS/Import/employees.csv" AS row
+LOAD CSV FROM "https://raw.githubusercontent.com/Flyer-Boy/NewApproach/refs/heads/main/NorthWindPLUS/Import/employees.csv" WITH HEADER AS row
 MERGE (l:RolE {Title:row.Title}) 
 WITH l
 MATCH (r:RoleS)
 MERGE (r)-[:HAS_ROLE_TITLE]->(l);
 
 // We will normalize the Employees by creating a Person Node and an Address Node and connecting them to the Employee Node.
-LOAD CSV WITH HEADERS FROM "https://raw.githubusercontent.com/Flyer-Boy/NewApproach/refs/heads/main/NorthWindPLUS/Import/employees.csv" AS row
+LOAD CSV FROM "https://raw.githubusercontent.com/Flyer-Boy/NewApproach/refs/heads/main/NorthWindPLUS/Import/employees.csv" WITH HEADER AS row
 MERGE (n:Employee {EmployeeID:row.EmployeeID, Email: row.FirstName + "." + row.LastName + "@northwind.com"}) 
 SET n += row
 WITH n, row 
@@ -208,17 +208,17 @@ MATCH (n:Employee)
 REMOVE n.FirstName, n.LastName, n.TitleOfCourtesy, n.BirthDate, n.Address, n.City, n.Region, n.PostalCode, n.Country, n.HomePhone, n.Fax, n.Notes, n.Photo, n.ReportsTo, n.Title; 
 
 // We will normalize the Territories by creating a Territory Node and connecting it to the respective Employee
-LOAD CSV WITH HEADERS FROM "https://raw.githubusercontent.com/Flyer-Boy/NewApproach/refs/heads/main/NorthWindPLUS/Import/territories.csv" AS row
+LOAD CSV FROM "https://raw.githubusercontent.com/Flyer-Boy/NewApproach/refs/heads/main/NorthWindPLUS/Import/territories.csv" WITH HEADER AS row
 MERGE (n:Territory {TerritoryID:row.TerritoryID})
 SET n += row;
 
 // We will normalize the Territories by connecting them to the respective Employee
-LOAD CSV WITH HEADERS FROM "https://raw.githubusercontent.com/Flyer-Boy/NewApproach/refs/heads/main/NorthWindPLUS/Import/regions.csv" AS row
+LOAD CSV FROM "https://raw.githubusercontent.com/Flyer-Boy/NewApproach/refs/heads/main/NorthWindPLUS/Import/regions.csv" WITH HEADER AS row
 MERGE (n:Regions {RegionID:row.RegionID})
 SET n += row;
 
 // We will normalize the Employee Territories by connecting them to the respective Employee and Territory
-LOAD CSV WITH HEADERS FROM "https://raw.githubusercontent.com/Flyer-Boy/NewApproach/refs/heads/main/NorthWindPLUS/Import/employee-territories.csv" AS row
+LOAD CSV FROM "https://raw.githubusercontent.com/Flyer-Boy/NewApproach/refs/heads/main/NorthWindPLUS/Import/employee-territories.csv" WITH HEADER AS row
 MATCH (e:Employee), (t:Territory)
 WHERE e.EmployeeID = row.EmployeeID AND t.TerritoryID = row.TerritoryID
 MERGE (t)-[:HAS_EMPLOYEE]->(e);
@@ -232,7 +232,7 @@ MERGE (r)-[:HAS_TERRITORY]->(t);
 MATCH (t:Territory) REMOVE t.RegionID;
 
 // We will import the Shippers into the Graph
-LOAD CSV WITH HEADERS FROM "https://raw.githubusercontent.com/Flyer-Boy/NewApproach/refs/heads/main/NorthWindPLUS/Import/shippers.csv" AS row
+LOAD CSV FROM "https://raw.githubusercontent.com/Flyer-Boy/NewApproach/refs/heads/main/NorthWindPLUS/Import/shippers.csv" WITH HEADER AS row
 MERGE (n:Shipper {ShipperID:row.ShipperID, CompanyName:row.CompanyName, Phone:row.Phone});
 
 // We will create the ShipperS Superset Collection and the subset Shipper Collection Nodes
@@ -243,7 +243,7 @@ CREATE (c)-[:IS_SHIPPER]->(o);
 
 // We will import the Orders into a temporary Node OrderTmp and then we will normalize the OrderDate, RequiredDate and ShippedDate to proper datetime format.
 // We will not have the OrderTmp Node declared on the GRAPH TYPE constraint as it is a temporary node only used during the import process.
-LOAD CSV WITH HEADERS FROM "https://raw.githubusercontent.com/Flyer-Boy/NewApproach/refs/heads/main/NorthWindPLUS/Import/orders.csv" AS row
+LOAD CSV FROM "https://raw.githubusercontent.com/Flyer-Boy/NewApproach/refs/heads/main/NorthWindPLUS/Import/orders.csv" WITH HEADER AS row
 MERGE (n:OrderTmp {OrderID:row.OrderID})
 SET n += row;
 
@@ -272,18 +272,17 @@ WHERE c.CustomerID = o.CustomerID
 MERGE (o)-[:HAS_ORDER_CUSTOMER]->(c);
 
 // We will create a ShipInfo Node to hold the shipment information and connect it to the Order and Shipper
-//** NOTE **:  We could have normalized the ShipName into a separate Node, but we will keep it as a property of the ShipInfo Node for simplicity.
 MATCH (n:Order), (s:Shipper)
 WHERE n.ShipVia = s.ShipperID 
 CREATE (n)-[:HAS_SHIPMENT_INFO]->(i:ShipInfo {ShippmentID:"SH-"+randomUUID(), ShipName:n.ShipName, ShippedDate:n.ShippedDate, Freight:n.Freight })
 CREATE (i)-[:HAS_SHIPPER]->(s)
 WITH n, i
 MATCH (a:Address) WHERE a.Address = n.ShipAddress AND a.City = n.ShipCity AND a.Region = n.ShipRegion AND a.PostalCode = n.ShipPostalCode AND a.Country = n.ShipCountry
-MERGE (i)-[:HAS_SHIPMENT_ADDRESS]->(a)
-WITH n, i
-WHERE NOT EXISTS((i)-[:HAS_SHIPMENT_ADDRESS]->(:Address {Address:n.ShipAddress, City:n.ShipCity, Region:n.ShipRegion, PostalCode:n.ShipPostalCode, Country:n.ShipCountry}) ) 
-CREATE (a:Address {Address:n.ShipAddress, City:n.ShipCity, Region:n.ShipRegion, PostalCode:n.ShipPostalCode, Country:n.ShipCountry})
-CREATE (i)-[:HAS_SHIPMENT_ADDRESS]->(a);
+MERGE (i)-[:HAS_SHIPMENT_ADDRESS]->(a);
+// WITH n, i
+// WHERE NOT EXISTS((i)-[:HAS_SHIPMENT_ADDRESS]->(:Address {Address:n.ShipAddress, City:n.ShipCity, Region:n.ShipRegion, PostalCode:n.ShipPostalCode, Country:n.ShipCountry}) ) 
+// CREATE (a:Address {Address:n.ShipAddress, City:n.ShipCity, Region:n.ShipRegion, PostalCode:n.ShipPostalCode, Country:n.ShipCountry})
+// CREATE (i)-[:HAS_SHIPMENT_ADDRESS]->(a);
 
 // We will connect the Order to the respective Employee that sold the Order
 MATCH (e:Employee), (o:Order)
@@ -296,7 +295,7 @@ REMOVE n.CustomerID, n.ShipVia, n.ShipName, n.ShipAddress, n.ShipCity, n.ShipReg
 
 //-- Including Order Details in the Relationship --//
 // We will import the Order Details and connect them to the respective Order and Product
-LOAD CSV WITH HEADERS FROM "https://raw.githubusercontent.com/Flyer-Boy/NewApproach/refs/heads/main/NorthWindPLUS/Import/order-details.csv" AS row
+LOAD CSV FROM "https://raw.githubusercontent.com/Flyer-Boy/NewApproach/refs/heads/main/NorthWindPLUS/Import/order-details.csv" WITH HEADER AS row
 MATCH (p:Product), (o:Order)
 WHERE p.ProductID = row.ProductID AND o.OrderID = row.OrderID 
 MERGE (o)-[details:HAS_ORDER_PRODUCT]->(p)
@@ -318,9 +317,11 @@ WHERE s.ShippedDate = datetime("9999-12-31T00:00:00.000")
 CREATE (o)-[:IS_OPEN_ORDER_STATE]->(n);
 
 
+
 // Increment the stock of all products by 150 units to simulate a restock event before the simulation begins.
 // This should be done after the import to avoid any issues with the initial stock levels being too low for the simulation, resulting in old (original) Order backlogs and PO generation.
 MATCH (p:Product)-[:HAS_INVENTORY_LEVEL]->(i) SET i.UnitsInStock = i.UnitsInStock+150;
+
 
 //-- End of NorthWind Graph Data Model Import --//
 
@@ -490,21 +491,28 @@ CREATE (ed)-[:HAS_ACTIVE_EMPLOYEE {StartDate:datetime()}]->(:Employee {Email:"sy
 
 // Create a random Customer order with 1 to 11 products. We will execute this a few times to create some Open Orders to fulfill later.
 // The bellow command will create 50 Random Customer orders.
+// Create a random Customer order with 1 to 11 products. We will execute this a few times to create some Open Orders to fulfill later.
+// The bellow command will create 50 Random Customer orders.
 UNWIND range(1, 50) AS i
-CALL (i)  {with i
+CALL (i)  {WITH i
 MATCH (e:Employee)-[]-(:RolE {Title: "Sales Representative"}), (op:OrderStatusOpeN {Status: "Open"})
-WITH e, op
-ORDER BY rand() LIMIT 1
-MATCH (c:Customer) 
-WITH e, c, op
-ORDER BY rand() LIMIT 1
-CREATE (o:Order {OrderID: "CO-"+left(randomUUID(),5)+right(randomUUID(),5) , OrderDate:datetime(), RequiredDate:datetime()+duration("P7D")})<-[:IS_OPEN_ORDER_STATE]-(op)
-CREATE (o)-[:HAS_ORDER_CUSTOMER]->(c) 
+WITH e, op ORDER BY rand() LIMIT 1
+MATCH (c:Customer)
+WITH e, c, op ORDER BY rand() LIMIT 1
+CREATE (o:Order {
+    OrderID: "CO-" + left(randomUUID(), 5) + right(randomUUID(), 5),
+    OrderDate: datetime(),
+    RequiredDate: datetime() + duration("P7D")
+})<-[:IS_OPEN_ORDER_STATE]-(op)
+CREATE (o)-[:HAS_ORDER_CUSTOMER]->(c)
 CREATE (o)-[:SOLD_BY]->(e)
 WITH o
-MATCH (p:Product)-[]-(:ProductStatusAvailablE {Status: "Available"}) 
-ORDER BY rand() LIMIT toInteger(round(rand()*10 + 1))
-CREATE (o)-[:HAS_ORDER_PRODUCT {Quantity: toInteger(round(rand()*19)+1), UnitPrice:p.UnitPrice, Discount: rand()*0.07}]->(p)
+MATCH (p:Product)-[]-(:ProductStatusAvailablE {Status: "Available"})
+WITH o, p
+ORDER BY rand() LIMIT toInteger(round(rand() * 10 + 1))
+WITH o, p, toInteger(round(rand() * 19) + 1) AS qty
+CREATE (o)-[:HAS_ORDER_PRODUCT {Quantity: qty, UnitPrice: p.UnitPrice, Discount: rand()*0.07}]->(p)
+RETURN o.OrderID AS OrderID, p.ProductName AS ProductName, qty AS Quantity
 };
 
 // ###### Run the **Inventory Level Report** ######  
@@ -523,8 +531,10 @@ MATCH (s:Supplier)-[]->(p:Product)<-[]-(a:ProductStatusAvailablE),(r:ReorderLeve
  RETURN DISTINCT  s.SupplierID, s.CompanyName, p.ProductName, p.ProductID, i.UnitsInStock, r.StockThreshold, (r.StockThreshold)-i.UnitsInStock+(r.StockThreshold/2) as MinOrder
  ORDER BY s.SupplierID ;
 
+
 // Let's check the open Customer Orders by Product. 
-MATCH (p:Product)<-[cop:HAS_ORDER_PRODUCT]-(o:Order)-[]-(op:OrderStatusOpeN {Status: "Open"}) RETURN p.ProductID, SUM(cop.Quantity) ORDER BY p.ProductID;
+MATCH (p:Product)<-[cop:HAS_ORDER_PRODUCT]-(o:Order)<-[]-(op:OrderStatusOpeN {Status: "Open"}) 
+RETURN p.ProductID AS ProductID, SUM(cop.Quantity) ORDER BY ProductID;
 
 // Creating PO's states schemas in preparation for the PO Vetting process.
 
@@ -639,36 +649,44 @@ RETURN p.PONumber, SUM((id.POqt * (i.UnitPrice*id.POPriceDiscount))) AS Estimate
 
 // Level 1 is now ready to vet the New (pending approval) POs.
 // For our Demo, we will Reject two POs at Level 1 so we have one instance (we will resubmit one of them later)
-MATCH (l1:Employee)<-[:IS_ACTIVE_ROLE]-(ro:RolE {Title:"Level1Approver"}), (a:RejectedPoS {Name:"RejectedPoS"})
-WITH a, ro, l1 ORDER BY rand() LIMIT 1
-MATCH (:NewPoS {Name:"NewPoS"})-[np]->(p:PurchaseOrder)-[id:HAS_PO_ITEM]->(i:Product)-[]-(s:Supplier) 
-WITH a, ro, l1, np, p, SUM((id.POqt * (i.UnitPrice*id.POPriceDiscount))) AS POCost ORDER BY p LIMIT 2
-WHERE POCost > ro.ApprovalBase  
-CREATE (p)-[:HAS_L1_PO_REJECTION {Date:datetime(), Comment:"This PO is rejected by L1 due to..< Rejection justification for Decision Traces - for Context Graph > - alternatively this could be placed on a separate Node  >..."}]->(l1),
-      (a)-[:IS_REJECTED_PO_STATE {Date:datetime()}]->(p)
-DELETE np;
+MATCH (l:Employee)<-[:IS_ACTIVE_ROLE]-(ro:RolE {Title:"Level1Approver"}), (a:RejectedPoS {Name:"RejectedPoS"})
+WITH a, ro, l ORDER BY rand() LIMIT 1
+MATCH (:NewPoS {Name:"NewPoS"})-[np]->(po:PurchaseOrder)-[id:HAS_PO_ITEM]->(i:Product)
+WHERE NOT (po)-[:HAS_L1_PO_APPROVAL|HAS_L1_PO_REJECTION]-()
+WITH a, ro, l, np, po, SUM((id.POqt * (i.UnitPrice * id.POPriceDiscount))) AS POCost
+WHERE POCost > ro.ApprovalBase
+WITH a, ro, l, np, po, POCost ORDER BY rand() LIMIT 1
+CREATE (po)-[:HAS_L1_PO_REJECTION {Date:datetime(), Comment:"This PO is rejected by L1 due to..< Rejection justification for Decision Traces - for Context Graph > - alternatively this could be placed on a separate Node  >..."}]->(l),
+       (a)-[:IS_REJECTED_PO_STATE {Date:datetime()}]->(po)
+DELETE np
+RETURN po.PONumber AS PONumber, POCost AS Cost;
 
 
 // Let's have the L1 approver approve all the remaining applicable POs.
 // We select the POs that are below the L1 Approval Limit and move them to the Approved State. For Demo purposes we will only approve 20 PO's here
-MATCH (l1:Employee)<-[:IS_ACTIVE_ROLE]-(ro:RolE {Title:"Level1Approver"}), (a:ApprovedPoS {Name:"ApprovedPoS"})
-WITH a, ro, l1 ORDER BY rand() LIMIT 1
-MATCH (:NewPoS {Name:"NewPoS"})-[np]->(p:PurchaseOrder)-[id:HAS_PO_ITEM]->(i:Product)-[]-(s:Supplier) 
-WITH a, ro, l1, np, p, SUM((id.POqt * (i.UnitPrice*id.POPriceDiscount))) AS POCost ORDER BY p LIMIT 20
+MATCH (l:Employee)<-[:IS_ACTIVE_ROLE]-(ro:RolE {Title:"Level1Approver"}), (a:ApprovedPoS {Name:"ApprovedPoS"})
+WITH a, ro, l ORDER BY rand() LIMIT 1
+MATCH (:NewPoS {Name:"NewPoS"})-[np]->(po:PurchaseOrder)-[id:HAS_PO_ITEM]->(i:Product)
+WHERE NOT (po)-[:HAS_L1_PO_APPROVAL|HAS_L1_PO_REJECTION]-()
+WITH a, ro, l, np, po, SUM((id.POqt * (i.UnitPrice * id.POPriceDiscount))) AS POCost
 WHERE POCost > ro.ApprovalBase AND POCost < ro.ApprovalLimit
-CREATE (p)-[:HAS_L1_PO_APPROVAL {Date:datetime(), Comment:"This PO is approved by L1 due to..< Approval justification for Decision Traces - for Context Graph > - alternatively this could be placed on a separate Node  >..."}]->(l1),
-      (a)-[:IS_APPROVED_PO_STATE {Date:datetime()}]->(p)
-DELETE np;
+WITH a, ro, l, np, po, POCost ORDER BY rand() LIMIT 20
+CREATE (po)-[:HAS_L1_PO_APPROVAL {Date:datetime(), Comment:"This PO is approved by L1 due to..< Approval justification for Decision Traces - for Context Graph > - alternatively this could be placed on a separate Node  >..."}]->(l),
+       (a)-[:IS_APPROVED_PO_STATE {Date:datetime()}]->(po)
+DELETE np
+RETURN po.PONumber AS PONumber, POCost AS Cost;
 
 // Level 1 is now ready to vet the New (pending approval) POs whose cost exceeds the Level 1 approval limit, so they cannot fully approve them, 
 // however, they will still vet them so the next Approval level can continue the approval process. 
-MATCH (l1:Employee)<-[:IS_ACTIVE_ROLE]-(ro:RolE {Title:"Level1Approver"}) 
-WITH  ro, l1 ORDER BY rand() LIMIT 1
-MATCH (:NewPoS {Name:"NewPoS"})-[np]->(p:PurchaseOrder)-[id:HAS_PO_ITEM]->(i:Product)-[]-(s:Supplier) 
-WITH  ro, l1, np, p, SUM((id.POqt * (i.UnitPrice*id.POPriceDiscount))) AS POCost 
+MATCH (l:Employee)<-[:IS_ACTIVE_ROLE]-(ro:RolE {Title:"Level1Approver"})
+WITH ro, l ORDER BY rand() LIMIT 1
+MATCH (:NewPoS {Name:"NewPoS"})-[np]->(po:PurchaseOrder)-[id:HAS_PO_ITEM]->(i:Product)
+WHERE NOT (po)-[:HAS_L1_PO_APPROVAL|HAS_L1_PO_REJECTION]-()
+WITH ro, l, np, po, SUM((id.POqt * (i.UnitPrice * id.POPriceDiscount))) AS POCost
 WHERE POCost > ro.ApprovalBase AND POCost > ro.ApprovalLimit
-CREATE (p)-[:HAS_L1_PO_APPROVAL {Date:datetime(), Comment:"This PO is approved by L1 due to..< Approval justification for Decision Traces - for Context Graph > - alternatively this could be placed on a separate Node  >..."}]->(l1);
-
+WITH ro, l, np, po, POCost ORDER BY rand() LIMIT 20
+CREATE (po)-[:HAS_L1_PO_APPROVAL {Date:datetime(), Comment:"This PO is approved by L1 due to..< Approval justification for Decision Traces - for Context Graph > - alternatively this could be placed on a separate Node  >..."}]->(l)
+RETURN po.PONumber AS PONumber, POCost AS Cost;
 
 // The following command is not supported by Cypher/GQL, but it would be very helpful if it were, as one Cypher command would suffice for both CASES. 
 // I am commenting it out and leaving it here as an enhancement request for the Graph Database provider. 
@@ -686,27 +704,33 @@ CREATE (p)-[:HAS_L1_PO_APPROVAL {Date:datetime(), Comment:"This PO is approved b
 // **Level 2 vetting**
 
 // Now we move to Level 2 vetting - similar to Level 1, but we will check whether L1 has already approved the PO.
-MATCH (l2:Employee)<-[:IS_ACTIVE_ROLE]-(ro:RolE {Title:"Level2Approver"}), (a:ApprovedPoS {Name:"ApprovedPoS"})
-WITH a, ro, l2 ORDER BY rand() LIMIT 1
-MATCH (:NewPoS {Name:"NewPoS"})-[np]->(p:PurchaseOrder)-[id:HAS_PO_ITEM]->(i:Product)-[]-(s:Supplier), (p)-[:HAS_L1_PO_APPROVAL]-()
-WITH a, ro, l2, np, p, SUM((id.POqt * (i.UnitPrice*id.POPriceDiscount))) AS POCost
+MATCH (l:Employee)<-[:IS_ACTIVE_ROLE]-(ro:RolE {Title:"Level2Approver"}), (a:ApprovedPoS {Name:"ApprovedPoS"})
+WITH a, ro, l ORDER BY rand() LIMIT 1
+MATCH (:NewPoS {Name:"NewPoS"})-[np]->(po:PurchaseOrder)-[id:HAS_PO_ITEM]->(i:Product), (po)-[:HAS_L1_PO_APPROVAL]-()
+WHERE NOT (po)-[:HAS_L2_PO_APPROVAL|HAS_L2_PO_REJECTION]-()
+WITH a, ro, l, np, po, SUM((id.POqt * (i.UnitPrice * id.POPriceDiscount))) AS POCost
 WHERE POCost > ro.ApprovalBase AND POCost < ro.ApprovalLimit
-CREATE (p)-[:HAS_L2_PO_APPROVAL {Date:datetime(), Comment:"This PO is approved by L2 due to..< Approval justification for Decision Traces - for Context Graph > - alternatively this could be placed on a separate Node  >..."}]->(l2),
-      (a)-[:IS_APPROVED_PO_STATE {Date:datetime()}]->(p)
-DELETE np;
+WITH a, ro, l, np, po, POCost ORDER BY rand() LIMIT 1
+CREATE (po)-[:HAS_L2_PO_APPROVAL {Date:datetime(), Comment:"This PO is approved by L2 due to..< Approval justification for Decision Traces - for Context Graph > - alternatively this could be placed on a separate Node  >..."}]->(l),
+       (a)-[:IS_APPROVED_PO_STATE {Date:datetime()}]->(po)
+DELETE np
+RETURN po.PONumber AS PONumber, POCost AS Cost;
 
 // Level 2 is now ready to vet the New (pending approval) POs whose cost exceeds the Level 2 approval limit, so they cannot fully approve them, 
 // however, they will still vet them so the next Approval level can continue the approval process.
 
-// For our Demo, we will Reject one PO at level 2 so we have one instance s these PO will not be approved by L3 as it will be rejected at L2 despite the fact that they were approved at L1 and beyond the L2 approval limit.
-MATCH (l2:Employee)<-[:IS_ACTIVE_ROLE]-(ro:RolE {Title:"Level2Approver"}), (a:RejectedPoS {Name:"RejectedPoS"})
-WITH a, ro, l2 ORDER BY rand() LIMIT 1
-MATCH (:NewPoS {Name:"NewPoS"})-[np]->(p:PurchaseOrder)-[id:HAS_PO_ITEM]->(i:Product)-[]-(s:Supplier), (p)-[:HAS_L1_PO_APPROVAL]-()
-WITH a, ro, l2, np, p, SUM((id.POqt * (i.UnitPrice*id.POPriceDiscount))) AS POCost ORDER BY p LIMIT 1
-WHERE POCost > ro.ApprovalBase AND POCost > ro.ApprovalLimit
-CREATE (p)-[:HAS_L2_PO_REJECTION {Date:datetime(), Comment:"This PO is rejected by L2 due to..< Rejection justification for Decision Traces - for Context Graph > - alternatively this could be placed on a separate Node  >..."}]->(l2),
-      (a)-[:IS_REJECTED_PO_STATE {Date:datetime()}]->(p)
-DELETE np;
+// For our Demo, we will Reject one PO at level 2 so we have one instance these PO will not be approved by L3 as it will be rejected at L2 despite the fact that they were approved at L1 and beyond the L2 approval limit.
+MATCH (l:Employee)<-[:IS_ACTIVE_ROLE]-(ro:RolE {Title:"Level2Approver"}), (a:RejectedPoS {Name:"RejectedPoS"})
+WITH a, ro, l ORDER BY rand() LIMIT 1
+MATCH (:NewPoS {Name:"NewPoS"})-[np]->(po:PurchaseOrder)-[id:HAS_PO_ITEM]->(i:Product), (po)-[:HAS_L1_PO_APPROVAL]-()
+WHERE NOT (po)-[:HAS_L2_PO_APPROVAL|HAS_L2_PO_REJECTION]-()
+WITH a, ro, l, np, po, SUM((id.POqt * (i.UnitPrice * id.POPriceDiscount))) AS POCost
+WHERE POCost > ro.ApprovalBase
+WITH a, ro, l, np, po, POCost ORDER BY rand() LIMIT 1
+CREATE (po)-[:HAS_L2_PO_REJECTION {Date:datetime(), Comment:"This PO is rejected by L2 due to..< Rejection justification for Decision Traces - for Context Graph > - alternatively this could be placed on a separate Node  >..."}]->(l),
+       (a)-[:IS_REJECTED_PO_STATE {Date:datetime()}]->(po)
+DELETE np
+RETURN po.PONumber AS PONumber, POCost AS Cost;
 
 
 MATCH (l2:Employee)<-[:IS_ACTIVE_ROLE]-(ro:RolE {Title:"Level2Approver"}) 
@@ -717,29 +741,36 @@ WHERE POCost > ro.ApprovalBase AND POCost > ro.ApprovalLimit
 CREATE (p)-[:HAS_L2_PO_APPROVAL {Date:datetime(), Comment:"This PO is approved by L2 due to..< Approval justification for Decision Traces - for Context Graph > - alternatively this could be placed on a separate Node  >..."}]->(l2);
 
 
+
 // **Level 3 vetting**
 
 //Finally, Level 3 vetting  
 // For our Demo, we will Reject one PO at level 3 so we have one instance  
-MATCH (l3:Employee)<-[:IS_ACTIVE_ROLE]-(ro:RolE {Title:"Level3Approver"}), (a:RejectedPoS {Name:"RejectedPoS"})
-WITH a, ro, l3 ORDER BY rand() LIMIT 1
-MATCH (:NewPoS {Name:"NewPoS"})-[np]->(p:PurchaseOrder)-[id:HAS_PO_ITEM]->(i:Product)-[]-(s:Supplier), (p)-[:HAS_L2_PO_APPROVAL]-()
-WITH a, ro, l3, np, p, SUM((id.POqt * (i.UnitPrice*id.POPriceDiscount))) AS POCost ORDER BY p LIMIT 1
-WHERE POCost > ro.ApprovalBase AND POCost < ro.ApprovalLimit 
-CREATE (p)-[:HAS_L3_PO_REJECTION {Date:datetime(), Comment:"This PO is rejected by L3 due to..< Rejection justification for Decision Traces - for Context Graph > - alternatively this could be placed on a separate Node  >..."}]->(l3),
-      (a)-[:IS_REJECTED_PO_STATE {Date:datetime()}]->(p)
-DELETE np;
+MATCH (l:Employee)<-[:IS_ACTIVE_ROLE]-(ro:RolE {Title:"Level3Approver"}), (a:RejectedPoS {Name:"RejectedPoS"})
+WITH a, ro, l ORDER BY rand() LIMIT 1
+MATCH (:NewPoS {Name:"NewPoS"})-[np]->(po:PurchaseOrder)-[id:HAS_PO_ITEM]->(i:Product), (po)-[:HAS_L2_PO_APPROVAL]-()
+WHERE NOT (po)-[:HAS_L3_PO_APPROVAL|HAS_L3_PO_REJECTION]-()
+WITH a, ro, l, np, po, SUM((id.POqt * (i.UnitPrice * id.POPriceDiscount))) AS POCost
+WHERE POCost > ro.ApprovalBase AND POCost < ro.ApprovalLimit
+WITH a, ro, l, np, po, POCost ORDER BY rand() LIMIT 1
+CREATE (po)-[:HAS_L3_PO_REJECTION {Date:datetime(), Comment:"This PO is rejected by L3 due to..< Rejection justification for Decision Traces - for Context Graph > - alternatively this could be placed on a separate Node>"}]->(l),
+       (a)-[:IS_REJECTED_PO_STATE {Date:datetime()}]->(po)
+DELETE np
+RETURN po.PONumber AS PONumber, POCost AS Cost;
 
 
 // Level 3 will approve the two remaining PO's , so we leave some PO's pending approval. 
-MATCH (l3:Employee)<-[:IS_ACTIVE_ROLE]-(ro:RolE {Title:"Level3Approver"}), (a:ApprovedPoS {Name:"ApprovedPoS"})
-WITH a, ro, l3 ORDER BY rand() LIMIT 1
-MATCH (:NewPoS {Name:"NewPoS"})-[np]->(p:PurchaseOrder)-[id:HAS_PO_ITEM]->(i:Product)-[]-(s:Supplier), (p)-[:HAS_L2_PO_APPROVAL]-()
-WITH a, ro, l3, np, p, SUM((id.POqt * (i.UnitPrice*id.POPriceDiscount))) AS POCost ORDER BY p LIMIT 2
+MATCH (l:Employee)<-[:IS_ACTIVE_ROLE]-(ro:RolE {Title:"Level3Approver"}), (a:ApprovedPoS {Name:"ApprovedPoS"})
+WITH a, ro, l ORDER BY rand() LIMIT 1
+MATCH (:NewPoS {Name:"NewPoS"})-[np]->(po:PurchaseOrder)-[id:HAS_PO_ITEM]->(i:Product), (po)-[:HAS_L2_PO_APPROVAL]-()
+WHERE NOT (po)-[:HAS_L3_PO_APPROVAL|HAS_L3_PO_REJECTION]-()
+WITH a, ro, l, np, po, SUM((id.POqt * (i.UnitPrice * id.POPriceDiscount))) AS POCost
 WHERE POCost > ro.ApprovalBase AND POCost < ro.ApprovalLimit
-CREATE (p)-[:HAS_L3_PO_APPROVAL {Date:datetime(), Comment:"This PO is approved by L3 due to..< Approval justification for Decision Traces - for Context Graph > - alternatively this could be placed on a separate Node  >..."}]->(l3),
-      (a)-[:IS_APPROVED_PO_STATE {Date:datetime()}]->(p)
-DELETE np;
+WITH a, ro, l, np, po, POCost ORDER BY rand() LIMIT 2
+CREATE (po)-[:HAS_L3_PO_APPROVAL {Date:datetime(), Comment:"This PO is approved by L3 due to..< Approval justification for Decision Traces - for Context Graph > - alternatively this could be placed on a separate Node>"}]->(l),
+       (a)-[:IS_APPROVED_PO_STATE {Date:datetime()}]->(po)
+DELETE np
+RETURN po.PONumber AS PONumber, POCost AS Cost;
 
 
 
@@ -754,10 +785,11 @@ MATCH (re:RejectedPoS)-[:IS_REJECTED_PO_STATE]->(rpo:PurchaseOrder)-[:PO_CREATED
       (n:NewPoS {Name:"NewPoS"})
 WHERE NOT ()-[:HAS_PREVIOUS_PO]->(rpo)
 WITH n, rpo, e, s ORDER BY rand() LIMIT 1
+WHERE NOT ()-[:HAS_PREVIOUS_PO]->(rpo)
 MATCH (rpo)-[:HAS_PO_ITEM]->(p)<-[:SUPPLIES]-(s),
       (p)<-[:IS_AVAILABLE_PRODUCT]-(:ProductStatusAvailablE),
       (r:ReorderLevel)<-[:HAS_REORDER_LEVEL]-(p)-[:HAS_INVENTORY_LEVEL]->(i:InventoryLevel)
-OPTIONAL MATCH ()-[:IS_NEW_PO_STATE | IS_APPROVED_PO_STATE | IS_SUBMITTED_PO_STATE]->(activePO:PurchaseOrder)-[poi2:HAS_PO_ITEM]->(p)
+OPTIONAL MATCH ()-[:IS_NEW_PO_STATE|IS_APPROVED_PO_STATE|IS_SUBMITTED_PO_STATE]->(activePO:PurchaseOrder)-[poi2:HAS_PO_ITEM]->(p)
 WITH rpo, e, n, s, p, r, i, SUM(coalesce(poi2.POqt, 0)) AS AlreadyPendingQty
 OPTIONAL MATCH (p)<-[op:HAS_ORDER_PRODUCT]-(:Order)<-[:IS_OPEN_ORDER_STATE]-()
 WITH rpo, e, n, s, p, r, i, AlreadyPendingQty, SUM(coalesce(op.Quantity, 0)) AS OpenOrderQty
@@ -765,11 +797,11 @@ WHERE i.UnitsInStock + AlreadyPendingQty - OpenOrderQty - (r.StockThreshold * 0.
 WITH rpo, e, n, s, COLLECT({
      Product: p,
      qty: (r.StockThreshold) - (i.UnitsInStock + AlreadyPendingQty - OpenOrderQty) + (r.StockThreshold / 2)
-}) AS orderItems
+     }) AS orderItems
 WHERE size(orderItems) > 0
 CREATE (n)-[:IS_NEW_PO_STATE]->(po:PurchaseOrder {
-       PONumber: "PO-" + left(randomUUID(), 5) + right(randomUUID(), 5),
-       PODate: datetime()
+        PONumber: "PO-" + left(randomUUID(), 5) + right(randomUUID(), 5),
+        PODate: datetime()
 })
 CREATE (s)<-[:PO_FOR_SUPPLIER]-(po)
 CREATE (po)-[:PO_CREATED_BY]->(e)
@@ -795,17 +827,19 @@ RETURN DISTINCT po.PONumber AS PONumber, rpo.PONumber AS ResubmittedFrom;
 // The Buyer will Approve and Submit the PO's to the respective Supplier. For Demo purpouse, we will limit to 10 submission and we will leave a few PO's on the Approved collection (state) pending submission 
 // When the Buyer submits the PO to the Supplier 
 
-MATCH (bu:Employee)<-[:IS_ACTIVE_ROLE]-(ro:RolE {Title:"Buyer"}), (su:SubmittedPoS {Name:"SubmittedPoS"})
+MATCH (bu:Employee)<-[:IS_ACTIVE_ROLE]-(:RolE {Title:"Buyer"}), (su:SubmittedPoS {Name:"SubmittedPoS"})
 WITH su, bu ORDER BY rand() LIMIT 1
-MATCH (a:ApprovedPoS {Name:"ApprovedPoS"})-[ap]->(po:PurchaseOrder)-[:PO_FOR_SUPPLIER]->(s:Supplier)-[:HAS_SUPPLIER_NEW_PENDING_POS]->(snp) 
-WITH ap, s, bu, su, po, snp ORDER BY po LIMIT 10             
-CREATE (po)-[:HAS_BUYER_PO_APPROVAL {Date:datetime(), Comment:"This PO is approved by Buyer due to..< Approval justification for Decision Traces - for Context Graph > - alternatively this could be placed on a separate Node  >..."}]->(bu),  // We connect the PO to the Buyer that Submitted it. 
-       (su)-[:IS_SUBMITTED_PO_STATE {Date:datetime()}]->(po), // We connect the PO to the Submitted state Collection 
-       (snp)-[:IS_SUPPLIER_NEW_PO_STATE {Date:datetime()}]->(po),                     // The Buyer places the PO in the Supplier's NewPoS collection 
-       (po)-[:HAS_SUPPLIER_NEW_RFQ]->(:PoNewRFQ {Name:"PoNewRFQ"}),             // The Buyer creats the PO's state collections for upcoming RFQ's vetting process - The firts one is PoNewFRQ - to hold the new RFQ's submitted by the Supplier
-       (po)-[:HAS_SUPPLIER_REJECTED_RFQ]->(:PoRejectedRFQ {Name:"PoRejectedRFQ"})    // The second one is the PoRejectedRFQ - to hold the Rejected RFQ's as there could be more than one rejection in the vetting
-                                                              // we don'tt need a collection to hold the Approved RFQ as there will only be one and we can connect it directly to the PO
-DELETE ap;                                                    // We remove the PO from the Approved state as we have connected it to Submitted earlier. 
+MATCH (a:ApprovedPoS {Name:"ApprovedPoS"})-[ap]->(po:PurchaseOrder)-[:PO_FOR_SUPPLIER]->(s:Supplier)-[:HAS_SUPPLIER_NEW_PENDING_POS]->(snp)
+WITH bu, su, s, po, snp ORDER BY rand() LIMIT 1
+MATCH (a:ApprovedPoS {Name:"ApprovedPoS"})-[ap]->(po)
+CREATE (po)-[:HAS_BUYER_PO_APPROVAL {Date:datetime(), Comment:"This PO is approved by Buyer due to..< Approval justification for Decision Traces - for Context Graph > - alternatively this could be placed on a separate Node  >"}]->(bu),
+       (su)-[:IS_SUBMITTED_PO_STATE {Date:datetime()}]->(po),        // We connect the PO to the Submitted state Collection 
+       (snp)-[:IS_SUPPLIER_NEW_PO_STATE {Date:datetime()}]->(po),    // The Buyer places the PO in the Supplier's NewPoS collection 
+       (po)-[:HAS_SUPPLIER_NEW_RFQ]->(:PoNewRFQ {Name:"PoNewRFQ"}),  // The Buyer creats the PO's state collections for upcoming RFQ's vetting process - The firts one is PoNewFRQ - to hold the new RFQ's submitted by the Supplier
+       (po)-[:HAS_SUPPLIER_REJECTED_RFQ]->(:PoRejectedRFQ {Name:"PoRejectedRFQ"})  // The second one is the PoRejectedRFQ - to hold the Rejected RFQ's as there could be more than one rejection in the vetting
+DELETE ap                                                                          // we don't need a collection to hold the Approved RFQ as there will only be one and we can connect it directly to the PO
+RETURN po.PONumber AS PONumber;                                                    // We remove the PO from the Approved state as we have connected it to Submitted earlier.                                               
+                                  
 
 // As we move the 'RFQs through the Vetting process, we will connect the respective RFQ State to the RFQs.
 // We will use the following Ontology for this:
@@ -944,8 +978,6 @@ RETURN po.PONumber, rfq.RFQNumber ,p.ProductID, poi.POqt, poi.POqt * (p.UnitPric
         MATCH (su:Supplier)<-[:RFQ_FROM_SUPPLIER]-(rrfq:RFQ)<-[:IS_SUPPLIER_REJECTED_RFQ_STATE]-(), (rrfq)-[:IS_RFQ_FOR_PO]-(po:PurchaseOrder)
         WHERE NOT ()-[:HAS_PREVIOUS_RFQ]->(rrfq)
         WITH su, rrfq, po ORDER BY rand() LIMIT 1
-        CALL apoc.lock.nodes([rrfq])
-        WITH su, rrfq, po
         WHERE NOT ()-[:HAS_PREVIOUS_RFQ]->(rrfq)
         MATCH (p)<-[pq:HAS_PO_ITEM]-(po)-[:HAS_SUPPLIER_NEW_RFQ]->(snr)
         WITH rrfq, su, po, snr, COLLECT({
@@ -979,8 +1011,14 @@ RETURN po.PONumber, rfq.RFQNumber ,p.ProductID, poi.POqt, poi.POqt * (p.UnitPric
 //--------------------------------------------------------------------------------------------------------------------------------------------------------------//
 
 // Check the updated Stock Threshold for each Product before the update of Stock Threshold.
-MATCH ()-[:IS_AVAILABLE_PRODUCT]->(p:Product)-[:HAS_INVENTORY_LEVEL]-(in), (p)-[:HAS_SUPPLY_ORDER]->(so), (p)-[:HAS_REORDER_LEVEL]->(re), (p)<-[oi:HAS_ORDER_PRODUCT]-(or)
-RETURN p.ProductName, in.UnitsInStock, so.UnitsOnOrder, re.StockThreshold, toInteger((avg(oi.Quantity))) AS AverageQuantityPerOrder, min(oi.Quantity), max(oi.Quantity),count(DISTINCT (toString(or.OrderDate.year) + "-" + toString(or.OrderDate.month))) AS OrdersPerMonth ORDER BY  p.ProductName;
+MATCH ()-[:IS_AVAILABLE_PRODUCT]->(p:Product)-[:HAS_INVENTORY_LEVEL]-(in), 
+      (p)-[:HAS_SUPPLY_ORDER]->(so), 
+      (p)-[:HAS_REORDER_LEVEL]->(re), 
+      (p)<-[oi:HAS_ORDER_PRODUCT]-(or)
+RETURN p.ProductName AS ProductName, in.UnitsInStock, so.UnitsOnOrder, re.StockThreshold, 
+toInteger((avg(oi.Quantity))) AS AverageQuantityPerOrder, min(oi.Quantity), max(oi.Quantity),count(DISTINCT (toString(or.OrderDate.year) + "-" + toString(or.OrderDate.month))) AS OrdersPerMonth
+ ORDER BY ProductName;
+
 
 // ** IMPORTANT NOTE **: The Stock Threshold is a critical parameter in inventory management that determines when to reorder products.
 //    It is essential to keep it updated based on the latest order data to ensure that it reflects current demand patterns and helps in maintaining optimal inventory levels.
@@ -999,8 +1037,14 @@ SET re.StockThreshold = toInteger(round((toFloat(TotalQuantityOrdered) / MonthsW
 
 
 // Check the Stock Threshold for each Product after the update of Stock Threshold.
-MATCH ()-[:IS_AVAILABLE_PRODUCT]->(p:Product)-[:HAS_INVENTORY_LEVEL]-(in), (p)-[:HAS_SUPPLY_ORDER]->(so), (p)-[:HAS_REORDER_LEVEL]->(re), (p)<-[oi:HAS_ORDER_PRODUCT]-(or)
-RETURN p.ProductName, in.UnitsInStock, so.UnitsOnOrder, re.StockThreshold, toInteger((avg(oi.Quantity))) AS AverageQuantityPerOrder, min(oi.Quantity), max(oi.Quantity),count(DISTINCT (toString(or.OrderDate.year) + "-" + toString(or.OrderDate.month))) AS OrdersPerMonth ORDER BY  p.ProductName;
+MATCH ()-[:IS_AVAILABLE_PRODUCT]->(p:Product)-[:HAS_INVENTORY_LEVEL]-(in), 
+      (p)-[:HAS_SUPPLY_ORDER]->(so), 
+      (p)-[:HAS_REORDER_LEVEL]->(re), 
+      (p)<-[oi:HAS_ORDER_PRODUCT]-(or)
+RETURN p.ProductName AS ProductName, in.UnitsInStock, so.UnitsOnOrder, re.StockThreshold, 
+toInteger((avg(oi.Quantity))) AS AverageQuantityPerOrder, min(oi.Quantity), max(oi.Quantity),count(DISTINCT (toString(or.OrderDate.year) + "-" + toString(or.OrderDate.month))) AS OrdersPerMonth
+ ORDER BY ProductName;
+
 
 // ###### Run the **Inventory Level Report** ######  
 // You will see how the updated Stock Threshold affects the creation of new Purchase Orders for products that are below their Stock Threshold.
@@ -1060,14 +1104,28 @@ RETURN DISTINCT po.PONumber AS PONumber, s.SupplierID AS SupplierID, size(orderI
 
 // First, we will have the Warehouse Clerk (Employee) receive the products and update the Inventory Levels accordingly.
 // We will recive 5 PO's and update the Inventory Levels for the products in those PO's. We will leave a few PO's pending delivery so we can query them later and see that they are pending delivery.
-MATCH (wc:Employee)<-[:IS_ACTIVE_ROLE]-(ro:RolE {Title:"WarehouseClerk"}), (p)<-[poi:HAS_PO_ITEM]-(po:PurchaseOrder)-[:HAS_APPROVED_RFQ]->(rfq:RFQ)-[rfi:HAS_RFQ_ITEM]->(p)-[:HAS_INVENTORY_LEVEL]->(inv), (p)-[:HAS_SUPPLY_ORDER]->(suo)
-WHERE poi.POqt = rfi.RFQqt AND NOT (po)-[:HAS_WAREHOUSE_DELIVERY]->() // We only want to receive the products for the PO's that have not been received yet (no Warehouse Delivery yet)
-WITH wc, po, rfq, inv, suo, rfi, p ORDER BY po.PONumber LIMIT 5
-MERGE (po)-[:HAS_WAREHOUSE_DELIVERY {Date:datetime(), Comment:"The products have been received as per PO at the Warehouse and the Inventory Levels have been updated accordingly."}]->(wc)  // We connect the PO to the Warehouse Clerk that received the products and updated the Inventory Levels
-SET  inv.UnitsInStock = inv.UnitsInStock + rfi.RFQqt,  // We update the Inventory Level to reflect the received products
-     suo.UnitsOnOrder = suo.UnitsOnOrder - rfi.RFQqt;  // We update the Supply Order status to reflect the received products 
-
-
+MATCH (wc:Employee)<-[:IS_ACTIVE_ROLE]-(:RolE {Title:"WarehouseClerk"})
+WITH wc ORDER BY rand() LIMIT 1
+MATCH (p)<-[poi:HAS_PO_ITEM]-(po:PurchaseOrder)-[:HAS_APPROVED_RFQ]->(:RFQ)-[rfi:HAS_RFQ_ITEM]->(p)
+WHERE poi.POqt = rfi.RFQqt AND NOT (po)-[:HAS_WAREHOUSE_DELIVERY]->()  // We only want to receive the products for the PO's that have not been received yet (no Warehouse Delivery yet)
+WITH wc, po, COLLECT({p: p, rfi: rfi}) AS items
+WITH wc, po, items ORDER BY rand() LIMIT 1
+       // Gather every node this delivery will touch — each product's InventoryLevel
+        // and SupplyOrder nodes — so they can be locked alongside the PO before writing.
+UNWIND items AS item
+WITH wc, po, items, item.p AS p
+MATCH (p)-[:HAS_INVENTORY_LEVEL]->(inv), (p)-[:HAS_SUPPLY_ORDER]->(suo)
+WITH wc, po, items, collect(inv) AS invNodes, collect(suo) AS suoNodes
+WHERE NOT (po)-[:HAS_WAREHOUSE_DELIVERY]->()
+CREATE (po)-[:HAS_WAREHOUSE_DELIVERY {Date:datetime(), Comment:"The products have been received as per PO at the Warehouse and the Inventory Levels have been updated accordingly."}]->(wc)
+WITH po, items
+UNWIND items AS item
+WITH po, item.p AS p, item.rfi AS rfi
+MATCH (p)-[:HAS_INVENTORY_LEVEL]->(inv), (p)-[:HAS_SUPPLY_ORDER]->(suo)
+SET inv.UnitsInStock = inv.UnitsInStock + rfi.RFQqt,     // We update the Inventory Level to reflect the received products
+    inv.LastUpdate = datetime(),
+    suo.UnitsOnOrder = suo.UnitsOnOrder - rfi.RFQqt      // We update the Supply Order status to reflect the received products 
+RETURN DISTINCT po.PONumber AS PONumber;
 
 //--------------------------------------------------------------------------------------------------------------------------------------------------------------//
 // **PO Payment and Closure by Finance**
@@ -1076,15 +1134,17 @@ SET  inv.UnitsInStock = inv.UnitsInStock + rfi.RFQqt,  // We update the Inventor
 
 // Next, Finance will Pay and close the PO and move it to the Closed state on both the Procurement and Supplier perspectives.
 // We will pay and close 4 PO's and leave a few pending payment so we can query them later and see that they are pending payment.
-MATCH (f:Employee)<-[:IS_ACTIVE_ROLE]-(ro:RolE {Title:"Finance"}), 
-(cpo)<-[:HAS_CLOSED_PO_STATE]-(:PoS)-[:HAS_SUBMITTED_PO_STATE]->(:SubmittedPoS)-[r1]->(po:PurchaseOrder)-[:HAS_WAREHOUSE_DELIVERY]->(wc:Employee), 
-(po)<-[r2:IS_SUPPLIER_OPEN_PO_STATE]-()<-[]-(su:Supplier)-[:HAS_SUPPLIER_CLOSED_POS]->(scp)
-WITH r1, r2, cpo, scp, f, po ORDER BY po.PONumber LIMIT 4
-MERGE (po)-[:HAS_FINANCE_PAYMENT {Date:datetime(), Comment:"The PO has been paid by Finance and the PO is now closed."}]->(f)  // We connect the PO to the Finance employee that paid the PO and closed it
-MERGE (cpo)-[:IS_CLOSED_PO_STATE {Date:datetime(), Comment:"The PO has been paid by Finance and the PO is now closed."}]->(po)  // We connect the PO to the Closed state on the Procurement perspective
-MERGE (scp)-[:HAS_SUPPLIER_CLOSED_PO_STATE {Date:datetime(), Comment:"The PO has been paid by Finance and the PO is now closed."}]->(po)  // We connect the PO to the Closed state on the Supplier perspective
-DELETE r1, r2;  // We remove the PO from the Submitted state on the Procurement perspective and from the Open state on the Supplier perspective
-
+MATCH (f:Employee)<-[:IS_ACTIVE_ROLE]-(:RolE {Title:"Finance"})
+WITH f ORDER BY rand() LIMIT 1
+MATCH (cpo)<-[:HAS_CLOSED_PO_STATE]-(:PoS)-[:HAS_SUBMITTED_PO_STATE]->(:SubmittedPoS)-[r1]->(po:PurchaseOrder)-[:HAS_WAREHOUSE_DELIVERY]->(:Employee),
+      (po)<-[r2:IS_SUPPLIER_OPEN_PO_STATE]-()<-[]-(:Supplier)-[:HAS_SUPPLIER_CLOSED_POS]->(scp)
+WITH f, cpo, scp, r1, r2, po ORDER BY rand() LIMIT 1
+WHERE NOT (po)-[:HAS_FINANCE_PAYMENT]->()
+CREATE (po)-[:HAS_FINANCE_PAYMENT {Date:datetime(), Comment:"The PO has been paid by Finance and the PO is now closed."}]->(f)  // We connect the PO to the Finance employee that paid the PO and closed it
+CREATE (cpo)-[:IS_CLOSED_PO_STATE {Date:datetime(), Comment:"The PO has been paid by Finance and the PO is now closed."}]->(po)  // We connect the PO to the Closed state on the Procurement perspective
+CREATE (scp)-[:HAS_SUPPLIER_CLOSED_PO_STATE {Date:datetime(), Comment:"The PO has been paid by Finance and the PO is now closed."}]->(po)  // We connect the PO to the Closed state on the Supplier perspective
+DELETE r1, r2    // We remove the PO from the Submitted state on the Procurement perspective and from the Open state on the Supplier perspective
+RETURN po.PONumber AS PONumber;
 
 
 //--------------------------------------------------------------------------------------------------------------------------------------------------------------//
@@ -1097,38 +1157,44 @@ DELETE r1, r2;  // We remove the PO from the Submitted state on the Procurement 
 
 // Select the Warehouse Clerk and a Shipper who will handle this batch of fulfillments.
 // (Same disconnected-pattern Cartesian product warning noted earlier in the script -- harmless here since we cap it to one Employee and one Shipper via ORDER BY rand() LIMIT 1.)
+//Order fulfillment — process ONE order per call
 MATCH (wc:Employee)<-[:IS_ACTIVE_ROLE]-(:RolE {Title:"WarehouseClerk"}), (s:Shipper)<-[:HAS_SHIPPER]-(si:ShipInfo)
 WITH wc, si, s ORDER BY rand() LIMIT 1
 
 // Find the oldest Open Order where every line currently has sufficient stock (grouped by Order).
-MATCH (op:OrderStatusOpeN {Status:"Open"})-[r:IS_OPEN_ORDER_STATE]->(o:Order)-[details:HAS_ORDER_PRODUCT]->(p:Product)-[:HAS_INVENTORY_LEVEL]->(inv:InventoryLevel)
-WITH wc, si, s, op, o, r,
+// This read is unlocked and can be stale by the time we act on it — that's fine, because
+// everything that matters gets re-verified under lock before any write happens below.
+MATCH (op:OrderStatusOpeN {Status:"Open"})-[:IS_OPEN_ORDER_STATE]->(o:Order)-[details:HAS_ORDER_PRODUCT]->(p:Product)-[:HAS_INVENTORY_LEVEL]->(inv:InventoryLevel)
+WITH wc, si, s, op, o,
      count(details)                                                        AS TotalLines,
      sum(CASE WHEN inv.UnitsInStock > details.Quantity THEN 1 ELSE 0 END) AS LinesWithStock
 WHERE TotalLines = LinesWithStock
-WITH wc, si, s, op, o, r
+WITH wc, si, s, op, o
 ORDER BY o.OrderDate
 LIMIT 1
 
-// Re-collect this order's lines as one list, so shipment creation happens once — not once per line.
+// Re-collect this order's lines.
 MATCH (o)-[details:HAS_ORDER_PRODUCT]->(p:Product)-[:HAS_INVENTORY_LEVEL]->(inv:InventoryLevel)
-WITH wc, si, s, op, o, r, collect({details: details, inv: inv}) AS lines
+WITH wc, si, s, op, o, collect({details: details, inv: inv}) AS lines
+
+MATCH (op)-[r:IS_OPEN_ORDER_STATE]->(o)
+WHERE ALL(x IN lines WHERE x.inv.UnitsInStock > x.details.Quantity)
 
 MATCH (a)<-[:HAS_CUSTOMER_ADDRESS]-(:Customer)<-[:HAS_ORDER_CUSTOMER]-(o)
 MATCH (f:OrderStatusFulfilleD {Status:"Fulfilled"})
-CREATE (i:ShipInfo {ShippmentID:"SH-"+randomUUID(), ShippedDate:datetime(), ShipName:si.ShipName, Freight:round(rand()*100, 2)}),
+CREATE (i:ShipInfo {ShippmentID:"SH-"+randomUUID(), ShippedDate:datetime(), ShipName:si.ShipName, Freight:round(rand()*100)}),
        (o)-[:HAS_SHIPMENT_INFO]->(i),
        (i)-[:HAS_SHIPPER]->(s),
        (i)-[:HAS_SHIPMENT_ADDRESS]->(a),
        (f)-[:IS_FULFILLED_ORDER_STATE {FulfillDate: datetime()}]->(o),
        (o)-[:HAS_WAREHOUSE_FULFILLMENT {Date:datetime(), Comment:"Order picked, packed, and shipped by the Warehouse Clerk."}]->(wc)
 DELETE r
+
 WITH o, lines
 UNWIND lines AS x
   SET x.inv.UnitsInStock = x.inv.UnitsInStock - x.details.Quantity,
       x.inv.LastUpdate = datetime()
 RETURN DISTINCT o.OrderID AS OrderID;
-
 
 // ###### Run the **Inventory Level Report** ######  
 // You will see how the Inventory Level changes after the Order Fulfillment and the updated Supply Order status for the products.
@@ -1148,20 +1214,11 @@ RETURN DISTINCT o.OrderID AS OrderID;
 
 // python NorthwindPlus_Stress_Test.py --loop customer-order --rate 6 & 
 
-  // To visualize on the Graph console the new Orders that were created and fulfilled today.
-  MATCH (superset:OrderS)-[edge]->(os)
-  OPTIONAL MATCH path = (os)-[]->(o:Order)
-   WHERE duration.inDays(o.OrderDate, datetime()).days = 0
-   RETURN superset, edge, os, path;
+
 
 // python NorthwindPlus_Stress_Test.py --loop po-creation --rate 2 &
 // python NorthwindPlus_Stress_Test.py --loop po-vetting --rate 4 &
 
-  // To visualize in the Graph console the new POs that were created, approved, submitted, and closed today.
-  MATCH (superset:PoS)-[edge]->(collection)
-  OPTIONAL MATCH path = (collection)-[]->(po:PurchaseOrder)
-   WHERE duration.inDays(po.PODate, datetime()).days = 0
-   RETURN superset, edge, collection, path; 
 
 // python NorthwindPlus_Stress_Test.py --loop rfq-vetting --rate 4 &
 // python NorthwindPlus_Stress_Test.py --loop warehouse-finance --rate 4 &
@@ -1290,7 +1347,7 @@ ORDER BY r.Similarity DESC limit 10;
 MATCH (me:Customer)-[:SIMILARITY]->(c:Customer)-[r:RATED]->(p:Product)
 WHERE me.CustomerID = 'ANTON' and NOT ( (me)-[:RATED*1..2]->(p:Product) )
 WITH p, COLLECT(r.Rating)[0..1] as Ratings, collect(c.CompanyName)[0..1] as Customers
-WITH p, Customers, round(REDUCE(s=0,i in Ratings | s+i) / size(Ratings), 5)  as Recommendation
+WITH p, Customers, round(REDUCE(s=0,i in Ratings | s+i) / size(Ratings))  as Recommendation
 ORDER BY Recommendation DESC
 RETURN p.ProductName, Customers, Recommendation LIMIT 25;
 
@@ -1332,7 +1389,7 @@ LIMIT 10;
 // Employees by Average Discount Given
 MATCH (n)<-[:HAS_PERSON]-(e:Employee)<-[:SOLD_BY]-(o:Order)-[details:HAS_ORDER_PRODUCT]->(:Product)
 RETURN n.FirstName, n.LastName,e.EmployeeID AS EmployeeID, 
-       round(avg(details.Discount), 4) AS AverageDiscount, 
+       round(avg(details.Discount)) AS AverageDiscount, 
        count(details) AS LinesSold
 ORDER BY AverageDiscount DESC;
 
@@ -1393,13 +1450,13 @@ MATCH (s:Supplier)<-[:RFQ_FROM_SUPPLIER]-(rfq:RFQ)
 WITH s, count(rfq) AS TotalRFQs,
      count(CASE WHEN (rfq)<-[:IS_SUPPLIER_REJECTED_RFQ_STATE]-() THEN 1 END) AS RejectedRFQs
 WHERE TotalRFQs > 0
-RETURN s.CompanyName, TotalRFQs, RejectedRFQs, round(100.0 * RejectedRFQs / TotalRFQs, 1) AS RejectionRatePct
+RETURN s.CompanyName, TotalRFQs, RejectedRFQs, round(100.0 * RejectedRFQs / TotalRFQs) AS RejectionRatePct
 ORDER BY RejectionRatePct DESC;
 
 // PO Rejection Value by Approval Level -- where is procurement friction concentrated?
 MATCH (po:PurchaseOrder)-[r:HAS_L1_PO_REJECTION|HAS_L2_PO_REJECTION|HAS_L3_PO_REJECTION]->(:Employee), (po)-[poi:HAS_PO_ITEM]->(p:Product)
 WITH type(r) AS RejectionLevel, po, SUM(poi.POqt * (p.UnitPrice * poi.POPriceDiscount)) AS POCost
-RETURN RejectionLevel, count(DISTINCT po) AS RejectedPOs, round(SUM(POCost), 2) AS TotalRejectedValue
+RETURN RejectionLevel, count(DISTINCT po) AS RejectedPOs, round(SUM(POCost)) AS TotalRejectedValue
 ORDER BY TotalRejectedValue DESC;
 
 // Approval Workload by Employee -- who is doing the most PO/RFQ vetting?
@@ -1412,7 +1469,7 @@ MATCH (:OrderStatusOpeN)-[:IS_OPEN_ORDER_STATE]->(o:Order)-[details:HAS_ORDER_PR
 WITH c, o, collect({ProductName: p.ProductName, Ordered: details.Quantity, InStock: inv.UnitsInStock, Shortfall: details.Quantity - inv.UnitsInStock}) AS lines
 WITH c, o, [line IN lines WHERE line.Shortfall > 0] AS blockingProducts
 WHERE size(blockingProducts) > 0
-RETURN c.CompanyName AS Customer, o.OrderID, o.OrderDate, duration_between(DateTime(),o.OrderDate) AS TimeWaiting ,blockingProducts
+RETURN c.CompanyName AS Customer, o.OrderID, o.OrderDate, DateTime() - o.OrderDate AS TimeWaiting ,blockingProducts
 ORDER BY o.OrderDate ASC;
 
 // Top Products by Total Quantity Ordered to Date, and the Customer that ordered the most of that Product
@@ -1436,11 +1493,11 @@ ORDER BY Product, QuantityOrderedToDate DESC;
 
 // Open Customer Orders waiting time (short query to see how long Orders have been waiting to be fulfilled)
 MATCH (:OrderStatusOpeN)-[]->(o:Order)-[]->(c:Customer) 
-RETURN o.OrderID,c.CompanyName AS Customer , o.OrderDate AS OrderDate, duration_between(DateTime(),o.OrderDate) AS TimeWaiting;
+RETURN o.OrderID,c.CompanyName AS Customer , o.OrderDate AS OrderDate, DateTime() - o.OrderDate AS TimeWaiting;
 
 // Fulfilled Customer Orders - Time to Fulfill 
 MATCH (:OrderStatusFulfilleD)-[f]->(o:Order)-[]->(c:Customer) 
-RETURN o.OrderID,c.CompanyName AS Customer , o.OrderDate AS OrderDate, duration_between(f.FulfillDate,o.OrderDate) AS TimeToFulfill ORDER BY TimeToFulfill DESC;
+RETURN o.OrderID,c.CompanyName AS Customer , o.OrderDate AS OrderDate, f.FulfillDate - o.OrderDate AS TimeToFulfill ORDER BY TimeToFulfill DESC;
 
 // Available Products Urgently Needed to Fulfill Blocked Customer Orders (Might influence vetting proecess of new Purchase Orders and/or RFQ's)
 MATCH (:OrderStatusOpeN)-[:IS_OPEN_ORDER_STATE]->(o:Order)-[details:HAS_ORDER_PRODUCT]->(p:Product)-[:HAS_INVENTORY_LEVEL]->(inv:InventoryLevel), (p)<-[:IS_AVAILABLE_PRODUCT]-(a:ProductStatusAvailablE)
@@ -1558,10 +1615,7 @@ MATCH ()-[:IS_AVAILABLE_PRODUCT]->(p:Product)-[:HAS_INVENTORY_LEVEL]->(i) WHERE 
 MATCH ()-[:IS_AVAILABLE_PRODUCT]->(p:Product)-[:HAS_INVENTORY_LEVEL]->(i) SET i.UnitsInStock = i.UnitsInStock+50;
 
 
-// Visualize the schema
-  CALL db.schema.visualization();
-
-//**PO Vetting concurency test**
+ //**PO Vetting concurency test**
 // Try running multiple instances of the PO Vetting process (the Python script) at the same time to see how the system handles concurrent vetting of the same PO.
 
 // Before you begin, run this query to see how many PO's are on each state:
@@ -1585,20 +1639,6 @@ RETURN po.PONumber AS PONumber,
        role.Title
 ORDER BY PONumber, VettingDate ASC;
 
-// Total Units Ordered from Suppliers, Total Amount Paid to Suppliers, Total Units Sold, Total Revenue, and Gross Profit
-CALL {
-  MATCH (po:PurchaseOrder)-[i:HAS_PO_ITEM]-(p)
-  RETURN sum(i.POqt) AS UnitsOrderedFromSuppliers,
-         sum(i.POqt * i.POPriceDiscount * p.UnitPrice) AS AmountPaidToSuppliers
-}
-CALL {
-  MATCH (o:Order)-[i:HAS_ORDER_PRODUCT]-(p)
-  RETURN sum(i.Quantity) AS UnitsSold,
-         sum(i.Quantity * p.UnitPrice) AS Revenue
-}
-RETURN UnitsSold, Revenue, UnitsOrderedFromSuppliers, AmountPaidToSuppliers,
-       Revenue - AmountPaidToSuppliers AS GrossProfit;
-
 // Total Units Ordered from Suppliers (fulfilled), Total Amount Paid to Suppliers, Total Units Sold (fulfilled), Total Revenue, and Gross Profit
 CALL {
   MATCH ()-[:IS_CLOSED_PO_STATE]->(po:PurchaseOrder)-[:HAS_APPROVED_RFQ]-()-[i:HAS_RFQ_ITEM]-(p)
@@ -1614,7 +1654,7 @@ RETURN UnitsSold, Revenue, UnitsOrderedFromSuppliers, AmountPaidToSuppliers,
        Revenue - AmountPaidToSuppliers AS GrossProfit;
 
 
-// Total Units Ordered from Suppliers (fulfilled), Total Amount Paid to Suppliers, Total Units Sold (fulfilled), Total Revenue, and Gross Profit for the last 1 hour 
+// Total Units Ordered from Suppliers (fulfilled), Total Amount Paid to Suppliers, Total Units Sold (fulfilled), Total Revenue, and Gross Profit for the last 1 hour
 // (to be run during the simulation)
 WITH datetime() - duration('PT1H') AS since  // Past hour
 CALL (since) {
@@ -1630,7 +1670,7 @@ CALL (since) {
          sum(i.Quantity * (i.UnitPrice - (i.Discount * i.UnitPrice))) AS Revenue
 }
 RETURN UnitsSold, Revenue, UnitsOrderedFromSuppliers, AmountPaidToSuppliers,
-       Revenue - AmountPaidToSuppliers AS GrossProfit;       
+       Revenue - AmountPaidToSuppliers AS GrossProfit;
 
 
 // Outgoing vs. Incoming edges for all nodes in the graph, ordered by IncomingCount descending. 
@@ -1769,5 +1809,3 @@ RETURN po.PONumber AS PONumber;
 //  End of Query Examples  //
 
 // I invite you to explore the NorthWind Graph Data Model and create your own queries to extract insights and stress test the model (and the Graph Database).
-
-
