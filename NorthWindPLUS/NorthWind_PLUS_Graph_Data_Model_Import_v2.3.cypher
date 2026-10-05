@@ -1,8 +1,8 @@
-// -- NorthWind PLUS Graph Data Model Import v2.3 --//
+// -- NorthWind PLUS Graph Data Model Import v2.3 for Neo4j --//
 
 // If you find yourself filtering on a Node property that represents state, context, or an entity's relevance to something else, that's a sign the model needs a relationship instead, 
 // as it was most likely built with a table mentality.
-// This is what this model intends to achieve, by using a Graph mentality to rebuild a well known model that once was a reference for a Relational Database model.  
+// This is what this model intends to achieve by using a Graph mentality to rebuild a well-known model that once was a reference for a Relational Database model.  
 
 
 // This v2 introduces changes of truly *ontological* proportions.
@@ -66,8 +66,8 @@
 
 //--------------------------------------------------------------------------------------------------------------------------------------------------------------//
 //                                                                    ** Quick Run Instructions: **
-// Copy this script from line 73 to 1129. Paste it into the Neo4j Aura Query console. Execute and wait. Optionally, you can run the Recommendation Engine - Lines 1217 through 1283.
-// Follow the instructions from line 1130 to 1175 to run the Python simulation loops.  Run the Queries on line 1286 onwards as the Python loops run. Enjoy!! 
+// Copy this script from line 73 to 1143. Paste it into the Neo4j Aura Query console. Execute and wait. Optionally, you can run the Recommendation Engine - Lines 1231 through 1299.
+// Follow the instructions from line 1145 to 1225 to run the Python simulation loops.  Run the queries from line 1300 onwards as the Python loops run. Enjoy!! 
 //--------------------------------------------------------------------------------------------------------------------------------------------------------------//
 
 
