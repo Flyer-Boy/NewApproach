@@ -1,4 +1,4 @@
-// -- NorthWind PLUS Graph Data Model Import v2.2 For Aura --//
+// -- NorthWind PLUS Graph Data Model Import v2.31 For MemGraph --//
 
 // If you find yourself filtering on a Node property that represents state, context, or an entity's relevance to something else, that's a sign the model needs a relationship instead, 
 // as it was most likely built with a table mentality.
@@ -66,8 +66,8 @@
 
 //--------------------------------------------------------------------------------------------------------------------------------------------------------------//
 //                                                                    ** Quick Run Instructions: **
-// Copy this script from line 73 to 1078. Paste it into the MemGraph Query console. Execute and wait. Optionally, you can run the Recommendation Engine - Lines 1173 through 1240.
-// Follow the instructions from line 1087 to 1132 to run the Python simulation loops.  Run the Queries on line 1242 onwards as the Python loops run. Enjoy!! 
+// Copy this script from line 73 to 1201. Paste it into the MemGraph Query console. Execute and wait. Optionally, you can run the Recommendation Engine - Lines 1288 through 1356.
+// Follow the instructions from line 1210 to 1286 to run the Python simulation loops.  Run the Queries on line 1357 onwards as the Python loops run. Enjoy!! 
 //--------------------------------------------------------------------------------------------------------------------------------------------------------------//
 
 
@@ -1212,17 +1212,17 @@ RETURN DISTINCT o.OrderID AS OrderID;
 
 // The loops are the following: 
 
-// python NorthwindPlus_Stress_Test.py --loop customer-order --rate 6 & 
+// python NorthwindPlus_Stress_Test_MemGraph.py --loop customer-order --rate 6 & 
 
 
 
-// python NorthwindPlus_Stress_Test.py --loop po-creation --rate 2 &
-// python NorthwindPlus_Stress_Test.py --loop po-vetting --rate 4 &
+// python NorthwindPlus_Stress_Test_MemGraph.py --loop po-creation --rate 2 &
+// python NorthwindPlus_Stress_Test_MemGraph.py --loop po-vetting --rate 4 &
 
 
-// python NorthwindPlus_Stress_Test.py --loop rfq-vetting --rate 4 &
-// python NorthwindPlus_Stress_Test.py --loop warehouse-finance --rate 4 &
-// python NorthwindPlus_Stress_Test.py --loop order-fulfillment --rate 4 &
+// python NorthwindPlus_Stress_Test_MemGraph.py --loop rfq-vetting --rate 4 &
+// python NorthwindPlus_Stress_Test_MemGraph.py --loop warehouse-finance --rate 4 &
+// python NorthwindPlus_Stress_Test_MemGraph.py --loop order-fulfillment --rate 4 &
 
 
 // NOTE:   --rate is executions per minute. Adjust them as you like. 
@@ -1231,21 +1231,21 @@ RETURN DISTINCT o.OrderID AS OrderID;
 
 // STEPS to run them (presuming you have Python installed):
 
-// 1) Set up your Neo4j Aura Database instance, if you don't have one yet. Retrieve the Aura instance credentials: 
-//    NEO4J_URI=
-//    NEO4J_USERNAME= 
-//    NEO4J_PASSWORD= 
-//    NEO4J_DATABASE= 
+// 1) Set up your MemGraph Database instance, if you don't have one yet. Retrieve the MemGraph instance credentials: 
+//    NEO4J_URI=memgraph
+//    NEO4J_USERNAME=user 
+//    NEO4J_PASSWORD=password 
+//    NEO4J_DATABASE=bolt://127.0.0.1:7687 
 
-// 2) Update the PySetup.bat file provided with the Neo4j Cedentials (Optionally, you can change the Loop --rate from the default provided  )
+// 2) Update the MPySetup.bat file provided with the MemGraph Cedentials (Optionally, you can change the Loop --rate from the default provided  )
 // 3) Open the Command Line Interface (CLI) 
 // 4) Install the Neo4j interface (if you haven't done so):  pip install neo4j
-// 5) Run the PySetup.bat batch file - This will set up the proper environment variables and open 6 different windows
-// 6) Arrange the 6 windows so you can see all separately
+// 5) Run the MPySetup.bat batch file - This will set up the proper environment variables and open 8 windows
+// 6) Arrange the 8 windows so you can see all separately
 // 7) Start each independent Loop by pressing ENTER (Press Ctrl+C to STOP the Loop at any moment and wait for it to end)   
 
 
-// As the Loops run independently, go to the Neo4j Query Console and run some queries
+// As the Loops run independently, go to the MemGraph Lab Query Console and run some queries
 // ###### Run the **Inventory Level Report** ######  
 // You will see how the Inventory Levels change as the loops run.
 
