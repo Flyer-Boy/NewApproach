@@ -93,7 +93,9 @@ The same script then *plays* the business. It creates 19 drivers and their cars 
 
 Several bookings are deliberately left in `WaitinG`, so the database starts in a realistic, mixed state.
 
-> This version of the model uses a single generic `[:HAS]` relationship for Collection membership, a deliberate trade-off to keep UI components reusable. Later models in this repository ([TenderWorkflow](../TenderWorkflow) v7.1 and [NorthWindPLUS](../NorthWindPLUS)) replace it with ontology-specific relationship types.
+One car, `ABF-5678`, is intentionally left in `PendinG`, so the demo always has a pending application to query and approve.
+
+> **About this POC.** This was the first proof of concept in the series, and it has no ontology layer. Every node "inside" a Collection is connected with the same generic `[:HAS]` relationship, a trade-off made at the time to keep UI components reusable. Later models in this repository ([TenderWorkflow](../TenderWorkflow) v7.1 and [NorthWindPLUS](../NorthWindPLUS)) replace it with ontology-specific relationship types and add schema enforcement. Read this one as the clearest introduction to the core concepts, not as the most refined model.
 
 ---
 
