@@ -2,7 +2,7 @@
 :: Set your environment variables
 SET NEO4J_DATABASE=memgraph
 SET NEO4J_PASSWORD=password 
-SET NEO4J_URI=bolt://127.0.0.1:7688
+SET NEO4J_URI=bolt://127.0.0.1:7687
 SET NEO4J_USER=user
 
 

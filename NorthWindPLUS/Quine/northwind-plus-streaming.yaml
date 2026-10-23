@@ -1,0 +1,941 @@
+# =============================================================================
+# NorthWindPLUS on Quine — a streaming take on Marcos Pinedo's
+# "A Labeled Property Graph (LPG) Masterpiece" (Sept 2026)
+#
+# ONE BUSINESS DAY IN FIVE MINUTES, THEN IT RUNS AGAIN.
+#
+# The article runs six Python loops against Neo4j Aura to simulate a 360°
+# business cycle (sales → procurement → vetting → supplier RFQ → warehouse →
+# fulfillment) and then queries the result. Here the same cycle runs as Quine
+# ingest streams — 1 tick per second, 300 ticks = one business day — and the
+# article's "run a query while it's running" moments become STANDING QUERIES:
+# they fire the instant a pattern appears, and they ACT on it.
+#
+# The article's four rules, kept:
+#   1. Proper-noun nodes  → idFrom("product", 3) etc. Identity IS the node id.
+#   2. State = position   → one :Collection node per state. Moving state =
+#                           relinking a CONTAINS edge. No status property, ever.
+#   3. Isotopes           → mutable counts live in their own tiny nodes
+#                           (InventoryLevel, ReorderLevel, OrderLevel, and now
+#                           SupplierOffer, SupplierScore, CustomerSpend).
+#   4. Never delete nodes → only CONTAINS edges move. A rejected PO stays, and
+#                           its resubmission points back at it (HAS_PREVIOUS_PO).
+#
+# And a fifth claim the article can't make from a request/response database:
+#   5. The twin ACTS       → four standing queries don't just report a change,
+#                           they perform the next business step, in the graph,
+#                           the moment the change lands:
+#        low stock        → picks the best of 3 suppliers, writes a purchase
+#                           recommendation that procurement then executes
+#        PO rejected      → creates the resubmission with lineage, routes it
+#                           to the L2 approver
+#        PO closed        → books the invoice into payables, updates the
+#                           supplier scorecard (which the first automation reads)
+#        order shipped    → accrues customer spend, promotes the customer to
+#                           Preferred when they cross the threshold — which
+#                           fires a further standing query
+#      Two more watch for a condition AND for it ending: a product entering and
+#      leaving LowStock, an order entering and leaving BackOrders.
+#
+# HOW TO RUN:
+#   ./run-demo.sh            one day, then the graph sits still for inspection
+#   ./run-demo.sh --loop     a new day every ~5½ minutes, forever
+#   then open http://localhost:8080
+#
+# Every stream is deterministic in the tick number, so a day replays the same
+# way each time (up to the ordering of concurrent streams).
+# =============================================================================
+
+version: 2
+title: NorthWindPLUS Streaming Graph
+contributor: https://github.com/thatdot
+summary: Northwind run as a live 300-tick business day where state lives in relationships and standing queries run the next step
+description: |-
+  Eight simulated business processes run concurrently as ingest streams over a
+  seeded Northwind estate. Entities are immutable proper-noun nodes; every
+  state change is a relationship move between Collection nodes; every mutable
+  number is an isotope node. Six standing queries watch the Collections and
+  four of them act: supplier selection, PO resubmission, invoicing + supplier
+  scoring, customer tiering.
+
+ingestStreams:
+
+  # ---------------------------------------------------------------------------
+  # SEED A — the business (12 products, 8 customers, 9 employees + roles,
+  #   5 suppliers, 3 shippers), each product's three isotopes, its THREE
+  #   supplier offers, and the per-supplier / per-customer scorecards.
+  #   Runs once, instantly. Nothing here ever changes except the isotopes.
+  # ---------------------------------------------------------------------------
+  - name: seed-business
+    source: { type: NumberIterator, startOffset: 0, limit: 12 }
+    parallelism: 1
+    query: |-
+      WITH toInteger($that) AS i
+      WITH i,
+        CASE i
+          WHEN 0 THEN "Chai" WHEN 1 THEN "Chang" WHEN 2 THEN "Aniseed Syrup"
+          WHEN 3 THEN "Chef Anton's Cajun Seasoning" WHEN 4 THEN "Chef Anton's Gumbo Mix"
+          WHEN 5 THEN "Grandma's Boysenberry Spread" WHEN 6 THEN "Uncle Bob's Organic Dried Pears"
+          WHEN 7 THEN "Northwoods Cranberry Sauce" WHEN 8 THEN "Mishi Kobe Niku"
+          WHEN 9 THEN "Ikura" WHEN 10 THEN "Queso Cabrales" ELSE "Queso Manchego La Pastora"
+        END AS productName,
+        CASE i
+          WHEN 0 THEN 18.0 WHEN 1 THEN 19.0 WHEN 2 THEN 10.0 WHEN 3 THEN 22.0
+          WHEN 4 THEN 21.35 WHEN 5 THEN 25.0 WHEN 6 THEN 30.0 WHEN 7 THEN 40.0
+          WHEN 8 THEN 97.0 WHEN 9 THEN 31.0 WHEN 10 THEN 21.0 ELSE 38.0
+        END AS unitPrice,
+        CASE WHEN i < 3 THEN 0 WHEN i < 5 THEN 1 WHEN i < 8 THEN 2 WHEN i < 10 THEN 3 ELSE 4 END AS supplierIdx,
+        CASE i % 8
+          WHEN 0 THEN "Alfreds Futterkiste" WHEN 1 THEN "Ana Trujillo Emparedados y helados"
+          WHEN 2 THEN "Antonio Moreno Taquería" WHEN 3 THEN "Around the Horn"
+          WHEN 4 THEN "Berglunds snabbköp" WHEN 5 THEN "Blauer See Delikatessen"
+          WHEN 6 THEN "Blondesddsl père et fils" ELSE "Bólido Comidas preparadas"
+        END AS customerName,
+        CASE i % 9
+          WHEN 0 THEN "Nancy Davolio" WHEN 1 THEN "Andrew Fuller" WHEN 2 THEN "Janet Leverling"
+          WHEN 3 THEN "Margaret Peacock" WHEN 4 THEN "Steven Buchanan" WHEN 5 THEN "Michael Suyama"
+          WHEN 6 THEN "Robert King" WHEN 7 THEN "Laura Callahan" ELSE "Anne Dodsworth"
+        END AS employeeName,
+        CASE i % 9
+          WHEN 0 THEN "Sales Representative" WHEN 1 THEN "Sales Representative"
+          WHEN 2 THEN "Sales Representative" WHEN 3 THEN "Sales Representative"
+          WHEN 4 THEN "Buyer" WHEN 5 THEN "Procurement Vetting L1" WHEN 6 THEN "Procurement Vetting L2"
+          WHEN 7 THEN "Finance" ELSE "Warehouse Clerk"
+        END AS roleTitle,
+        CASE i % 3 WHEN 0 THEN "Speedy Express" WHEN 1 THEN "United Package" ELSE "Federal Shipping" END AS shipperName
+      MATCH (p), (inv), (rl), (suo), (c), (cs), (e), (role), (sh)
+      WHERE id(p)    = idFrom("product", i)
+        AND id(inv)  = idFrom("inventory", i)
+        AND id(rl)   = idFrom("reorder", i)
+        AND id(suo)  = idFrom("supply", i)
+        AND id(c)    = idFrom("customer", i % 8)
+        AND id(cs)   = idFrom("spend", i % 8)
+        AND id(e)    = idFrom("employee", i % 9)
+        AND id(role) = idFrom("role", roleTitle)
+        AND id(sh)   = idFrom("shipper", i % 3)
+      SET p:Product,          p.ProductID = i + 1, p.ProductName = productName, p.UnitPrice = unitPrice
+      SET inv:InventoryLevel, inv.UnitsInStock = 20
+      SET rl:ReorderLevel,    rl.StockThreshold = 12
+      SET suo:OrderLevel,     suo.UnitsOnOrder = 0
+      SET c:Customer,         c.CompanyName = customerName
+      SET cs:CustomerSpend,   cs.DaySpend = 0.0, cs.OrdersShipped = 0
+      SET e:Employee,         e.Name = employeeName
+      SET role:RolE,          role.Title = roleTitle,
+                              role.ApprovalLimit = CASE roleTitle WHEN "Procurement Vetting L1" THEN 100
+                                                                  WHEN "Procurement Vetting L2" THEN 500 ELSE null END
+      SET sh:Shipper,         sh.CompanyName = shipperName
+      CREATE (p)-[:HAS_INVENTORY_LEVEL]->(inv),
+             (p)-[:HAS_REORDER_LEVEL]->(rl),
+             (p)-[:HAS_SUPPLY_ORDER]->(suo),
+             (c)-[:HAS_SPEND]->(cs),
+             (e)-[:HAS_ROLE]->(role)
+      // Three suppliers per product: the article's primary supplier plus the
+      // next two in the list. Each offer is an isotope — cost and availability
+      // move every tick (see supplier-catalog) — and products 4, 8, 12 are
+      // "bulk-pack" SKUs every supplier sells in lots of 150, which is what
+      // pushes a PO over the L1 approval limit later in the day.
+      WITH i, p, unitPrice, supplierIdx
+      UNWIND [0, 1, 2] AS k
+      WITH i, p, unitPrice, k, (supplierIdx + k) % 5 AS sIdx
+      MATCH (s), (sc), (o)
+      WHERE id(s)  = idFrom("supplier", sIdx)
+        AND id(sc) = idFrom("score", sIdx)
+        AND id(o)  = idFrom("offer", i, sIdx)
+      SET s:Supplier, s.CompanyName = CASE sIdx WHEN 0 THEN "Exotic Liquids" WHEN 1 THEN "New Orleans Cajun Delights"
+                                                 WHEN 2 THEN "Grandma Kelly's Homestead" WHEN 3 THEN "Tokyo Traders"
+                                                 ELSE "Cooperativa de Quesos 'Las Cabras'" END
+      SET sc:SupplierScore, sc.POsClosed = 0, sc.UnitsDelivered = 0, sc.Resubmissions = 0
+      SET o:SupplierOffer,
+          o.Rank = k,
+          o.BaseCost = round(unitPrice * 60 * CASE k WHEN 0 THEN 1.0 WHEN 1 THEN 1.08 ELSE 1.15 END) / 100,
+          o.UnitCost = round(unitPrice * 60 * CASE k WHEN 0 THEN 1.0 WHEN 1 THEN 1.08 ELSE 1.15 END) / 100,
+          o.LeadTimeDays = 3 + k * 2,
+          o.UnitsAvailable = 200,
+          o.MinOrderQty = CASE WHEN i % 4 = 3 THEN 150 ELSE 25 END
+      CREATE (s)-[:HAS_SCORECARD]->(sc),
+             (p)-[:HAS_OFFER]->(o),
+             (o)-[:FROM_SUPPLIER]->(s)
+      FOREACH (_ IN CASE WHEN k = 0 THEN [1] ELSE [] END | CREATE (p)-[:SUPPLIED_BY]->(s))
+
+  # ---------------------------------------------------------------------------
+  # SEED B — the 14 state Collections. Rule 2: these ARE the state machine.
+  # ---------------------------------------------------------------------------
+  - name: seed-collections
+    source: { type: NumberIterator, startOffset: 0, limit: 14 }
+    parallelism: 1
+    query: |-
+      WITH toInteger($that) AS i
+      WITH CASE i
+        WHEN 0 THEN "OpenOrders"   WHEN 1 THEN "BackOrders"           WHEN 2 THEN "ShippedOrders"
+        WHEN 3 THEN "LowStock"     WHEN 4 THEN "Reordering"           WHEN 5 THEN "RecommendedPurchases"
+        WHEN 6 THEN "ActionedPurchases" WHEN 7 THEN "NewPoS"          WHEN 8 THEN "ApprovedPoS"
+        WHEN 9 THEN "RejectedPoS"  WHEN 10 THEN "SubmittedPoS"        WHEN 11 THEN "ClosedPoS"
+        WHEN 12 THEN "PayablesDue" ELSE "PreferredCustomers"
+      END AS name
+      MATCH (col) WHERE id(col) = idFrom("collection", name)
+      SET col:Collection, col.name = name
+
+  # ---------------------------------------------------------------------------
+  # 0. SUPPLIER CATALOG — the outside world. Every tick one product's three
+  #    offers re-price (±10% around base) and re-stock. This is the feed the
+  #    low-stock automation reads when it chooses a supplier.
+  # ---------------------------------------------------------------------------
+  - name: supplier-catalog
+    source: { type: NumberIterator, startOffset: 0, limit: 300 }
+    parallelism: 1
+    maxPerSecond: 1
+    query: |-
+      WITH toInteger($that) AS n WHERE n >= 3
+      MATCH (p)-[:HAS_OFFER]->(o) WHERE id(p) = idFrom("product", n % 12)
+      SET o.UnitCost = round(o.BaseCost * (100 + ((n * 7 + o.Rank * 5) % 21) - 10)) / 100,
+          o.UnitsAvailable = 50 + ((n * 13 + o.Rank * 40) % 300),
+          o.UpdatedAtTick = n
+
+  # ---------------------------------------------------------------------------
+  # 1. SALES — one customer order every 2 ticks until t=240, 2 line items each.
+  #    Order enters OpenOrders. Nothing on it is ever updated.
+  # ---------------------------------------------------------------------------
+  - name: sales
+    source: { type: NumberIterator, startOffset: 0, limit: 300 }
+    parallelism: 1
+    maxPerSecond: 1
+    query: |-
+      WITH toInteger($that) AS n WHERE n % 2 = 1 AND n >= 3 AND n < 240
+      WITH n, (n - 1) / 2 AS h
+      MATCH (o), (c), (rep), (open), (l1), (l2), (p1), (p2)
+      WHERE id(o)    = idFrom("order", n)
+        AND id(c)    = idFrom("customer", h % 8)
+        AND id(rep)  = idFrom("employee", h % 4)
+        AND id(open) = idFrom("collection", "OpenOrders")
+        AND id(l1)   = idFrom("orderline", n, 1)
+        AND id(l2)   = idFrom("orderline", n, 2)
+        AND id(p1)   = idFrom("product", n % 12)
+        AND id(p2)   = idFrom("product", (n * 7 + 3) % 12)
+        AND p1.UnitPrice IS NOT NULL
+      SET o:Order, o.OrderID = "CO-" + toString(n), o.Tick = n, o.OrderDate = datetime()
+      SET l1:OrderLine, l1.Quantity = n % 6 + 1, l1.UnitPrice = p1.UnitPrice, l1.Discount = (n % 8) * 0.01
+      SET l2:OrderLine, l2.Quantity = n % 4 + 2, l2.UnitPrice = p2.UnitPrice, l2.Discount = 0.0
+      CREATE (open)-[:CONTAINS]->(o),
+             (o)-[:HAS_ORDER_CUSTOMER]->(c),
+             (o)-[:SOLD_BY]->(rep),
+             (o)-[:HAS_ORDER_LINE]->(l1), (l1)-[:FOR_PRODUCT]->(p1),
+             (o)-[:HAS_ORDER_LINE]->(l2), (l2)-[:FOR_PRODUCT]->(p2)
+
+  # ---------------------------------------------------------------------------
+  # 2. PROCUREMENT — every 2 ticks the Buyer executes ONE purchase
+  #    recommendation (written by the low-stock standing query): raises a PO
+  #    from the recommended supplier at the recommended quantity.
+  #    PO enters NewPoS; recommendation moves RecommendedPurchases →
+  #    ActionedPurchases; product enters Reordering (and STAYS in LowStock
+  #    until the goods arrive — LowStock is the real-world condition,
+  #    Reordering is the process state).
+  # ---------------------------------------------------------------------------
+  - name: procurement
+    source: { type: NumberIterator, startOffset: 0, limit: 300 }
+    parallelism: 1
+    maxPerSecond: 1
+    query: |-
+      WITH toInteger($that) AS n WHERE n % 2 = 0 AND n >= 4
+      MATCH (rc)-[r:CONTAINS]->(rec) WHERE id(rc) = idFrom("collection", "RecommendedPurchases")
+      WITH n, r, rec ORDER BY rec.CreatedAt LIMIT 1
+      MATCH (rec)-[:FOR_PRODUCT]->(p), (rec)-[:RECOMMENDS_SUPPLIER]->(s)
+      MATCH (po), (line), (newc), (reord), (buyer), (done)
+      WHERE id(po)    = idFrom("po", n)
+        AND id(line)  = idFrom("poline", n)
+        AND id(newc)  = idFrom("collection", "NewPoS")
+        AND id(reord) = idFrom("collection", "Reordering")
+        AND id(buyer) = idFrom("employee", 4)
+        AND id(done)  = idFrom("collection", "ActionedPurchases")
+      SET po:PurchaseOrder, po.PONumber = "PO-" + toString(n), po.Tick = n, po.CreatedAt = datetime()
+      SET line:POLine, line.POqt = rec.Qty
+      DELETE r
+      CREATE (newc)-[:CONTAINS]->(po),
+             (done)-[:CONTAINS]->(rec),
+             (po)-[:FROM_RECOMMENDATION]->(rec),
+             (po)-[:HAS_PO_LINE]->(line), (line)-[:FOR_PRODUCT]->(p),
+             (po)-[:PO_SUPPLIER]->(s),
+             (po)-[:CREATED_BY]->(buyer),
+             (reord)-[:CONTAINS]->(p)
+
+  # ---------------------------------------------------------------------------
+  # 3. VETTING — 10 ticks after creation, L1 checks the PO against the
+  #    approval limit on their ROLE node. Within limit → ApprovedPoS.
+  #    Over limit → RejectedPoS, which is where the auto-resubmit standing
+  #    query takes over. The PO node is never touched, only its position.
+  # ---------------------------------------------------------------------------
+  - name: vetting-l1
+    source: { type: NumberIterator, startOffset: 0, limit: 300 }
+    parallelism: 1
+    maxPerSecond: 1
+    query: |-
+      WITH toInteger($that) AS n
+      MATCH (po)<-[r:CONTAINS]-(newc)
+      WHERE id(po) = idFrom("po", n - 10) AND id(newc) = idFrom("collection", "NewPoS")
+      MATCH (po)-[:HAS_PO_LINE]->(line)
+      MATCH (l1)-[:HAS_ROLE]->(role) WHERE id(l1) = idFrom("employee", 5)
+      MATCH (appr), (rej)
+      WHERE id(appr) = idFrom("collection", "ApprovedPoS") AND id(rej) = idFrom("collection", "RejectedPoS")
+      WITH po, r, line, l1, appr, rej, line.POqt <= role.ApprovalLimit AS withinLimit
+      DELETE r
+      FOREACH (_ IN CASE WHEN withinLimit THEN [1] ELSE [] END |
+        CREATE (appr)-[:CONTAINS]->(po), (po)-[:VETTED_L1_BY]->(l1))
+      FOREACH (_ IN CASE WHEN NOT withinLimit THEN [1] ELSE [] END |
+        CREATE (rej)-[:CONTAINS]->(po), (po)-[:REJECTED_L1_BY]->(l1))
+
+  # ---------------------------------------------------------------------------
+  # 4. SUBMIT TO SUPPLIER + RFQ — 20 ticks after creation, the Buyer submits
+  #    the latest PO in the lineage; the supplier answers with an RFQ at its
+  #    current offer price, which the Buyer approves (HAS_APPROVED_RFQ).
+  #    PO moves ApprovedPoS → SubmittedPoS. Isotope update: UnitsOnOrder.
+  # ---------------------------------------------------------------------------
+  - name: submit-rfq
+    source: { type: NumberIterator, startOffset: 0, limit: 300 }
+    parallelism: 1
+    maxPerSecond: 1
+    query: |-
+      WITH toInteger($that) AS n
+      MATCH (orig) WHERE id(orig) = idFrom("po", n - 20)
+      OPTIONAL MATCH (orig)<-[:HAS_PREVIOUS_PO]-(resub)
+      WITH n, coalesce(resub, orig) AS po
+      MATCH (po)<-[r:CONTAINS]-(appr) WHERE id(appr) = idFrom("collection", "ApprovedPoS")
+      MATCH (po)-[:HAS_PO_LINE]->(line)-[:FOR_PRODUCT]->(p)-[:HAS_SUPPLY_ORDER]->(suo),
+            (po)-[:PO_SUPPLIER]->(s),
+            (p)-[:HAS_OFFER]->(offer)-[:FROM_SUPPLIER]->(s)
+      MATCH (sub), (rfq), (rfqline), (buyer)
+      WHERE id(sub)     = idFrom("collection", "SubmittedPoS")
+        AND id(rfq)     = idFrom("rfq", n)
+        AND id(rfqline) = idFrom("rfqline", n)
+        AND id(buyer)   = idFrom("employee", 4)
+      SET rfq:RFQ, rfq.RFQNumber = "RFQ-" + toString(n), rfq.SubmittedAt = datetime()
+      SET rfqline:RFQLine, rfqline.RFQqt = line.POqt, rfqline.UnitCost = offer.UnitCost
+      WITH n, po, r, line, p, suo, s, offer, sub, rfq, rfqline, buyer
+      CALL int.add(suo, "UnitsOnOrder", line.POqt) YIELD result AS onOrder
+      DELETE r
+      CREATE (sub)-[:CONTAINS]->(po),
+             (po)-[:SUBMITTED_BY]->(buyer),
+             (s)-[:SUBMITTED_RFQ]->(rfq),
+             (po)-[:HAS_APPROVED_RFQ]->(rfq),
+             (rfq)-[:HAS_RFQ_LINE]->(rfqline), (rfqline)-[:FOR_PRODUCT]->(p)
+
+  # ---------------------------------------------------------------------------
+  # 5. WAREHOUSE RECEIVING + FINANCE CLOSE — 30 ticks after creation, goods
+  #    arrive. Isotopes: UnitsInStock up, UnitsOnOrder down (atomic adds).
+  #    PO moves SubmittedPoS → ClosedPoS. Product leaves Reordering AND
+  #    LowStock — that second edge removal is what the low-stock standing
+  #    query reports as RESTOCKED.
+  # ---------------------------------------------------------------------------
+  - name: receiving
+    source: { type: NumberIterator, startOffset: 0, limit: 300 }
+    parallelism: 1
+    maxPerSecond: 1
+    query: |-
+      WITH toInteger($that) AS n
+      MATCH (orig) WHERE id(orig) = idFrom("po", n - 30)
+      OPTIONAL MATCH (orig)<-[:HAS_PREVIOUS_PO]-(resub)
+      WITH n, coalesce(resub, orig) AS po
+      MATCH (po)<-[r:CONTAINS]-(sub) WHERE id(sub) = idFrom("collection", "SubmittedPoS")
+      MATCH (po)-[:HAS_APPROVED_RFQ]->(rfq)-[:HAS_RFQ_LINE]->(rl)-[:FOR_PRODUCT]->(p)-[:HAS_INVENTORY_LEVEL]->(inv),
+            (p)-[:HAS_SUPPLY_ORDER]->(suo)
+      MATCH (p)<-[rr:CONTAINS]-(reord) WHERE id(reord) = idFrom("collection", "Reordering")
+      OPTIONAL MATCH (p)<-[rlow:CONTAINS]-(low) WHERE id(low) = idFrom("collection", "LowStock")
+      MATCH (closed), (delivery), (clerk), (fin)
+      WHERE id(closed)   = idFrom("collection", "ClosedPoS")
+        AND id(delivery) = idFrom("delivery", n)
+        AND id(clerk)    = idFrom("employee", 8)
+        AND id(fin)      = idFrom("employee", 7)
+      SET delivery:WarehouseDelivery, delivery.ReceivedAt = datetime(), delivery.Quantity = rl.RFQqt, delivery.Tick = n
+      WITH n, po, r, rl, p, inv, suo, rr, rlow, closed, delivery, clerk, fin
+      CALL int.add(inv, "UnitsInStock", rl.RFQqt) YIELD result AS stock
+      CALL int.add(suo, "UnitsOnOrder", -rl.RFQqt) YIELD result AS onOrder
+      DELETE r, rr, rlow
+      CREATE (closed)-[:CONTAINS]->(po),
+             (po)-[:HAS_WAREHOUSE_DELIVERY]->(delivery),
+             (delivery)-[:RECEIVED_BY]->(clerk),
+             (po)-[:CLOSED_BY]->(fin)
+
+  # ---------------------------------------------------------------------------
+  # 6. ORDER FULFILLMENT + SHIPPING — retries an open order 6, 20, 40 and 60
+  #    ticks after it was placed. Ships only if every line is in stock;
+  #    otherwise the order enters BackOrders (state = position) and leaves it
+  #    the moment it ships. Isotope: UnitsInStock down (atomic). Products that
+  #    drop below threshold enter LowStock — which wakes up the twin.
+  # ---------------------------------------------------------------------------
+  - name: fulfillment
+    source: { type: NumberIterator, startOffset: 0, limit: 300 }
+    parallelism: 1
+    maxPerSecond: 1
+    query: |-
+      WITH toInteger($that) AS n WHERE n % 2 = 1
+      UNWIND [n - 6, n - 20, n - 40, n - 60] AS k
+      MATCH (o)<-[r:CONTAINS]-(open)
+      WHERE id(o) = idFrom("order", k) AND id(open) = idFrom("collection", "OpenOrders")
+      MATCH (o)-[:HAS_ORDER_LINE]->(l)-[:FOR_PRODUCT]->(p)-[:HAS_INVENTORY_LEVEL]->(inv),
+            (p)-[:HAS_REORDER_LEVEL]->(rl)
+      WITH n, o, r, collect({p: p, inv: inv, qty: l.Quantity, thr: rl.StockThreshold, short: l.Quantity - inv.UnitsInStock}) AS lines
+      WITH n, o, r, lines, size([x IN lines WHERE x.short > 0]) AS shortLines
+      MATCH (shipped), (shipper), (clerk), (bo)
+      WHERE id(shipped) = idFrom("collection", "ShippedOrders")
+        AND id(shipper) = idFrom("shipper", n % 3)
+        AND id(clerk)   = idFrom("employee", 8)
+        AND id(bo)      = idFrom("collection", "BackOrders")
+      OPTIONAL MATCH (bo)-[rb:CONTAINS]->(o)
+      FOREACH (_ IN CASE WHEN shortLines = 0 THEN [1] ELSE [] END |
+        DELETE r
+        CREATE (shipped)-[:CONTAINS]->(o), (o)-[:SHIPPED_VIA]->(shipper), (o)-[:FULFILLED_BY]->(clerk))
+      FOREACH (_ IN CASE WHEN shortLines = 0 AND rb IS NOT NULL THEN [1] ELSE [] END | DELETE rb)
+      FOREACH (_ IN CASE WHEN shortLines > 0 AND rb IS NULL THEN [1] ELSE [] END | CREATE (bo)-[:CONTAINS]->(o))
+      WITH lines, shortLines WHERE shortLines = 0
+      UNWIND lines AS x
+      MATCH (inv) WHERE id(inv) = id(x.inv)
+      CALL int.add(inv, "UnitsInStock", -x.qty) YIELD result AS newStock
+      WITH x.p AS p, x.thr AS thr, newStock WHERE newStock < thr
+      OPTIONAL MATCH (p)<-[:CONTAINS]-(already) WHERE id(already) = idFrom("collection", "LowStock")
+      WITH p, already WHERE already IS NULL
+      MATCH (low) WHERE id(low) = idFrom("collection", "LowStock")
+      CREATE (low)-[:CONTAINS]->(p)
+
+# =============================================================================
+# STANDING QUERIES — the part a request/response graph database can't do.
+# Each pattern is a Collection membership (rule 2), so "a business event
+# happened" and "a node moved" are the same thing. Where the automation needs
+# more than the anchor node, the extra edge is IN THE PATTERN, so the query
+# fires only once the whole shape exists — never against a half-written one.
+#
+# Every enrichment starts with `$that.meta.isPositiveMatch` — Quine runs each
+# enrichment once at startup with an empty envelope, and the guard keeps that
+# from printing a null alert.
+# =============================================================================
+standingQueries:
+
+  # --- 1. LOW STOCK → supplier selection + purchase recommendation ----------
+  # includeCancellations: the query also fires when the product LEAVES
+  # LowStock, i.e. when the goods arrive. Two outputs: the alert prints both
+  # directions; the recommendation acts on entries only.
+  - name: low-stock
+    includeCancellations: true
+    pattern:
+      type: Cypher
+      mode: DISTINCT_ID
+      query: |-
+        MATCH (c:Collection {name: "LowStock"})-[:CONTAINS]->(p:Product)
+        RETURN DISTINCT id(p) AS id
+    outputs:
+      - name: low-stock-alert
+        resultEnrichment:
+          query: |-
+            MATCH (p) WHERE id(p) = quineId($that.data.id) AND $that.meta.isPositiveMatch IS NOT NULL
+            MATCH (p)-[:HAS_INVENTORY_LEVEL]->(inv), (p)-[:HAS_REORDER_LEVEL]->(rl)
+            RETURN CASE WHEN $that.meta.isPositiveMatch
+                     THEN "[LOW STOCK] " + p.ProductName + " dropped to " + toString(inv.UnitsInStock) + " (threshold " + toString(rl.StockThreshold) + ")"
+                     ELSE "[RESTOCKED] " + p.ProductName + " back to " + toString(inv.UnitsInStock) + " (threshold " + toString(rl.StockThreshold) + ") — no longer low"
+                   END AS alert
+        destinations:
+          - type: StandardOut
+      - name: purchase-recommendation
+        resultEnrichment:
+          query: |-
+            MATCH (p) WHERE id(p) = quineId($that.data.id) AND $that.meta.isPositiveMatch = true
+            MATCH (p)-[:HAS_INVENTORY_LEVEL]->(inv), (p)-[:HAS_REORDER_LEVEL]->(rl)
+            MATCH (p)-[:HAS_OFFER]->(o)-[:FROM_SUPPLIER]->(s)-[:HAS_SCORECARD]->(sc)
+            WITH p, inv, rl, o, s, sc, rl.StockThreshold * 3 AS baseQty
+            WITH p, inv, rl, collect({o: o, s: s, sc: sc, qty: CASE WHEN o.MinOrderQty > baseQty THEN o.MinOrderQty ELSE baseQty END}) AS offers
+            UNWIND offers AS x
+            WITH p, inv, rl, offers, x
+            ORDER BY CASE WHEN x.o.UnitsAvailable >= x.qty THEN 0 ELSE 1 END ASC, x.o.UnitCost ASC, x.sc.POsClosed DESC
+            LIMIT 1
+            MATCH (bestOffer), (bestSupplier) WHERE id(bestOffer) = id(x.o) AND id(bestSupplier) = id(x.s)
+            CALL int.add(rl, "Episodes", 1) YIELD result AS episode
+            WITH p, inv, rl, offers, x, bestOffer, bestSupplier, episode,
+                 "REC-" + toString(p.ProductID) + "-" + toString(episode) AS recNumber,
+                 round(x.qty * x.o.UnitCost * 100) / 100 AS estCost
+            MATCH (rec), (col) WHERE id(rec) = idFrom("rec", p.ProductID, episode) AND id(col) = idFrom("collection", "RecommendedPurchases")
+            SET rec:PurchaseRecommendation, rec.RecNumber = recNumber, rec.Qty = x.qty, rec.UnitCost = x.o.UnitCost,
+                rec.EstimatedCost = estCost, rec.CreatedAt = datetime()
+            CREATE (col)-[:CONTAINS]->(rec), (rec)-[:FOR_PRODUCT]->(p),
+                   (rec)-[:RECOMMENDS_SUPPLIER]->(bestSupplier), (rec)-[:BASED_ON_OFFER]->(bestOffer)
+            RETURN "[RECOMMEND] " + recNumber + ": buy " + toString(x.qty) + " × " + p.ProductName + " from " + bestSupplier.CompanyName
+                 + " @ $" + toString(x.o.UnitCost) + " = $" + toString(estCost)
+                 + CASE WHEN x.o.UnitsAvailable < x.qty THEN " (only " + toString(x.o.UnitsAvailable) + " available — best of a short market)" ELSE "" END
+                 + CASE WHEN x.qty > rl.StockThreshold * 3 THEN " · bulk-pack SKU, minimum lot " + toString(x.qty) ELSE "" END
+                 + " · passed on: "
+                 + reduce(acc = "", y IN [y IN offers WHERE y.s.CompanyName <> bestSupplier.CompanyName] |
+                     acc + y.s.CompanyName + " $" + toString(y.o.UnitCost) + " (" + toString(y.o.UnitsAvailable) + " avail) ") AS alert
+        destinations:
+          - type: StandardOut
+
+  # --- 2. PO REJECTED → auto-resubmit with lineage, routed to L2 -----------
+  # The REJECTED_L1_BY edge is in the pattern so the resubmission never runs
+  # before the rejection is fully written.
+  - name: po-rejected
+    pattern:
+      type: Cypher
+      mode: DISTINCT_ID
+      query: |-
+        MATCH (c:Collection {name: "RejectedPoS"})-[:CONTAINS]->(po:PurchaseOrder)-[:REJECTED_L1_BY]->(e:Employee)
+        RETURN DISTINCT id(po) AS id
+    outputs:
+      - name: auto-resubmit
+        resultEnrichment:
+          query: |-
+            MATCH (po) WHERE id(po) = quineId($that.data.id) AND $that.meta.isPositiveMatch = true
+            MATCH (po)-[:HAS_PO_LINE]->(line)-[:FOR_PRODUCT]->(p),
+                  (po)-[:PO_SUPPLIER]->(s),
+                  (po)-[:CREATED_BY]->(buyer)
+            MATCH (l1)-[:HAS_ROLE]->(r1) WHERE id(l1) = idFrom("employee", 5)
+            MATCH (l2)-[:HAS_ROLE]->(r2) WHERE id(l2) = idFrom("employee", 6)
+            MATCH (appr), (po2), (line2)
+            WHERE id(appr)  = idFrom("collection", "ApprovedPoS")
+              AND id(po2)   = idFrom("po", po.Tick, "R")
+              AND id(line2) = idFrom("poline", po.Tick, "R")
+            WITH po, line, p, s, buyer, l1, r1, l2, r2, appr, po2, line2, po.PONumber + "-R" AS newNumber
+            SET po2:PurchaseOrder, po2.PONumber = newNumber, po2.Tick = po.Tick, po2.CreatedAt = datetime()
+            SET line2:POLine, line2.POqt = line.POqt
+            CREATE (po2)-[:HAS_PREVIOUS_PO]->(po),
+                   (appr)-[:CONTAINS]->(po2),
+                   (po2)-[:HAS_PO_LINE]->(line2), (line2)-[:FOR_PRODUCT]->(p),
+                   (po2)-[:PO_SUPPLIER]->(s),
+                   (po2)-[:CREATED_BY]->(buyer),
+                   (po2)-[:VETTED_L2_BY]->(l2)
+            RETURN "[AUTO-RESUBMIT] " + po.PONumber + " (" + toString(line.POqt) + " × " + p.ProductName + ") exceeds "
+                 + l1.Name + "'s limit of " + toString(r1.ApprovalLimit) + " → " + newNumber + " created with lineage, routed to "
+                 + l2.Name + " (" + r2.Title + ", limit " + toString(r2.ApprovalLimit) + "), approved" AS alert
+        destinations:
+          - type: StandardOut
+
+  # --- 3. PO CLOSED → invoice into payables + supplier scorecard -------------
+  # HAS_WAREHOUSE_DELIVERY is in the pattern: the query fires once the goods
+  # are booked, not when the PO merely changes collection.
+  - name: po-closed
+    pattern:
+      type: Cypher
+      mode: DISTINCT_ID
+      query: |-
+        MATCH (c:Collection {name: "ClosedPoS"})-[:CONTAINS]->(po:PurchaseOrder)-[:HAS_WAREHOUSE_DELIVERY]->(d:WarehouseDelivery)
+        RETURN DISTINCT id(po) AS id
+    outputs:
+      - name: invoice-and-score
+        resultEnrichment:
+          query: |-
+            MATCH (po) WHERE id(po) = quineId($that.data.id) AND $that.meta.isPositiveMatch = true
+            MATCH (po)-[:HAS_APPROVED_RFQ]->(rfq)-[:HAS_RFQ_LINE]->(rfql)-[:FOR_PRODUCT]->(p),
+                  (po)-[:PO_SUPPLIER]->(s)-[:HAS_SCORECARD]->(sc)
+            OPTIONAL MATCH (po)-[:HAS_PREVIOUS_PO]->(prev)
+            MATCH (inv), (pay) WHERE id(inv) = idFrom("invoice", po.PONumber) AND id(pay) = idFrom("collection", "PayablesDue")
+            WITH po, rfql, p, s, sc, prev, inv, pay,
+                 replace(po.PONumber, "PO-", "INV-") AS invNumber,
+                 round(rfql.RFQqt * rfql.UnitCost * 100) / 100 AS amount
+            SET inv:Invoice, inv.InvoiceNumber = invNumber, inv.Amount = amount, inv.DueInDays = 30, inv.IssuedAt = datetime()
+            WITH po, rfql, p, s, sc, prev, inv, pay, invNumber, amount
+            CALL int.add(sc, "POsClosed", 1) YIELD result AS closed
+            CALL int.add(sc, "UnitsDelivered", rfql.RFQqt) YIELD result AS units
+            CALL int.add(sc, "Resubmissions", CASE WHEN prev IS NULL THEN 0 ELSE 1 END) YIELD result AS resubs
+            CREATE (pay)-[:CONTAINS]->(inv), (po)-[:HAS_INVOICE]->(inv), (inv)-[:PAYABLE_TO]->(s)
+            RETURN "[PO CLOSED] " + po.PONumber
+                 + CASE WHEN prev IS NULL THEN "" ELSE " (resubmission of " + prev.PONumber + ")" END
+                 + ": " + toString(rfql.RFQqt) + " × " + p.ProductName + " received · " + invNumber + " $" + toString(amount)
+                 + " payable to " + s.CompanyName + " in 30 days · scorecard: " + toString(closed) + " closed, "
+                 + toString(units) + " units, " + toString(resubs) + " resubmitted" AS alert
+        destinations:
+          - type: StandardOut
+
+  # --- 4. ORDER SHIPPED → customer spend + Preferred tier ---------------------
+  # SHIPPED_VIA is in the pattern so the carrier is always there to name.
+  - name: order-shipped
+    pattern:
+      type: Cypher
+      mode: DISTINCT_ID
+      query: |-
+        MATCH (c:Collection {name: "ShippedOrders"})-[:CONTAINS]->(o:Order)-[:SHIPPED_VIA]->(s:Shipper)
+        RETURN DISTINCT id(o) AS id
+    outputs:
+      - name: customer-360
+        resultEnrichment:
+          query: |-
+            MATCH (o) WHERE id(o) = quineId($that.data.id) AND $that.meta.isPositiveMatch = true
+            MATCH (o)-[:HAS_ORDER_CUSTOMER]->(c)-[:HAS_SPEND]->(cs), (o)-[:SHIPPED_VIA]->(sh), (o)-[:HAS_ORDER_LINE]->(l)
+            WITH o, c, cs, sh, round(sum(l.Quantity * l.UnitPrice * (1 - l.Discount)) * 100) / 100 AS total
+            CALL float.add(cs, "DaySpend", total) YIELD result AS spend
+            CALL int.add(cs, "OrdersShipped", 1) YIELD result AS nShipped
+            MATCH (pref) WHERE id(pref) = idFrom("collection", "PreferredCustomers")
+            FOREACH (_ IN CASE WHEN spend >= 3000 THEN [1] ELSE [] END | CREATE (pref)-[:CONTAINS]->(c))
+            RETURN "[SHIPPED] " + o.OrderID + " to " + c.CompanyName + " via " + sh.CompanyName + " — $" + toString(total)
+                 + " · customer today: " + toString(nShipped) + " orders, $" + toString(round(spend * 100) / 100) AS alert
+        destinations:
+          - type: StandardOut
+      - name: shipped-ledger
+        resultEnrichment:
+          query: |-
+            MATCH (o) WHERE id(o) = quineId($that.data.id) AND $that.meta.isPositiveMatch = true
+            MATCH (o)-[:HAS_ORDER_CUSTOMER]->(c), (o)-[:SHIPPED_VIA]->(sh), (o)-[:HAS_ORDER_LINE]->(l)
+            RETURN o.OrderID AS orderId, c.CompanyName AS customer, sh.CompanyName AS shipper,
+                   round(sum(l.Quantity * l.UnitPrice * (1 - l.Discount)) * 100) / 100 AS total
+        destinations:
+          - type: File
+            path: shipped-orders.jsonl
+
+  # --- 5. CUSTOMER PROMOTED — fired BY automation 4's write ------------------
+  - name: customer-promoted
+    pattern:
+      type: Cypher
+      mode: DISTINCT_ID
+      query: |-
+        MATCH (c:Collection {name: "PreferredCustomers"})-[:CONTAINS]->(cust:Customer)
+        RETURN DISTINCT id(cust) AS id
+    outputs:
+      - name: tier-alert
+        resultEnrichment:
+          query: |-
+            MATCH (cust) WHERE id(cust) = quineId($that.data.id) AND $that.meta.isPositiveMatch = true
+            MATCH (cust)-[:HAS_SPEND]->(cs)
+            RETURN "[TIER] " + cust.CompanyName + " promoted to Preferred — $" + toString(round(cs.DaySpend * 100) / 100)
+                 + " shipped today across " + toString(cs.OrdersShipped) + " orders" AS alert
+        destinations:
+          - type: StandardOut
+
+  # --- 6. BACK ORDER — a condition and its end -------------------------------
+  - name: back-order
+    includeCancellations: true
+    pattern:
+      type: Cypher
+      mode: DISTINCT_ID
+      query: |-
+        MATCH (c:Collection {name: "BackOrders"})-[:CONTAINS]->(o:Order)
+        RETURN DISTINCT id(o) AS id
+    outputs:
+      - name: back-order-alert
+        resultEnrichment:
+          query: |-
+            MATCH (o) WHERE id(o) = quineId($that.data.id) AND $that.meta.isPositiveMatch IS NOT NULL
+            MATCH (o)-[:HAS_ORDER_CUSTOMER]->(c), (o)-[:HAS_ORDER_LINE]->(l)-[:FOR_PRODUCT]->(p)-[:HAS_INVENTORY_LEVEL]->(inv)
+            WITH o, c, collect(CASE WHEN l.Quantity > inv.UnitsInStock
+                                    THEN p.ProductName + " (needs " + toString(l.Quantity) + ", " + toString(inv.UnitsInStock) + " in stock)"
+                                    ELSE null END) AS shortNames
+            RETURN CASE WHEN $that.meta.isPositiveMatch
+                     THEN "[BACKORDER] " + o.OrderID + " for " + c.CompanyName + " waiting on "
+                          + reduce(acc = "", s IN shortNames | acc + s + " ")
+                     ELSE "[RELEASED] " + o.OrderID + " for " + c.CompanyName + " — stock arrived, order shipped"
+                   END AS alert
+        destinations:
+          - type: StandardOut
+
+# =============================================================================
+# UI
+# =============================================================================
+nodeAppearances:
+  - predicate: { propertyKeys: [], knownValues: {}, dbLabel: Collection }
+    icon: ion-folder
+    color: "#f39c12"
+    size: 45.0
+    label: { type: Property, key: name }
+  - predicate: { propertyKeys: [], knownValues: {}, dbLabel: Product }
+    icon: ion-cube
+    color: "#2ecc71"
+    size: 32.0
+    label: { type: Property, key: ProductName }
+  - predicate: { propertyKeys: [], knownValues: {}, dbLabel: InventoryLevel }
+    icon: ion-ios-circle-filled
+    color: "#a3e4b5"
+    size: 18.0
+    label: { type: Property, key: UnitsInStock }
+  - predicate: { propertyKeys: [], knownValues: {}, dbLabel: ReorderLevel }
+    icon: ion-flag
+    color: "#a3e4b5"
+    size: 18.0
+    label: { type: Property, key: StockThreshold }
+  - predicate: { propertyKeys: [], knownValues: {}, dbLabel: OrderLevel }
+    icon: ion-clock
+    color: "#a3e4b5"
+    size: 18.0
+    label: { type: Property, key: UnitsOnOrder }
+  - predicate: { propertyKeys: [], knownValues: {}, dbLabel: SupplierOffer }
+    icon: ion-pricetag
+    color: "#f5b041"
+    size: 18.0
+    label: { type: Property, key: UnitCost }
+  - predicate: { propertyKeys: [], knownValues: {}, dbLabel: SupplierScore }
+    icon: ion-ios-star
+    color: "#f9e79f"
+    size: 18.0
+    label: { type: Property, key: POsClosed }
+  - predicate: { propertyKeys: [], knownValues: {}, dbLabel: CustomerSpend }
+    icon: ion-cash
+    color: "#a3e4d7"
+    size: 18.0
+    label: { type: Property, key: DaySpend }
+  - predicate: { propertyKeys: [], knownValues: {}, dbLabel: PurchaseRecommendation }
+    icon: ion-lightbulb
+    color: "#f1c40f"
+    size: 26.0
+    label: { type: Property, key: RecNumber }
+  - predicate: { propertyKeys: [], knownValues: {}, dbLabel: Order }
+    icon: ion-bag
+    color: "#3498db"
+    size: 30.0
+    label: { type: Property, key: OrderID }
+  - predicate: { propertyKeys: [], knownValues: {}, dbLabel: OrderLine }
+    icon: ion-document
+    color: "#aed6f1"
+    size: 16.0
+    label: { type: Property, key: Quantity }
+  - predicate: { propertyKeys: [], knownValues: {}, dbLabel: PurchaseOrder }
+    icon: ion-clipboard
+    color: "#9b59b6"
+    size: 30.0
+    label: { type: Property, key: PONumber }
+  - predicate: { propertyKeys: [], knownValues: {}, dbLabel: POLine }
+    icon: ion-document
+    color: "#d7bde2"
+    size: 16.0
+    label: { type: Property, key: POqt }
+  - predicate: { propertyKeys: [], knownValues: {}, dbLabel: RFQ }
+    icon: ion-pricetags
+    color: "#8e44ad"
+    size: 26.0
+    label: { type: Property, key: RFQNumber }
+  - predicate: { propertyKeys: [], knownValues: {}, dbLabel: RFQLine }
+    icon: ion-document
+    color: "#d7bde2"
+    size: 16.0
+    label: { type: Property, key: RFQqt }
+  - predicate: { propertyKeys: [], knownValues: {}, dbLabel: WarehouseDelivery }
+    icon: ion-ios-box
+    color: "#7f8c8d"
+    size: 22.0
+    label: { type: Property, key: Quantity }
+  - predicate: { propertyKeys: [], knownValues: {}, dbLabel: Invoice }
+    icon: ion-ios-paper
+    color: "#95a5a6"
+    size: 24.0
+    label: { type: Property, key: InvoiceNumber }
+  - predicate: { propertyKeys: [], knownValues: {}, dbLabel: Customer }
+    icon: ion-ios-people
+    color: "#1abc9c"
+    size: 30.0
+    label: { type: Property, key: CompanyName }
+  - predicate: { propertyKeys: [], knownValues: {}, dbLabel: Supplier }
+    icon: ion-ios-home
+    color: "#e67e22"
+    size: 30.0
+    label: { type: Property, key: CompanyName }
+  - predicate: { propertyKeys: [], knownValues: {}, dbLabel: Shipper }
+    icon: ion-plane
+    color: "#34495e"
+    size: 26.0
+    label: { type: Property, key: CompanyName }
+  - predicate: { propertyKeys: [], knownValues: {}, dbLabel: Employee }
+    icon: ion-person
+    color: "#e74c3c"
+    size: 28.0
+    label: { type: Property, key: Name }
+  - predicate: { propertyKeys: [], knownValues: {}, dbLabel: RolE }
+    icon: ion-ribbon-b
+    color: "#f1948a"
+    size: 20.0
+    label: { type: Property, key: Title }
+
+# Quick queries: right-click a node in the Exploration UI. One pivot per
+# question a person following the story would ask of that node.
+quickQueries:
+  - predicate: { propertyKeys: [], knownValues: {} }
+    quickQuery:
+      name: Adjacent Nodes
+      querySuffix: MATCH (n)--(m) RETURN DISTINCT m
+      sort: NODE
+  - predicate: { propertyKeys: [], knownValues: {} }
+    quickQuery:
+      name: Which Collection is this in? (its state)
+      querySuffix: MATCH (n)<-[:CONTAINS]-(c:Collection) RETURN c
+      sort: NODE
+  - predicate: { propertyKeys: [], knownValues: {}, dbLabel: Collection }
+    quickQuery:
+      name: Members of this Collection
+      querySuffix: MATCH (n)-[:CONTAINS]->(m) RETURN m
+      sort: NODE
+  - predicate: { propertyKeys: [], knownValues: {}, dbLabel: Collection }
+    quickQuery:
+      name: How many members?
+      querySuffix: MATCH (n)-[:CONTAINS]->(m) RETURN n.name AS collection, count(m) AS members
+      sort: TEXT
+  - predicate: { propertyKeys: [], knownValues: {}, dbLabel: Product }
+    quickQuery:
+      name: Isotopes (stock, threshold, on order)
+      querySuffix: MATCH (n)-[:HAS_INVENTORY_LEVEL|HAS_REORDER_LEVEL|HAS_SUPPLY_ORDER]->(m) RETURN m
+      sort: NODE
+  - predicate: { propertyKeys: [], knownValues: {}, dbLabel: Product }
+    quickQuery:
+      name: The 3 supplier offers, right now
+      querySuffix: MATCH (n)-[:HAS_OFFER]->(o)-[:FROM_SUPPLIER]->(s) RETURN s.CompanyName AS supplier, o.UnitCost AS unitCost, o.UnitsAvailable AS available, o.MinOrderQty AS minLot, o.LeadTimeDays AS leadDays ORDER BY unitCost
+      sort: TEXT
+  - predicate: { propertyKeys: [], knownValues: {}, dbLabel: Product }
+    quickQuery:
+      name: Offers + suppliers (graph)
+      querySuffix: MATCH (n)-[:HAS_OFFER]->(o)-[:FROM_SUPPLIER]->(s) RETURN o, s
+      sort: NODE
+  - predicate: { propertyKeys: [], knownValues: {}, dbLabel: Product }
+    quickQuery:
+      name: What the twin recommended for this product
+      querySuffix: MATCH (n)<-[:FOR_PRODUCT]-(rec:PurchaseRecommendation) OPTIONAL MATCH (rec)<-[:FROM_RECOMMENDATION]-(po) RETURN rec, po
+      sort: NODE
+  - predicate: { propertyKeys: [], knownValues: {}, dbLabel: Product }
+    quickQuery:
+      name: Open orders waiting on this product
+      querySuffix: MATCH (n)<-[:FOR_PRODUCT]-(l)<-[:HAS_ORDER_LINE]-(o)<-[:CONTAINS]-(c:Collection) WHERE c.name IN ["OpenOrders", "BackOrders"] RETURN o
+      sort: NODE
+  - predicate: { propertyKeys: [], knownValues: {}, dbLabel: PurchaseRecommendation }
+    quickQuery:
+      name: Product, chosen supplier, offer, resulting PO
+      querySuffix: MATCH (n)-[:FOR_PRODUCT|RECOMMENDS_SUPPLIER|BASED_ON_OFFER]->(m) OPTIONAL MATCH (n)<-[:FROM_RECOMMENDATION]-(po) RETURN m, po
+      sort: NODE
+  - predicate: { propertyKeys: [], knownValues: {}, dbLabel: PurchaseOrder }
+    quickQuery:
+      name: PO lineage (rejections it descends from)
+      querySuffix: MATCH (n)-[:HAS_PREVIOUS_PO*0..]->(m) RETURN m
+      sort: NODE
+  - predicate: { propertyKeys: [], knownValues: {}, dbLabel: PurchaseOrder }
+    quickQuery:
+      name: The whole PO story (line, product, supplier, RFQ, delivery, invoice, people)
+      querySuffix: MATCH (n)-[]->(m) WHERE NOT m:Collection OPTIONAL MATCH (n)-[:HAS_PO_LINE]->(l)-[:FOR_PRODUCT]->(p) OPTIONAL MATCH (n)-[:HAS_APPROVED_RFQ]->(rfq)-[:HAS_RFQ_LINE]->(rl) RETURN m, p, rl
+      sort: NODE
+  - predicate: { propertyKeys: [], knownValues: {}, dbLabel: PurchaseOrder }
+    quickQuery:
+      name: Who touched this PO
+      querySuffix: MATCH (n)-[r]->(e:Employee)-[:HAS_ROLE]->(role) RETURN type(r) AS action, e.Name AS who, role.Title AS role, role.ApprovalLimit AS approvalLimit
+      sort: TEXT
+  - predicate: { propertyKeys: [], knownValues: {}, dbLabel: Order }
+    quickQuery:
+      name: Lines, products, customer, rep
+      querySuffix: MATCH (n)-[:HAS_ORDER_LINE]->(l)-[:FOR_PRODUCT]->(p) OPTIONAL MATCH (n)-[:HAS_ORDER_CUSTOMER|SOLD_BY|SHIPPED_VIA|FULFILLED_BY]->(m) RETURN l, p, m
+      sort: NODE
+  - predicate: { propertyKeys: [], knownValues: {}, dbLabel: Order }
+    quickQuery:
+      name: Can it ship? (line vs stock)
+      querySuffix: MATCH (n)-[:HAS_ORDER_LINE]->(l)-[:FOR_PRODUCT]->(p)-[:HAS_INVENTORY_LEVEL]->(inv) RETURN p.ProductName AS product, l.Quantity AS ordered, inv.UnitsInStock AS inStock, CASE WHEN l.Quantity > inv.UnitsInStock THEN "SHORT" ELSE "ok" END AS status
+      sort: TEXT
+  - predicate: { propertyKeys: [], knownValues: {}, dbLabel: Customer }
+    quickQuery:
+      name: Orders + spend isotope
+      querySuffix: MATCH (n)<-[:HAS_ORDER_CUSTOMER]-(o) OPTIONAL MATCH (n)-[:HAS_SPEND]->(cs) RETURN o, cs
+      sort: NODE
+  - predicate: { propertyKeys: [], knownValues: {}, dbLabel: Customer }
+    quickQuery:
+      name: Customer 360 (table)
+      querySuffix: MATCH (n)-[:HAS_SPEND]->(cs) OPTIONAL MATCH (n)<-[:CONTAINS]-(tier:Collection) OPTIONAL MATCH (n)<-[:HAS_ORDER_CUSTOMER]-(o)<-[:CONTAINS]-(st:Collection) RETURN n.CompanyName AS customer, cs.DaySpend AS spendToday, cs.OrdersShipped AS shipped, coalesce(tier.name, "Standard") AS tier, collect(DISTINCT st.name) AS orderStates
+      sort: TEXT
+  - predicate: { propertyKeys: [], knownValues: {}, dbLabel: Supplier }
+    quickQuery:
+      name: Scorecard + offers + POs
+      querySuffix: MATCH (n)-[:HAS_SCORECARD]->(sc) OPTIONAL MATCH (n)<-[:FROM_SUPPLIER]-(o) OPTIONAL MATCH (n)<-[:PO_SUPPLIER]-(po) RETURN sc, o, po
+      sort: NODE
+  - predicate: { propertyKeys: [], knownValues: {}, dbLabel: Supplier }
+    quickQuery:
+      name: What we owe this supplier
+      querySuffix: MATCH (n)<-[:PAYABLE_TO]-(inv)<-[:CONTAINS]-(c:Collection) RETURN inv.InvoiceNumber AS invoice, inv.Amount AS amount, c.name AS state
+      sort: TEXT
+  - predicate: { propertyKeys: [], knownValues: {}, dbLabel: Invoice }
+    quickQuery:
+      name: The PO and supplier behind it
+      querySuffix: MATCH (n)<-[:HAS_INVOICE]-(po) MATCH (n)-[:PAYABLE_TO]->(s) RETURN po, s
+      sort: NODE
+  - predicate: { propertyKeys: [], knownValues: {}, dbLabel: Employee }
+    quickQuery:
+      name: Everything this person touched
+      querySuffix: MATCH (n)<-[r]-(m) RETURN m
+      sort: NODE
+
+# Sample queries: the drop-down on the search bar. In story order.
+sampleQueries:
+  - name: "1 · START HERE — the 14 state Collections (the business's state machine)"
+    query: |-
+      MATCH (c:Collection) RETURN c
+  - name: "2 · Where is everything right now? (members per Collection)"
+    query: |-
+      MATCH (c:Collection)
+      OPTIONAL MATCH (c)-[:CONTAINS]->(m)
+      RETURN c.name AS state, count(m) AS members
+      ORDER BY members DESC
+  - name: "3 · Inventory dashboard, live (the article's report — but it changes while you watch)"
+    query: |-
+      MATCH (p:Product)-[:HAS_INVENTORY_LEVEL]->(inv), (p)-[:HAS_REORDER_LEVEL]->(rl), (p)-[:HAS_SUPPLY_ORDER]->(suo)
+      OPTIONAL MATCH (p)<-[:CONTAINS]-(st:Collection)
+      RETURN p.ProductName AS product, inv.UnitsInStock AS inStock, rl.StockThreshold AS threshold,
+             suo.UnitsOnOrder AS onOrder, collect(st.name) AS state
+      ORDER BY inStock ASC
+  - name: "4 · The supplier market right now (3 offers per product, re-pricing every tick)"
+    query: |-
+      MATCH (p:Product)-[:HAS_OFFER]->(o)-[:FROM_SUPPLIER]->(s)
+      RETURN p.ProductName AS product, s.CompanyName AS supplier, o.UnitCost AS unitCost,
+             o.UnitsAvailable AS available, o.MinOrderQty AS minLot, o.UpdatedAtTick AS updatedAtTick
+      ORDER BY product, unitCost
+  - name: "5 · What the twin recommended, and whether procurement acted on it"
+    query: |-
+      MATCH (c:Collection)-[:CONTAINS]->(rec:PurchaseRecommendation)-[:FOR_PRODUCT]->(p), (rec)-[:RECOMMENDS_SUPPLIER]->(s)
+      OPTIONAL MATCH (rec)<-[:FROM_RECOMMENDATION]-(po)
+      RETURN rec.RecNumber AS recommendation, p.ProductName AS product, rec.Qty AS qty, s.CompanyName AS supplier,
+             rec.UnitCost AS unitCost, rec.EstimatedCost AS estCost, c.name AS state, po.PONumber AS raisedPO
+      ORDER BY recommendation
+  - name: "6 · A recommendation on the canvas: product, offers, chosen supplier, the PO it became"
+    query: |-
+      MATCH (c:Collection {name: "ActionedPurchases"})-[:CONTAINS]->(rec)-[:FOR_PRODUCT]->(p)-[:HAS_OFFER]->(o)-[:FROM_SUPPLIER]->(s)
+      MATCH (rec)-[:RECOMMENDS_SUPPLIER]->(chosen)
+      OPTIONAL MATCH (rec)<-[:FROM_RECOMMENDATION]-(po)
+      RETURN rec, p, o, s, chosen, po LIMIT 40
+  - name: "7 · Purchase orders by state"
+    query: |-
+      MATCH (c:Collection)-[:CONTAINS]->(po:PurchaseOrder)
+      RETURN c.name AS state, count(po) AS POs, collect(po.PONumber) AS which
+      ORDER BY POs DESC
+  - name: "8 · Rejected → resubmitted → closed: the lineage the graph kept (rule 4)"
+    query: |-
+      MATCH (rej:Collection {name: "RejectedPoS"})-[:CONTAINS]->(orig:PurchaseOrder)<-[:HAS_PREVIOUS_PO]-(resub)<-[:CONTAINS]-(now:Collection)
+      MATCH (orig)-[:REJECTED_L1_BY]->(l1), (resub)-[:VETTED_L2_BY]->(l2)
+      MATCH (orig)-[:HAS_PO_LINE]->(line)-[:FOR_PRODUCT]->(p)
+      RETURN rej, orig, resub, now, l1, l2, line, p LIMIT 60
+  - name: "9 · Back orders right now, and what they are waiting on"
+    query: |-
+      MATCH (bo:Collection {name: "BackOrders"})-[:CONTAINS]->(o)-[:HAS_ORDER_CUSTOMER]->(c)
+      MATCH (o)-[:HAS_ORDER_LINE]->(l)-[:FOR_PRODUCT]->(p)-[:HAS_INVENTORY_LEVEL]->(inv)
+      WHERE l.Quantity > inv.UnitsInStock
+      OPTIONAL MATCH (p)-[:HAS_SUPPLY_ORDER]->(suo)
+      RETURN o.OrderID AS order, c.CompanyName AS customer, p.ProductName AS waitingOn,
+             l.Quantity AS needs, inv.UnitsInStock AS inStock, suo.UnitsOnOrder AS onOrder
+  - name: "10 · Payables the twin booked (invoice per closed PO)"
+    query: |-
+      MATCH (pay:Collection {name: "PayablesDue"})-[:CONTAINS]->(inv:Invoice)-[:PAYABLE_TO]->(s)
+      MATCH (inv)<-[:HAS_INVOICE]-(po)
+      RETURN inv.InvoiceNumber AS invoice, po.PONumber AS po, s.CompanyName AS supplier, inv.Amount AS amount, inv.DueInDays AS dueInDays
+      ORDER BY invoice
+  - name: "11 · Supplier scorecard (what automation 1 reads when it chooses)"
+    query: |-
+      MATCH (s:Supplier)-[:HAS_SCORECARD]->(sc)
+      OPTIONAL MATCH (s)<-[:PAYABLE_TO]-(inv)
+      RETURN s.CompanyName AS supplier, sc.POsClosed AS POsClosed, sc.UnitsDelivered AS unitsDelivered,
+             sc.Resubmissions AS resubmissions, round(coalesce(sum(inv.Amount), 0) * 100) / 100 AS owed
+      ORDER BY POsClosed DESC
+  - name: "12 · Customer 360 — spend today, orders shipped, tier"
+    query: |-
+      MATCH (c:Customer)-[:HAS_SPEND]->(cs)
+      OPTIONAL MATCH (c)<-[:CONTAINS]-(tier:Collection)
+      RETURN c.CompanyName AS customer, round(cs.DaySpend * 100) / 100 AS spendToday, cs.OrdersShipped AS shipped,
+             coalesce(tier.name, "Standard") AS tier
+      ORDER BY spendToday DESC
+  - name: "13 · The whole life of one order (graph): the most recently shipped one"
+    query: |-
+      MATCH (sh:Collection {name: "ShippedOrders"})-[:CONTAINS]->(o)
+      WITH o ORDER BY o.Tick DESC LIMIT 1
+      MATCH (o)-[]->(m)
+      OPTIONAL MATCH (o)-[:HAS_ORDER_LINE]->(l)-[:FOR_PRODUCT]->(p)-[:HAS_INVENTORY_LEVEL]->(inv)
+      RETURN o, m, p, inv
+  - name: "14 · Who did what on a closed PO (people + roles)"
+    query: |-
+      MATCH (c:Collection {name: "ClosedPoS"})-[:CONTAINS]->(po:PurchaseOrder)-[rel]->(e:Employee)-[:HAS_ROLE]->(r)
+      RETURN po, e, r LIMIT 40
+  - name: "15 · Live graph around the NewPoS collection (what procurement just raised)"
+    query: |-
+      MATCH (c:Collection {name: "NewPoS"})-[:CONTAINS]->(po)-[:HAS_PO_LINE]->(l)-[:FOR_PRODUCT]->(p)
+      OPTIONAL MATCH (po)-[:PO_SUPPLIER]->(s)
+      RETURN c, po, l, p, s LIMIT 60
+
+statusQuery:
+  cypherQuery: |-
+    MATCH (c:Collection {name: "OpenOrders"})-[:CONTAINS]->(o)
+    RETURN count(o) AS openOrders

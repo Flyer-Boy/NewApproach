@@ -1,0 +1,50 @@
+[
+  {
+    "name": "LOW STOCK — product enters / leaves the LowStock collection",
+    "description": "Fires on the raw match: the product, its stock and threshold isotopes, and the LowStock collection it just joined. Cancellations (product restocked) arrive too — the feed redraws the same shape.",
+    "standingQueryName": "low-stock",
+    "outputName": null,
+    "preEnrichment": false,
+    "query": "MATCH (p) WHERE id(p) = $data.id MATCH (p)-[:HAS_INVENTORY_LEVEL]->(inv), (p)-[:HAS_REORDER_LEVEL]->(rl) MATCH (c:Collection {name: \"LowStock\"}) RETURN p, inv, rl, c"
+  },
+  {
+    "name": "PO REJECTED — the PO, who rejected it, the line and product",
+    "description": "Drawn the moment the rejection is fully written (the REJECTED_L1_BY edge is in the pattern). Watch the -R resubmission appear next to it a moment later — that node is written by the standing query itself.",
+    "standingQueryName": "po-rejected",
+    "outputName": null,
+    "preEnrichment": false,
+    "query": "MATCH (po) WHERE id(po) = $data.id MATCH (po)-[:REJECTED_L1_BY]->(e), (po)-[:HAS_PO_LINE]->(l)-[:FOR_PRODUCT]->(p) MATCH (c:Collection {name: \"RejectedPoS\"}) RETURN po, e, l, p, c"
+  },
+  {
+    "name": "PO CLOSED — PO, delivery, supplier, and its lineage if any",
+    "description": "Fires once the warehouse delivery is booked. The invoice the standing query writes appears on the canvas right after.",
+    "standingQueryName": "po-closed",
+    "outputName": null,
+    "preEnrichment": false,
+    "query": "MATCH (po) WHERE id(po) = $data.id MATCH (po)-[:HAS_WAREHOUSE_DELIVERY]->(d), (po)-[:PO_SUPPLIER]->(s) OPTIONAL MATCH (po)-[:HAS_PREVIOUS_PO]->(prev) MATCH (c:Collection {name: \"ClosedPoS\"}) RETURN po, d, s, prev, c"
+  },
+  {
+    "name": "ORDER SHIPPED — order, customer, carrier",
+    "description": "One frame per shipment. Busy: ~120 a day. Toggle it on for a minute to see the cadence, then off.",
+    "standingQueryName": "order-shipped",
+    "outputName": null,
+    "preEnrichment": false,
+    "query": "MATCH (o) WHERE id(o) = $data.id MATCH (o)-[:HAS_ORDER_CUSTOMER]->(c), (o)-[:SHIPPED_VIA]->(s) RETURN o, c, s"
+  },
+  {
+    "name": "CUSTOMER PROMOTED — a standing query's write fired another standing query",
+    "description": "The order-shipped automation moved this customer into PreferredCustomers; this feed draws the customer, its spend isotope and the tier collection.",
+    "standingQueryName": "customer-promoted",
+    "outputName": null,
+    "preEnrichment": false,
+    "query": "MATCH (cust) WHERE id(cust) = $data.id MATCH (cust)-[:HAS_SPEND]->(cs) MATCH (c:Collection {name: \"PreferredCustomers\"}) RETURN cust, cs, c"
+  },
+  {
+    "name": "BACK ORDER — order enters / leaves BackOrders",
+    "description": "The order, its customer, and the product lines it is waiting on. The cancellation (order released) redraws the same shape when it ships.",
+    "standingQueryName": "back-order",
+    "outputName": null,
+    "preEnrichment": false,
+    "query": "MATCH (o) WHERE id(o) = $data.id MATCH (o)-[:HAS_ORDER_CUSTOMER]->(cust), (o)-[:HAS_ORDER_LINE]->(l)-[:FOR_PRODUCT]->(p)-[:HAS_INVENTORY_LEVEL]->(inv) MATCH (c:Collection {name: \"BackOrders\"}) RETURN o, cust, l, p, inv, c"
+  }
+]

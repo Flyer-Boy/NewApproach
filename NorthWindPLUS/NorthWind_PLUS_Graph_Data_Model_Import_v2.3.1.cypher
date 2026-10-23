@@ -1,8 +1,17 @@
-// -- NorthWind PLUS Graph Data Model Import v2.3 for Neo4j --//
+// -- NorthWind PLUS Graph Data Model Import v2.3.1 Neo4j Aura --//
+
+// v2.3.1 -- bug fixes to v2.3 (no model changes):
+//   1. PO vetting cost was counted twice. The vetting queries matched (i:Product)-[]-(s:Supplier), an undirected pattern that hits BOTH
+//      (Product)-[:HAS_PRODUCT_SUPPLIER]->(Supplier) and (Supplier)-[:SUPPLIES]->(Product), so every PO item appeared twice and SUM(POCost)
+//      doubled. POs were therefore compared against the L1/L2/L3 approval limits at twice their real cost. Now (i:Product)-[:HAS_PRODUCT_SUPPLIER]->(s:Supplier).
+//   2. Warehouse receiving could add stock twice and could half-receive a PO. It matched every Warehouse Clerk (there are two) together with the
+//      PO lines, so each line could appear once per clerk and its quantity was added to UnitsInStock (and removed from UnitsOnOrder) twice.
+//      And LIMIT 5 counted PO lines, not POs, so a PO's last lines could be cut off; the PO still got HAS_WAREHOUSE_DELIVERY and those lines
+//      were never received. Now one clerk is picked first, then 5 whole POs, then all their lines.
 
 // If you find yourself filtering on a Node property that represents state, context, or an entity's relevance to something else, that's a sign the model needs a relationship instead, 
 // as it was most likely built with a table mentality.
-// This is what this model intends to achieve by using a Graph mentality to rebuild a well-known model that once was a reference for a Relational Database model.  
+// This is what this model intends to achieve, by using a Graph mentality to rebuild a well known model that once was a reference for a Relational Database model.  
 
 
 // This v2 introduces changes of truly *ontological* proportions.
@@ -66,8 +75,8 @@
 
 //--------------------------------------------------------------------------------------------------------------------------------------------------------------//
 //                                                                    ** Quick Run Instructions: **
-// Copy this script from line 73 to 1143. Paste it into the Neo4j Aura Query console. Execute and wait. Optionally, you can run the Recommendation Engine - Lines 1231 through 1299.
-// Follow the instructions from line 1145 to 1225 to run the Python simulation loops.  Run the queries from line 1300 onwards as the Python loops run. Enjoy!! 
+// Copy this script from line 73 to 1129. Paste it into the Neo4j Aura Query console. Execute and wait. Optionally, you can run the Recommendation Engine - Lines 1217 through 1283.
+// Follow the instructions from line 1130 to 1175 to run the Python simulation loops.  Run the Queries on line 1286 onwards as the Python loops run. Enjoy!! 
 //--------------------------------------------------------------------------------------------------------------------------------------------------------------//
 
 
@@ -81,7 +90,9 @@ MERGE (n:ProductCategorY {CategoryID:row.CategoryID, CategoryName:row.CategoryNa
 
 // Let's create the Product availability Status as Collections where we will connect the products later and the SuperSet CategorieS
 CREATE (:CategorieS {Name: "CategorieS"});
+// We will create the Product Status Collections and connect the Products to them based on their Discontinued property.
 CREATE (:ProductStatusDiscontinueD {Status: "Discontinued"}); 
+// We will create the Product Status Collections and connect the Products to them based on their Discontinued property.
 CREATE (:ProductStatusAvailablE {Status: "Available"}); 
 
 // We import the Suppliers
@@ -158,6 +169,8 @@ SET n += row;
 
 // We will create the CustomerS Superset Collection and the subset Customer Collection Nodes
 CREATE (c:CustomerS {Name:"CustomerS"});
+
+// We will connect the Customer to the respective CustomerS Superset Collection
 MATCH (c:CustomerS {Name:"CustomerS"}), (o:Customer)
 CREATE (c)-[:IS_CUSTOMER]->(o);
 
@@ -632,7 +645,7 @@ ORDER BY s.SupplierID, p.PONumber;
 // We will do a 3+1 Level Vetting process folowing the PO Budget approval level of each Procurement Approver as defined by their Role.
 
 //Summary of New (pending approval) POs by Total Cost (we will apply a ~30% standard discount by Suppliers as product cost).
-MATCH (:NewPoS {Name:"NewPoS"})-[r]->(p:PurchaseOrder)-[id:HAS_PO_ITEM]->(i:Product)-[]-(s:Supplier) 
+MATCH (:NewPoS {Name:"NewPoS"})-[r]->(p:PurchaseOrder)-[id:HAS_PO_ITEM]->(i:Product)-[:HAS_PRODUCT_SUPPLIER]->(s:Supplier) 
 RETURN p.PONumber, SUM((id.POqt * (i.UnitPrice*id.POPriceDiscount))) AS EstimatedCost ORDER BY EstimatedCost;
 
 // **Level 1 vetting**
@@ -641,7 +654,7 @@ RETURN p.PONumber, SUM((id.POqt * (i.UnitPrice*id.POPriceDiscount))) AS Estimate
 // For our Demo, we will Reject two POs at Level 1 so we have one instance (we will resubmit one of them later)
 MATCH (l1:Employee)<-[:IS_ACTIVE_ROLE]-(ro:RolE {Title:"Level1Approver"}), (a:RejectedPoS {Name:"RejectedPoS"})
 WITH a, ro, l1 ORDER BY rand() LIMIT 1
-MATCH (:NewPoS {Name:"NewPoS"})-[np]->(p:PurchaseOrder)-[id:HAS_PO_ITEM]->(i:Product)-[]-(s:Supplier) 
+MATCH (:NewPoS {Name:"NewPoS"})-[np]->(p:PurchaseOrder)-[id:HAS_PO_ITEM]->(i:Product)-[:HAS_PRODUCT_SUPPLIER]->(s:Supplier) 
 WITH a, ro, l1, np, p, SUM((id.POqt * (i.UnitPrice*id.POPriceDiscount))) AS POCost ORDER BY p LIMIT 2
 WHERE POCost > ro.ApprovalBase  
 CREATE (p)-[:HAS_L1_PO_REJECTION {Date:datetime(), Comment:"This PO is rejected by L1 due to..< Rejection justification for Decision Traces - for Context Graph > - alternatively this could be placed on a separate Node  >..."}]->(l1),
@@ -653,7 +666,7 @@ DELETE np;
 // We select the POs that are below the L1 Approval Limit and move them to the Approved State. For Demo purposes we will only approve 20 PO's here
 MATCH (l1:Employee)<-[:IS_ACTIVE_ROLE]-(ro:RolE {Title:"Level1Approver"}), (a:ApprovedPoS {Name:"ApprovedPoS"})
 WITH a, ro, l1 ORDER BY rand() LIMIT 1
-MATCH (:NewPoS {Name:"NewPoS"})-[np]->(p:PurchaseOrder)-[id:HAS_PO_ITEM]->(i:Product)-[]-(s:Supplier) 
+MATCH (:NewPoS {Name:"NewPoS"})-[np]->(p:PurchaseOrder)-[id:HAS_PO_ITEM]->(i:Product)-[:HAS_PRODUCT_SUPPLIER]->(s:Supplier) 
 WITH a, ro, l1, np, p, SUM((id.POqt * (i.UnitPrice*id.POPriceDiscount))) AS POCost ORDER BY p LIMIT 20
 WHERE POCost > ro.ApprovalBase AND POCost < ro.ApprovalLimit
 CREATE (p)-[:HAS_L1_PO_APPROVAL {Date:datetime(), Comment:"This PO is approved by L1 due to..< Approval justification for Decision Traces - for Context Graph > - alternatively this could be placed on a separate Node  >..."}]->(l1),
@@ -664,7 +677,7 @@ DELETE np;
 // however, they will still vet them so the next Approval level can continue the approval process. 
 MATCH (l1:Employee)<-[:IS_ACTIVE_ROLE]-(ro:RolE {Title:"Level1Approver"}) 
 WITH  ro, l1 ORDER BY rand() LIMIT 1
-MATCH (:NewPoS {Name:"NewPoS"})-[np]->(p:PurchaseOrder)-[id:HAS_PO_ITEM]->(i:Product)-[]-(s:Supplier) 
+MATCH (:NewPoS {Name:"NewPoS"})-[np]->(p:PurchaseOrder)-[id:HAS_PO_ITEM]->(i:Product)-[:HAS_PRODUCT_SUPPLIER]->(s:Supplier) 
 WITH  ro, l1, np, p, SUM((id.POqt * (i.UnitPrice*id.POPriceDiscount))) AS POCost 
 WHERE POCost > ro.ApprovalBase AND POCost > ro.ApprovalLimit
 CREATE (p)-[:HAS_L1_PO_APPROVAL {Date:datetime(), Comment:"This PO is approved by L1 due to..< Approval justification for Decision Traces - for Context Graph > - alternatively this could be placed on a separate Node  >..."}]->(l1);
@@ -675,7 +688,7 @@ CREATE (p)-[:HAS_L1_PO_APPROVAL {Date:datetime(), Comment:"This PO is approved b
 
 // MATCH (l1:Employee)<-[:IS_ACTIVE_ROLE]-(ro:RolE {Title:"Level1Approver"}), (a:ApprovedPoS {Name:"ApprovedPoS"})
 // WITH a, ro, l1 ORDER BY rand() LIMIT 1
-// MATCH (:NewPoS {Name:"NewPoS"})-[np]->(p:PurchaseOrder)-[id:HAS_PO_ITEM]->(i:Product)-[]-(s:Supplier) 
+// MATCH (:NewPoS {Name:"NewPoS"})-[np]->(p:PurchaseOrder)-[id:HAS_PO_ITEM]->(i:Product)-[:HAS_PRODUCT_SUPPLIER]->(s:Supplier) 
 // WITH a, ro, np, p, SUM((id.POqt * (i.UnitPrice*id.POPriceDiscount))) AS EstimatedCost ORDER BY EstimatedCost
 // CREATE (p)-[:HAS_L1_PO_APPROVAL {Date:datetime(), Comment:"This PO is approved by L1 due to..< Approval justification for Decision Traces - for Context Graph > - alternatively this could be placed on a separate Node  >..."}]->(l1)
 //   CASE EstimatedCost > ro.ApprovalBase AND EstimatedCost < ro.ApprovalLimit
@@ -688,7 +701,7 @@ CREATE (p)-[:HAS_L1_PO_APPROVAL {Date:datetime(), Comment:"This PO is approved b
 // Now we move to Level 2 vetting - similar to Level 1, but we will check whether L1 has already approved the PO.
 MATCH (l2:Employee)<-[:IS_ACTIVE_ROLE]-(ro:RolE {Title:"Level2Approver"}), (a:ApprovedPoS {Name:"ApprovedPoS"})
 WITH a, ro, l2 ORDER BY rand() LIMIT 1
-MATCH (:NewPoS {Name:"NewPoS"})-[np]->(p:PurchaseOrder)-[id:HAS_PO_ITEM]->(i:Product)-[]-(s:Supplier), (p)-[:HAS_L1_PO_APPROVAL]-()
+MATCH (:NewPoS {Name:"NewPoS"})-[np]->(p:PurchaseOrder)-[id:HAS_PO_ITEM]->(i:Product)-[:HAS_PRODUCT_SUPPLIER]->(s:Supplier), (p)-[:HAS_L1_PO_APPROVAL]-()
 WITH a, ro, l2, np, p, SUM((id.POqt * (i.UnitPrice*id.POPriceDiscount))) AS POCost
 WHERE POCost > ro.ApprovalBase AND POCost < ro.ApprovalLimit
 CREATE (p)-[:HAS_L2_PO_APPROVAL {Date:datetime(), Comment:"This PO is approved by L2 due to..< Approval justification for Decision Traces - for Context Graph > - alternatively this could be placed on a separate Node  >..."}]->(l2),
@@ -701,7 +714,7 @@ DELETE np;
 // For our Demo, we will Reject one PO at level 2 so we have one instance s these PO will not be approved by L3 as it will be rejected at L2 despite the fact that they were approved at L1 and beyond the L2 approval limit.
 MATCH (l2:Employee)<-[:IS_ACTIVE_ROLE]-(ro:RolE {Title:"Level2Approver"}), (a:RejectedPoS {Name:"RejectedPoS"})
 WITH a, ro, l2 ORDER BY rand() LIMIT 1
-MATCH (:NewPoS {Name:"NewPoS"})-[np]->(p:PurchaseOrder)-[id:HAS_PO_ITEM]->(i:Product)-[]-(s:Supplier), (p)-[:HAS_L1_PO_APPROVAL]-()
+MATCH (:NewPoS {Name:"NewPoS"})-[np]->(p:PurchaseOrder)-[id:HAS_PO_ITEM]->(i:Product)-[:HAS_PRODUCT_SUPPLIER]->(s:Supplier), (p)-[:HAS_L1_PO_APPROVAL]-()
 WITH a, ro, l2, np, p, SUM((id.POqt * (i.UnitPrice*id.POPriceDiscount))) AS POCost ORDER BY p LIMIT 1
 WHERE POCost > ro.ApprovalBase AND POCost > ro.ApprovalLimit
 CREATE (p)-[:HAS_L2_PO_REJECTION {Date:datetime(), Comment:"This PO is rejected by L2 due to..< Rejection justification for Decision Traces - for Context Graph > - alternatively this could be placed on a separate Node  >..."}]->(l2),
@@ -711,7 +724,7 @@ DELETE np;
 
 MATCH (l2:Employee)<-[:IS_ACTIVE_ROLE]-(ro:RolE {Title:"Level2Approver"}) 
 WITH  ro, l2 ORDER BY rand() LIMIT 1
-MATCH (:NewPoS {Name:"NewPoS"})-[np]->(p:PurchaseOrder)-[id:HAS_PO_ITEM]->(i:Product)-[]-(s:Supplier), (p)-[:HAS_L1_PO_APPROVAL]-()
+MATCH (:NewPoS {Name:"NewPoS"})-[np]->(p:PurchaseOrder)-[id:HAS_PO_ITEM]->(i:Product)-[:HAS_PRODUCT_SUPPLIER]->(s:Supplier), (p)-[:HAS_L1_PO_APPROVAL]-()
 WITH  ro, l2, np, p, SUM((id.POqt * (i.UnitPrice*id.POPriceDiscount))) AS POCost
 WHERE POCost > ro.ApprovalBase AND POCost > ro.ApprovalLimit
 CREATE (p)-[:HAS_L2_PO_APPROVAL {Date:datetime(), Comment:"This PO is approved by L2 due to..< Approval justification for Decision Traces - for Context Graph > - alternatively this could be placed on a separate Node  >..."}]->(l2);
@@ -723,7 +736,7 @@ CREATE (p)-[:HAS_L2_PO_APPROVAL {Date:datetime(), Comment:"This PO is approved b
 // For our Demo, we will Reject one PO at level 3 so we have one instance  
 MATCH (l3:Employee)<-[:IS_ACTIVE_ROLE]-(ro:RolE {Title:"Level3Approver"}), (a:RejectedPoS {Name:"RejectedPoS"})
 WITH a, ro, l3 ORDER BY rand() LIMIT 1
-MATCH (:NewPoS {Name:"NewPoS"})-[np]->(p:PurchaseOrder)-[id:HAS_PO_ITEM]->(i:Product)-[]-(s:Supplier), (p)-[:HAS_L2_PO_APPROVAL]-()
+MATCH (:NewPoS {Name:"NewPoS"})-[np]->(p:PurchaseOrder)-[id:HAS_PO_ITEM]->(i:Product)-[:HAS_PRODUCT_SUPPLIER]->(s:Supplier), (p)-[:HAS_L2_PO_APPROVAL]-()
 WITH a, ro, l3, np, p, SUM((id.POqt * (i.UnitPrice*id.POPriceDiscount))) AS POCost ORDER BY p LIMIT 1
 WHERE POCost > ro.ApprovalBase AND POCost < ro.ApprovalLimit 
 CREATE (p)-[:HAS_L3_PO_REJECTION {Date:datetime(), Comment:"This PO is rejected by L3 due to..< Rejection justification for Decision Traces - for Context Graph > - alternatively this could be placed on a separate Node  >..."}]->(l3),
@@ -734,7 +747,7 @@ DELETE np;
 // Level 3 will approve the two remaining PO's , so we leave some PO's pending approval. 
 MATCH (l3:Employee)<-[:IS_ACTIVE_ROLE]-(ro:RolE {Title:"Level3Approver"}), (a:ApprovedPoS {Name:"ApprovedPoS"})
 WITH a, ro, l3 ORDER BY rand() LIMIT 1
-MATCH (:NewPoS {Name:"NewPoS"})-[np]->(p:PurchaseOrder)-[id:HAS_PO_ITEM]->(i:Product)-[]-(s:Supplier), (p)-[:HAS_L2_PO_APPROVAL]-()
+MATCH (:NewPoS {Name:"NewPoS"})-[np]->(p:PurchaseOrder)-[id:HAS_PO_ITEM]->(i:Product)-[:HAS_PRODUCT_SUPPLIER]->(s:Supplier), (p)-[:HAS_L2_PO_APPROVAL]-()
 WITH a, ro, l3, np, p, SUM((id.POqt * (i.UnitPrice*id.POPriceDiscount))) AS POCost ORDER BY p LIMIT 2
 WHERE POCost > ro.ApprovalBase AND POCost < ro.ApprovalLimit
 CREATE (p)-[:HAS_L3_PO_APPROVAL {Date:datetime(), Comment:"This PO is approved by L3 due to..< Approval justification for Decision Traces - for Context Graph > - alternatively this could be placed on a separate Node  >..."}]->(l3),
@@ -855,13 +868,13 @@ RETURN po.PONumber, rfq.RFQNumber ,p.ProductID, poi.POqt, poi.POqt * (p.UnitPric
 // To keep things simple we will have only the Buyer, who was the last level of the PO Approval and the one who submitted the PO, to vet the RFQ. 
 // Alternatively, we could have a 3+1 Level RFQ approval just as we did with the PO 
 
-// We will reject two RFQs just to have an instance and be able to query it later 
+// We will reject one RFQs just to have an instance and be able to query it later 
 MATCH (bu:Employee)<-[:IS_ACTIVE_ROLE]-(ro:RolE {Title:"Buyer"}) 
 WITH bu ORDER BY rand() LIMIT 1
 MATCH (su:SubmittedPoS)-[]->(po)-[:HAS_SUPPLIER_NEW_RFQ]->(pnr)-[r:IS_SUPPLIER_NEW_RFQ]->(rfq)-[rfi:HAS_RFQ_ITEM]->(p)<-[poi:HAS_PO_ITEM]-(po), (po)-[:HAS_SUPPLIER_REJECTED_RFQ]->(prr)
 WHERE poi.POqt * (p.UnitPrice * poi.POPriceDiscount) >= rfi.RFQqt * rfi.RFQcost
 WITH bu, pnr, prr, po, p, r, poi, rfq, rfi 
-ORDER BY po.PONumber DESC LIMIT 2
+ORDER BY po.PONumber DESC LIMIT 1
 CREATE (rfq)-[:HAS_BUYER_RFQ_REJECTION {Date:datetime(), Comment:"This RFQ is rejected by Buyer due to..< Rejection justification for Decision Traces - for Context Graph > - alternatively this could be placed on a separate Node  >..."}]->(bu),      // We conect the rfq to the Buyer with the datetime of the Approval and the Buyer justification 
         (prr)-[:IS_SUPPLIER_REJECTED_RFQ_STATE {Date:datetime()}]->(rfq)   // We connect the rfq to the PO's PoRejectedRFQ state collection
 DELETE r;   
@@ -1060,9 +1073,13 @@ RETURN DISTINCT po.PONumber AS PONumber, s.SupplierID AS SupplierID, size(orderI
 
 // First, we will have the Warehouse Clerk (Employee) receive the products and update the Inventory Levels accordingly.
 // We will recive 5 PO's and update the Inventory Levels for the products in those PO's. We will leave a few PO's pending delivery so we can query them later and see that they are pending delivery.
-MATCH (wc:Employee)<-[:IS_ACTIVE_ROLE]-(ro:RolE {Title:"WarehouseClerk"}), (p)<-[poi:HAS_PO_ITEM]-(po:PurchaseOrder)-[:HAS_APPROVED_RFQ]->(rfq:RFQ)-[rfi:HAS_RFQ_ITEM]->(p)-[:HAS_INVENTORY_LEVEL]->(inv), (p)-[:HAS_SUPPLY_ORDER]->(suo)
-WHERE poi.POqt = rfi.RFQqt AND NOT (po)-[:HAS_WAREHOUSE_DELIVERY]->() // We only want to receive the products for the PO's that have not been received yet (no Warehouse Delivery yet)
-WITH wc, po, rfq, inv, suo, rfi, p ORDER BY po.PONumber LIMIT 5
+MATCH (wc:Employee)<-[:IS_ACTIVE_ROLE]-(ro:RolE {Title:"WarehouseClerk"})
+WITH wc ORDER BY rand() LIMIT 1                     // v2.3.1: pick ONE Warehouse Clerk first, so each PO line is received exactly once
+MATCH (po:PurchaseOrder)-[:HAS_APPROVED_RFQ]->(rfq:RFQ)
+WHERE NOT (po)-[:HAS_WAREHOUSE_DELIVERY]->()        // We only want to receive the products for the PO's that have not been received yet (no Warehouse Delivery yet)
+WITH wc, po, rfq ORDER BY po.PONumber LIMIT 5       // v2.3.1: the LIMIT now counts whole POs, not PO lines, so no PO is half-received
+MATCH (p)<-[poi:HAS_PO_ITEM]-(po)-[:HAS_APPROVED_RFQ]->(rfq)-[rfi:HAS_RFQ_ITEM]->(p)-[:HAS_INVENTORY_LEVEL]->(inv), (p)-[:HAS_SUPPLY_ORDER]->(suo)
+WHERE poi.POqt = rfi.RFQqt
 MERGE (po)-[:HAS_WAREHOUSE_DELIVERY {Date:datetime(), Comment:"The products have been received as per PO at the Warehouse and the Inventory Levels have been updated accordingly."}]->(wc)  // We connect the PO to the Warehouse Clerk that received the products and updated the Inventory Levels
 SET  inv.UnitsInStock = inv.UnitsInStock + rfi.RFQqt,  // We update the Inventory Level to reflect the received products
      suo.UnitsOnOrder = suo.UnitsOnOrder - rfi.RFQqt;  // We update the Supply Order status to reflect the received products 
@@ -1631,7 +1648,6 @@ CALL (since) {
 }
 RETURN UnitsSold, Revenue, UnitsOrderedFromSuppliers, AmountPaidToSuppliers,
        Revenue - AmountPaidToSuppliers AS GrossProfit;       
-
 
 // Outgoing vs. Incoming edges for all nodes in the graph, ordered by IncomingCount descending. 
 // This is a good way to see which nodes are the most connected and which nodes are the most important in the graph. Supernodes
