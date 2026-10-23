@@ -88,7 +88,7 @@
 // ------------------------------------------------------------------------------------ //
 
 
-// This script will create the NorthWind Graph Data Model in Neo4j
+// This script will create the NorthWind Graph Data Model in Quine
 // It will load data from CSV files and create Nodes, Relationships, Indexes, and Constraints    
 // Use the CSV provided in the import folder (https://raw.githubusercontent.com/Flyer-Boy/NewApproach/refs/heads/main/NorthWind/Import/), as they have been fixed. 
 // The original NorthWind CSV files (https://github.com/neo4j-graph-examples/northwind) have some issues with commas in the data fields, mainly in the Address fields (for Brazil, France, and Belgium) and some Description fields (Notes).
