@@ -151,4 +151,4 @@ the loop test).
   232k ticks and a 1.5 GB log.
 
 
-[Curtesy of the Thatdot/Quine team. Thanks Adam and Ryan for reaching out and showing me new perspectives using steaming.]
+[Curtesy of the Thatdot/Quine team. Thanks Adam and Ryan for reaching out and showing me some new perspectives using streaming.]
