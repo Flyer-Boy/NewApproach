@@ -164,7 +164,10 @@ I will keep adding content and prototypes as this New Approach evolves.
 
 ## Contact
 
-Questions, feedback and discussion are very welcome — reach me on [LinkedIn](https://www.linkedin.com/in/marcospinedo/).
+If you want to discuss, learn more, or try this approach on your next project, you can reach out to me at marcos.pinedo@outlook.com or [LinkedIn](https://www.linkedin.com/in/marcospinedo/)
+
+If you liked what you just saw, I suggest you read some of my previous articles (on [Medium](https://medium.com/@marcospinedo), [Substack](https://substack.com/@marcospinedo), or [LinkedIn](https://www.linkedin.com/in/marcospinedo/)) on related subjects if you haven’t already.
+
 
 **"Alea iacta est" — crossing the Rubicon of Graph adoption!** 🚀
 
@@ -172,4 +175,4 @@ Enjoy!
 
 ---
 
-<sub>*If you're curious about the name "Flyer-Boy": that is a long, long story. It happens to be my Xbox gamertag "Flyerboy", Instagram name, Discord tag and so on — it now follows me everywhere, so bear with it. Sorry!*</sub>
+<sub>*If you're curious about the name "Flyer-Boy": that is a long, long story. It now happens to be my Xbox gamertag "Flyerboy", Instagram name, Discord tag and so on — it now follows me everywhere, so bear with it. Sorry!*</sub>
