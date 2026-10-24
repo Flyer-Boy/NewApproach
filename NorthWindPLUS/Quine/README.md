@@ -149,3 +149,6 @@ the loop test).
 - Quine open source has no per-node TTL; the day-restart is the bound on graph
   size. Left running for 64 hours without one, the earlier version reached
   232k ticks and a 1.5 GB log.
+
+
+[Curtesy of the Thatdot/Quine team. Thanks Adam and Ryan for reaching out and showing me some new perspectives using streaming.]
