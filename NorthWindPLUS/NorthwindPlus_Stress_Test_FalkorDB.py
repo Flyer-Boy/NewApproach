@@ -14,7 +14,7 @@ Usage:
     export FALKORDB_PORT="6379"
     export FALKORDB_USERNAME=""          # optional (ACL user / FalkorDB Cloud)
     export FALKORDB_PASSWORD=""          # optional
-    export FALKORDB_GRAPH="northwind"    # same name the import script used (GRAPH)
+    export FALKORDB_GRAPH="northwind"    # same variables the import script reads
     export FALKORDB_SSL="0"              # 1 for TLS (e.g. FalkorDB Cloud)
 
     python NorthwindPlus_Stress_Test_FalkorDB.py --loop customer-order --rate 6

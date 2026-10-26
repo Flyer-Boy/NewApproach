@@ -4,7 +4,7 @@
 
 This repository contains the scripts, data and prototype code behind my articles on building **Line-of-Business applications natively on a Labeled Property Graph** — where the graph is not only the data layer, but also the place where business state, rules and workflow live.
 
-It holds four proofs of concept, from a Ride-Hailing app to a full 360-degree procurement and order-fulfillment system that runs six business processes concurrently against the same live graph — now on **Neo4j, Memgraph, FalkorDB and Quine**.
+It holds four proofs of concept, from a Ride-Hailing app to a full 360-degree procurement and order-fulfillment system that runs six business processes concurrently against the same live graph — now on **Neo4j, Memgraph, FalkorDB and Quine**. On Quine, that business even runs itself: a single recipe streams in customers, suppliers and deliveries, and standing queries apply the company's rules inside the graph, with no application code.
 
 ---
 
@@ -62,7 +62,7 @@ I'm aware that current graph databases are not fully optimized for this approach
 | [**RideHailing**](RideHailing) | The core concepts in a familiar domain: passengers, drivers, cars and bookings moving between states | Full **React + TypeScript** prototype app running directly on the graph |
 | [**TenderWorkflow**](TenderWorkflow) | A tendering system with intertwined workflows — vendor, tender and bid vetting with multi-level approvals — where the graph is both the data and the logic layer | Full ontology, Neo4j **GRAPH TYPE** schema, RDF/Turtle ontology, Python random test generator |
 | [**NorthWind**](NorthWind) | The classic Northwind database, remodeled with a Graph mentality | Cleaned CSV import files |
-| [**NorthWindPLUS**](NorthWindPLUS) | Northwind extended into a full 360-degree business cycle: customer orders, low-stock detection, POs with 3-level vetting, supplier RFQs, warehouse, finance and order fulfillment | Six concurrent Python simulation loops stress-testing the graph; ported to 4 graph databases; Quine Standing Queries version — see the [NorthWindPLUS README](NorthWindPLUS/README.md) |
+| [**NorthWindPLUS**](NorthWindPLUS) | Northwind extended into a full 360-degree business cycle: customer orders, low-stock detection, POs with 3-level vetting, supplier RFQs, warehouse, finance and order fulfillment | Six concurrent Python simulation loops stress-testing the graph; ported to 4 graph databases; on Quine, the business rules run as Standing Queries — and a **recipe version** runs the whole simulation inside the graph — see the [NorthWindPLUS README](NorthWindPLUS/README.md) |
 
 The Cypher scripts are heavily commented and explain what each block does and why, so they work well as a learning resource for applying the principles above.
 
@@ -77,7 +77,9 @@ I started with Neo4j and keep testing the models on other graph databases. When 
 | RideHailing | ✅ | ✅ | | |
 | TenderWorkflow | ✅ (v7.1, GRAPH TYPE) | ✅ (v7.1) | 🧪 beta (v7.1) | |
 | NorthWind | ✅ | | | |
-| NorthWindPLUS | ✅ (v2.3.1, GRAPH TYPE) | ✅ | ✅ | ✅ (v2.4) |
+| NorthWindPLUS | ✅ (v2.3.1, GRAPH TYPE) | ✅ | ✅ | ✅ (v2.4, Standing Queries + recipe) |
+
+Quine doesn't support properties on relationships, so the Quine version uses **model v2.4**, in which every edge that carried data becomes a small node. The principles are unchanged.
 
 With the standardization of **GQL** (ISO/IEC 39075:2024) and the wide adoption of **openCypher**, Cypher-based scripts are increasingly portable across graph databases — but each engine has its own nuances. The ported scripts document the changes each engine required in their headers.
 
@@ -141,9 +143,17 @@ The Python simulators need Python 3 and the driver for your database (for exampl
 
 ### `/NorthWindPLUS`
 
-The most complete proof of concept: Northwind turned into a full business cycle, plus Python harnesses that run six independent business processes concurrently against the same graph to test whether it holds the load. It includes ports to Memgraph, FalkorDB and Quine (with Standing Queries), a GRAPH TYPE schema, an RDF ontology, and notes on an Agentic AI layer.
+The most complete proof of concept: Northwind turned into a full business cycle, plus Python harnesses that run six independent business processes concurrently against the same graph to test whether it holds the load. It includes ports to Memgraph, FalkorDB and Quine, a GRAPH TYPE schema, an RDF ontology, and notes on an Agentic AI layer.
 
 ➡️ **See the [NorthWindPLUS README](NorthWindPLUS/README.md)** for the full guide and quick starts for each database.
+
+The Quine work comes in three flavours, each with its own README:
+
+| Folder | What it is | Who drives the business |
+|---|---|---|
+| [`NorthWindPLUS/Quine/Full_NorthWindPLUS/Recipe_Version`](NorthWindPLUS/Quine/Full_NorthWindPLUS/Recipe_Version/Readme.md) | **The full model as a single Quine recipe.** Ingest streams play the outside world (customers, suppliers, the warehouse dock). Standing queries run the company's rules (PO vetting, buyer submission, RFQ vetting, finance closure). It ships with 47 sample queries and 26 right-click quick queries. | Quine alone — no Python |
+| [`NorthWindPLUS/Quine/Full_NorthWindPLUS`](NorthWindPLUS/Quine/Full_NorthWindPLUS/Readme.md) | The full model loaded over Quine's REST API, driven by the Python harness: either the original six loops, or the outside world in Python with the rules as Standing Queries | Python, with or without Standing Queries |
+| [`NorthWindPLUS/Quine`](NorthWindPLUS/Quine/README.md) | A self-contained, five-minute "business day" streaming demo built by thatDot from the model | Quine alone |
 
 ---
 

@@ -13,9 +13,18 @@ instant a pattern appears, and four of them **perform the next business step**
 themselves, in the graph. The article's question was *"can a graph model a whole
 business?"* This demo's question is *"can the graph run one?"*
 
-Audience: Marcos. Runtime: Quine 2.1.0 (the jar this project pins).
+Audience: Marcos. Runtime: Quine 2.1.0.
 
 ## Run it
+
+With Docker (written for Windows + WSL + Docker Desktop):
+
+```bash
+./run-demo-docker.sh            # one business day (~5 min), then the graph sits still to explore
+./run-demo-docker.sh --loop     # a fresh day every ~5½ minutes, forever (Ctrl-C to stop)
+```
+
+With Java and the Quine jar (set `QUINE_JAR`, or put a `quine*.jar` in this folder):
 
 ```bash
 ./run-demo.sh            # one business day (~5 min), then the graph sits still to explore
@@ -126,11 +135,11 @@ Reordering is the separate process state. Both are "state = position".
 | File | What |
 |---|---|
 | `northwind-plus-streaming.yaml` | the recipe: 2 seed streams, 8 business streams, 6 standing queries, UI config |
-| `run-demo.sh` | launcher (standalone / `--loop`); arms the feeds through Quine's tap-query API |
+| `run-demo.sh` | launcher with the Quine jar (standalone / `--loop`); arms the feeds through Quine's tap-query API |
+| `run-demo-docker.sh` | the same launcher, starting Quine in Docker |
 | `feeds.json` | the 6 graph feeds |
 | `DEMO_PLAN.md` | the plan this was built from, with the decisions and the evidence for them |
 | `tap-queries-api (3).md` | reference for the tap-query API |
-| `_archive/northwind-plus-streaming.v1-original-2026-09-11.yaml` | the original v1 recipe, untouched |
 
 ## Verification
 

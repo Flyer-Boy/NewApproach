@@ -572,7 +572,7 @@ CREATE (s)-[:HAS_SUPPLIER_NEW_PENDING_POS]->(:SupplierNewPoS {Name:"SupplierNewP
 // We will use the following Ontology for this:
 // For New incoming POs: (PO)<-[:IS_SUPPLIER_NEW_PO_STATE {Date:datetime()}]-(:SupplierNewPoS {Name:"SupplierNewPoS"}) - New POs submitted by Buyer. 
 // For Open/Replied POs: (PO)<-[:IS_SUPPLIER_OPEN_PO_STATE {Date:datetime()}]-(:SupplierOpenPoS {Name:"SupplierOpenPoS"}) - POs that the Supplier has an RFQ, is negotiating or has still to deliver the products. 
-// For Closed POs: (PO)<-[:IS_SUPPLIER_CLOSED_PO_STATE {Date:datetime()}]-(:SupplierClosedPoS {Name:"SupplierClosedPoS"}) - POs closed (RFQ approved and products delivered, all RFQs rejected, PO canceled, etc.).
+// For Closed POs: (PO)<-[:HAS_SUPPLIER_CLOSED_PO_STATE {Date:datetime()}]-(:SupplierClosedPoS {Name:"SupplierClosedPoS"}) - POs closed (RFQ approved and products delivered, all RFQs rejected, PO canceled, etc.).
 
 
 //--------------------------------------------------------------------------------------------------------------------------------------------------------------//

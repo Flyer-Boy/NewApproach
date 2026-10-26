@@ -179,8 +179,8 @@ UNWIND items AS item
 WITH ls, n, s, po, prevPOs, item.p AS p, item.qty AS qty
 CREATE (po)-[:HAS_PO_ITEM]->(:POItem {POqt: qty, POPriceDiscount: 0.7})-[:PO_ITEM_PRODUCT]->(p)
 WITH ls, n, s, po, prevPOs, p, qty
-MATCH (ls)-[low:IS_LOW_STOCK_PRODUCT]->(p)
-DELETE low
+OPTIONAL MATCH (ls)-[low:IS_LOW_STOCK_PRODUCT]->(p)
+FOREACH (_ IN CASE WHEN low IS NULL THEN [] ELSE [1] END | DELETE low)
 WITH n, s, po, prevPOs, collect(p.ProductName + " x" + toString(qty)) AS lines
 CREATE (n)-[:IS_NEW_PO_STATE]->(po)
 RETURN "[PO CREATED] " + po.PONumber + " to " + s.CompanyName + ": " + reduce(t = "", l IN lines | t + l + "  ")

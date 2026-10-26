@@ -29,9 +29,9 @@ Requirements:
     pip install neo4j
 
 Usage:
-    export URI="bolt://localhost:7687"
-    export USERNAME=""
-    export PASSWORD=""
+    export MEMG_URI="bolt://localhost:7687"
+    export MEMG_USERNAME=""     # leave both empty when Memgraph runs without authentication
+    export MEMG_PASSWORD=""
     python Tender_Workflow_Random_Test_Generator_MemGraph.py --tenders 20 --seed 42
 """
 
@@ -619,11 +619,12 @@ def main() -> None:
     uri = os.environ.get("MEMG_URI", "bolt://localhost:7687")
     user = os.environ.get("MEMG_USERNAME", "")
     password = os.environ.get("MEMG_PASSWORD", "")
-    if not password:
-        raise SystemExit("Set the MEMG_PASSWORD environment variable before running.")
+    # Memgraph runs without authentication by default: connect with no auth
+    # unless a username is given.
+    auth = (user, password) if user else None
 
 
-    driver = CountingDriver(GraphDatabase.driver(uri, auth=(user, password)))
+    driver = CountingDriver(GraphDatabase.driver(uri, auth=auth))
     try:
         driver.verify_connectivity()
         employees_by_role, approved_vendor_codes, approver_levels, tender_type_names = fetch_reference_data(driver)

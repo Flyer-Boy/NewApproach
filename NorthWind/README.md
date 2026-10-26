@@ -108,12 +108,10 @@ Rounded nodes are Collections. Note that **roles point to employees**, not the o
 
 ## Quick start
 
-The scripts load the CSVs with `LOAD CSV … FROM "file:///<name>.csv"`, which reads from the **import folder of a local Neo4j instance**.
+The scripts load the cleaned CSVs straight from this repo on GitHub, so the same script works on **Neo4j Aura** and **Neo4j Desktop**:
 
-**With Neo4j Desktop (or any local Neo4j):**
-
-1. Copy the files from `Import/` into your database's `import` folder.
-2. Open `NorthWind v2.1.cypher` in Neo4j Browser and run it. ⚠️ It starts with `MATCH (n) DETACH DELETE n`, so use an empty or disposable database.
+1. Create a database — a free [Neo4j Aura](https://neo4j.com/cloud/aura-free/) instance or Neo4j Desktop.
+2. Open `NorthWind v2.1.cypher` in the Query console or Neo4j Browser and run it. ⚠️ It starts with `MATCH (n) DETACH DELETE n`, so use an empty or disposable database.
 3. Explore — for example, the whole neighbourhood of one order:
 
    ```cypher
@@ -121,13 +119,7 @@ The scripts load the CSVs with `LOAD CSV … FROM "file:///<name>.csv"`, which r
    RETURN path;
    ```
 
-**With Neo4j Aura:** `file:///` URLs don't work on Aura, because there's no local import folder. Replace `file:///` in each `LOAD CSV` line with the raw GitHub URL of this repo's import folder:
-
-```
-https://raw.githubusercontent.com/Flyer-Boy/NewApproach/refs/heads/main/NorthWind/Import/
-```
-
-For example, `LOAD CSV WITH HEADERS FROM "https://raw.githubusercontent.com/Flyer-Boy/NewApproach/refs/heads/main/NorthWind/Import/categories.csv" AS row`. NorthWind PLUS already loads its data this way.
+**Prefer local files?** Copy the files from `Import/` into your database's `import` folder, then replace the GitHub URL in each `LOAD CSV` line with `file:///` (for example, `LOAD CSV WITH HEADERS FROM "file:///categories.csv" AS row`).
 
 ---
 

@@ -67,7 +67,7 @@
 
 // This script will create the NorthWind Graph Data Model in Neo4j
 // It will load data from CSV files and create Nodes, Relationships, Indexes, and Constraints    
-// Use the CSV provided in the import folder (https://raw.githubusercontent.com/Flyer-Boy/NewApproach/refs/heads/main/NorthWind/Import/), as they have been fixed. 
+// Use the CSV provided in the import folder (https://raw.githubusercontent.com/Flyer-Boy/NewApproach/refs/heads/main/NorthWindPLUS/Import/), as they have been fixed. 
 // The original NorthWind CSV files (https://github.com/neo4j-graph-examples/northwind) have some issues with commas in the data fields, mainly in the Address fields (for Brazil, France, and Belgium) and some Description fields (Notes).
 // These issues can cause problems during import, resulting in misplaced fields and compromising data integrity.
 
@@ -575,7 +575,7 @@ CREATE (s)-[:HAS_SUPPLIER_NEW_PENDING_POS]->(:SupplierNewPoS {Name:"SupplierNewP
 // We will use the following Ontology for this:
 // For New incoming POs: (PO)<-[:IS_SUPPLIER_NEW_PO_STATE {Date:datetime()}]-(:SupplierNewPoS {Name:"SupplierNewPoS"}) - New POs submitted by Buyer. 
 // For Open/Replied POs: (PO)<-[:IS_SUPPLIER_OPEN_PO_STATE {Date:datetime()}]-(:SupplierOpenPoS {Name:"SupplierOpenPoS"}) - POs that the Supplier has an RFQ, is negotiating or has still to deliver the products. 
-// For Closed POs: (PO)<-[:IS_SUPPLIER_CLOSED_PO_STATE {Date:datetime()}]-(:SupplierClosedPoS {Name:"SupplierClosedPoS"}) - POs closed (RFQ approved and products delivered, all RFQs rejected, PO canceled, etc.).
+// For Closed POs: (PO)<-[:HAS_SUPPLIER_CLOSED_PO_STATE {Date:datetime()}]-(:SupplierClosedPoS {Name:"SupplierClosedPoS"}) - POs closed (RFQ approved and products delivered, all RFQs rejected, PO canceled, etc.).
 
 
 //--------------------------------------------------------------------------------------------------------------------------------------------------------------//

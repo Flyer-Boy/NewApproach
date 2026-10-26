@@ -1,0 +1,14 @@
+# Local environment (holds database credentials) -- use .env.example as the template
+.env
+.env.local
+.env.*.local
+
+# Dependencies and build output
+node_modules/
+dist/
+
+# Logs and editor files
+*.log
+.DS_Store
+.vscode/
+.idea/

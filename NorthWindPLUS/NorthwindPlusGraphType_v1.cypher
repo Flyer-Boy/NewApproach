@@ -1,24 +1,20 @@
-// GRAPH TYPE schema for the NorthWind PLUS Graph Data Model (v2.2).
-// Built directly from NorthWind_PLUS_Graph_Data_Model_Import_v2_2.cypher --
-// every node/relationship below was traced to an actual CREATE/MERGE in
-// that script (plus the confirmed additions from the stress-test harness:
-// HAS_WAREHOUSE_FULFILLMENT on Order, which order-fulfillment creates but
-// the base script's original demo query didn't).
+// GRAPH TYPE schema for the NorthWind PLUS Graph Data Model (v2.3.1).
+// Matches NorthWind_PLUS_Graph_Data_Model_Import_v2.3.1.cypher and the
+// NorthwindPlus_Stress_Test.py harness: every node/relationship below is
+// created by one of them (including HAS_WAREHOUSE_FULFILLMENT on Order,
+// written by order fulfillment). All date/time properties are ZONED DATETIME.
+// Requires Neo4j GRAPH TYPE support (preview in Neo4j 2026.02 / Cypher 25).
+// Run it AFTER the import script.
 //
 // -----------------------------------------------------------------------
 // KNOWN ISSUES -- read before using
 // -----------------------------------------------------------------------
 // 1. RESOLVED: HAS_CLOSED_PO_STATE was previously used for two different
 //    edges -- (PoS)->(ClosedPoS) collection membership, and
-//    (ClosedPoS)->(PurchaseOrder) instance state -- confirmed as a naming
-//    collision and resolved: HAS_CLOSED_PO_STATE stays as the
-//    collection-membership edge; the instance-level edge is now declared
-//    below as IS_CLOSED_PO_STATE, matching the source model's own
-//    ontology comment (which already documented this as the intended
-//    name). The main script's PO Payment and Closure section and the
-//    Python stress-test harness's finance_closure action both still need
-//    this same rename applied -- this schema reflects the target state,
-//    not (yet) what those two files currently create.
+//    (ClosedPoS)->(PurchaseOrder) instance state. HAS_CLOSED_PO_STATE is now
+//    only the collection-membership edge; the instance-level edge is
+//    IS_CLOSED_PO_STATE. Applied in the v2.3.1 import script and in every
+//    stress-test harness (Neo4j, Memgraph, FalkorDB).
 //
 // 2. RESOLVED: ShipInfo.ShippedDate is NOT NULL, using a far-future sentinel date
 //    (9999-12-31) for Orders that haven't shipped -- not left nullable.
@@ -52,6 +48,13 @@
 //    currently exercised by the script (no Supplier vetting workflow or
 //    Order cancellation path exists yet), matching the same "declared but
 //    unused" pattern as the original Northwind model's OrderStatusCanceleD.
+//
+// 6. Naming exception: the supplier-side "closed" instance edge is
+//    HAS_SUPPLIER_CLOSED_PO_STATE, (SupplierClosedPoS)->(PurchaseOrder),
+//    while its siblings are IS_SUPPLIER_NEW_PO_STATE / IS_SUPPLIER_OPEN_PO_STATE.
+//    This schema declares what the scripts actually create. Renaming it to
+//    IS_SUPPLIER_CLOSED_PO_STATE would need the same change in the import
+//    script, all three harnesses and the RDF ontology.
 // -----------------------------------------------------------------------
 
 ALTER CURRENT GRAPH TYPE SET {};

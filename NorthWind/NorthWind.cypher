@@ -2,7 +2,10 @@
 
 // This script will create the NorthWind Graph Data Model in Neo4j
 // It will load data from CSV files and create Nodes, Relationships, Indexes, and Constraints    
-// Use the CSV provided in the import folder, as it has been fixed. 
+// Use the CSV provided in the import folder, as it has been fixed.
+// The LOAD CSV statements read them straight from this repo on GitHub (https://raw.githubusercontent.com/Flyer-Boy/NewApproach/refs/heads/main/NorthWind/Import/),
+// so the script runs on Neo4j Aura and Desktop alike. To load local copies instead, put them in your
+// database's import folder and replace that URL with file:/// 
 // The original CSV files from NorthWind have some issues with commas in the data fields. Mainly in the Address (for Brazil, France, and Belgium) and some Description fields (Notes).
 // This causes problems when importing the data, leading to misplaced fields and compromising data integrity.
 
@@ -33,10 +36,10 @@ CREATE CONSTRAINT Regions_RegionID IF NOT EXISTS FOR (r:Regions) REQUIRE (r.Regi
 CREATE CONSTRAINT Shipper_ShipperID IF NOT EXISTS FOR (s:Shipper) REQUIRE (s.ShipperID) IS UNIQUE;
 
 //-- Loading Data from CSV files --//
-LOAD CSV WITH HEADERS FROM "file:///categories.csv" AS row
+LOAD CSV WITH HEADERS FROM "https://raw.githubusercontent.com/Flyer-Boy/NewApproach/refs/heads/main/NorthWind/Import/categories.csv" AS row
 MERGE (n:CategorY {CategoryID:row.CategoryID, CategoryName:row.CategoryName, Description:row.Description}); 
 
-LOAD CSV WITH HEADERS FROM "file:///suppliers.csv" AS row
+LOAD CSV WITH HEADERS FROM "https://raw.githubusercontent.com/Flyer-Boy/NewApproach/refs/heads/main/NorthWind/Import/suppliers.csv" AS row
 MERGE (n:Supplier {SupplierID:row.SupplierID, CompanyName:row.CompanyName, ContactName:row.ContactName, ContactTitle:row.ContactTitle, Address:row.Address, City:row.City, Region:row.Region, PostalCode:row.PostalCode, Country:row.Country, Phone:row.Phone, Fax:row.Fax, HomePage:"https://www." + replace(replace(replace(row.CompanyName," ",""),"'",""),".","") + ".com"});
 
 MATCH (n:Supplier)
@@ -49,7 +52,7 @@ CREATE (:CategorieS {Name: "CategorieS"});
 CREATE (:ProductStatus_DiscontinueD {Status: "Discontinued"}); 
 CREATE (:ProductStatus_AvailablE {Status: "Available"}); 
 
-LOAD CSV WITH HEADERS FROM "file:///products.csv" AS row
+LOAD CSV WITH HEADERS FROM "https://raw.githubusercontent.com/Flyer-Boy/NewApproach/refs/heads/main/NorthWind/Import/products.csv" AS row
 MERGE (n:Product {ProductID:row.ProductID, ProductName:row.ProductName, UnitPrice:toFloat(row.UnitPrice), ReorderLevel:toInteger(row.ReorderLevel), QuantityPerUnit:row.QuantityPerUnit, Discontinued:toInteger(row.Discontinued), SupplierID:row.SupplierID})
 CREATE (i:InventoryLevel {UnitsInStock:toInteger(row.UnitsInStock), LastUpdate: datetime()})
 CREATE (onorder:OrderLevel {UnitsOnOrder:toInteger(row.UnitsOnOrder), LastUpdate: datetime()})
@@ -81,7 +84,7 @@ REMOVE s.ContactName, s.ContactTitle, s.Address, s.City, s.Region, s.PostalCode,
 MATCH (k:CategorieS {Name: "CategorieS"}), (c:CategorY)
 MERGE (k)-[:HAS {RelType: "HAS_CATEGORY"}]->(c);
 
-LOAD CSV WITH HEADERS FROM "file:///customers.csv" AS row
+LOAD CSV WITH HEADERS FROM "https://raw.githubusercontent.com/Flyer-Boy/NewApproach/refs/heads/main/NorthWind/Import/customers.csv" AS row
 MERGE (n:Customer {CustomerID:row.CustomerID})
 SET n += row;
 
@@ -96,13 +99,13 @@ REMOVE n.Address, n.City, n.Region, n.PostalCode, n.Country, n.ContactName, n.Co
 
 CREATE (:RoleS {Name: "RoleS"});
 
-LOAD CSV WITH HEADERS FROM "file:///employees.csv" AS row
+LOAD CSV WITH HEADERS FROM "https://raw.githubusercontent.com/Flyer-Boy/NewApproach/refs/heads/main/NorthWind/Import/employees.csv" AS row
 MERGE (l:RolE {Title:row.Title}) 
 WITH l
 MATCH (r:RoleS)
 MERGE (r)-[:HAS {RelType: "HAS_ROLE"}]->(l);
 
-LOAD CSV WITH HEADERS FROM "file:///employees.csv" AS row
+LOAD CSV WITH HEADERS FROM "https://raw.githubusercontent.com/Flyer-Boy/NewApproach/refs/heads/main/NorthWind/Import/employees.csv" AS row
 MERGE (n:Employee {EmployeeID:row.EmployeeID, Email: row.FirstName + "." + row.LastName + "@northwind.com"}) 
 SET n += row
 WITH n, row 
@@ -124,15 +127,15 @@ MERGE (n)-[:REPORTS_TO]->(m);
 MATCH (n:Employee)
 REMOVE n.FirstName, n.LastName, n.TitleOfCourtesy, n.BirthDate, n.Address, n.City, n.Region, n.PostalCode, n.Country, n.HomePhone, n.Fax, n.Notes, n.Photo, n.ReportsTo, n.Title; 
 
-LOAD CSV WITH HEADERS FROM "file:///territories.csv" AS row
+LOAD CSV WITH HEADERS FROM "https://raw.githubusercontent.com/Flyer-Boy/NewApproach/refs/heads/main/NorthWind/Import/territories.csv" AS row
 MERGE (n:Territory {TerritoryID:row.TerritoryID})
 SET n += row;
 
-LOAD CSV WITH HEADERS FROM "file:///regions.csv" AS row
+LOAD CSV WITH HEADERS FROM "https://raw.githubusercontent.com/Flyer-Boy/NewApproach/refs/heads/main/NorthWind/Import/regions.csv" AS row
 MERGE (n:Regions {RegionID:row.RegionID})
 SET n += row;
 
-LOAD CSV WITH HEADERS FROM "file:///employee-territories.csv" AS row
+LOAD CSV WITH HEADERS FROM "https://raw.githubusercontent.com/Flyer-Boy/NewApproach/refs/heads/main/NorthWind/Import/employee-territories.csv" AS row
 MATCH (e:Employee), (t:Territory)
 WHERE e.EmployeeID = row.EmployeeID AND t.TerritoryID = row.TerritoryID
 MERGE (t)-[:HAS {RelType: "HAS_EMPLOYEE"}]->(e);
@@ -143,11 +146,11 @@ MERGE (r)-[:HAS {RelType: "HAS_TERRITORY"}]->(t);
 
 MATCH (t:Territory) REMOVE t.RegionID;
 
-LOAD CSV WITH HEADERS FROM "file:///shippers.csv" AS row
+LOAD CSV WITH HEADERS FROM "https://raw.githubusercontent.com/Flyer-Boy/NewApproach/refs/heads/main/NorthWind/Import/shippers.csv" AS row
 MERGE (n:Shipper {ShipperID:row.ShipperID, CompanyName:row.CompanyName, Phone:row.Phone});
 
 
-LOAD CSV WITH HEADERS FROM "file:///orders.csv" AS row
+LOAD CSV WITH HEADERS FROM "https://raw.githubusercontent.com/Flyer-Boy/NewApproach/refs/heads/main/NorthWind/Import/orders.csv" AS row
 MERGE (n:Order {OrderID:row.OrderID})
 SET n += row;
 
@@ -176,7 +179,7 @@ REMOVE n.CustomerID, n.ShipVia, n.ShipName, n.ShipAddress, n.ShipCity, n.ShipReg
 
 //-- Includong Order Details on the Relationship --//
 
-LOAD CSV WITH HEADERS FROM "file:///order-details.csv" AS row
+LOAD CSV WITH HEADERS FROM "https://raw.githubusercontent.com/Flyer-Boy/NewApproach/refs/heads/main/NorthWind/Import/order-details.csv" AS row
 MATCH (p:Product), (o:Order)
 WHERE p.ProductID = row.ProductID AND o.OrderID = row.OrderID 
 MERGE (o)-[details:HAS_PRODUCT]->(p)

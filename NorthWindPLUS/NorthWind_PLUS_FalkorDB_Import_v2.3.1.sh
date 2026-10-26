@@ -11,9 +11,13 @@
 #        checks     run the data-quality / inconsistency checks
 #        all        import + recommend + report + checks
 #
-#  Connection (environment variables):
-#     FALKOR_HOST (localhost)  FALKOR_PORT (6379)  FALKOR_USER ()  FALKOR_PASSWORD ()  FALKOR_TLS (0|1)
-#     GRAPH (northwind)        REDIS_CLI (redis-cli)  QUERY_TIMEOUT_MS (0 = server default)
+#  Connection (environment variables) -- the same names as NorthwindPlus_Stress_Test_FalkorDB.py,
+#  so one set of exports serves both:
+#     FALKORDB_HOST (localhost)  FALKORDB_PORT (6379)  FALKORDB_USERNAME ()  FALKORDB_PASSWORD ()
+#     FALKORDB_SSL (0|1)         FALKORDB_GRAPH (northwind)
+#     REDIS_CLI (redis-cli)      QUERY_TIMEOUT_MS (0 = server default)
+#     (The older names FALKOR_HOST, FALKOR_PORT, FALKOR_USER, FALKOR_PASSWORD, FALKOR_TLS and GRAPH
+#      still work as fallbacks.)
 #     CSV_BASE  -- where the CSVs live. Default: the GitHub raw folder (FalkorDB LOAD CSV accepts HTTPS URLs).
 #                  For local files put them in FalkorDB's IMPORT_FOLDER and set CSV_BASE=file:/
 #                  (queries use  CSV_BASE + "/categories.csv").
@@ -48,12 +52,12 @@
 # ------------------------------------------------------------------------------------------------------------------ #
 set -euo pipefail
 
-FALKOR_HOST="${FALKOR_HOST:-localhost}"
-FALKOR_PORT="${FALKOR_PORT:-6379}"
-FALKOR_USER="${FALKOR_USER:-}"
-FALKOR_PASSWORD="${FALKOR_PASSWORD:-}"
-FALKOR_TLS="${FALKOR_TLS:-0}"
-GRAPH="${GRAPH:-northwind}"
+FALKOR_HOST="${FALKORDB_HOST:-${FALKOR_HOST:-localhost}}"
+FALKOR_PORT="${FALKORDB_PORT:-${FALKOR_PORT:-6379}}"
+FALKOR_USER="${FALKORDB_USERNAME:-${FALKOR_USER:-}}"
+FALKOR_PASSWORD="${FALKORDB_PASSWORD:-${FALKOR_PASSWORD:-}}"
+FALKOR_TLS="${FALKORDB_SSL:-${FALKOR_TLS:-0}}"
+GRAPH="${FALKORDB_GRAPH:-${GRAPH:-northwind}}"
 REDIS_CLI="${REDIS_CLI:-redis-cli}"
 QUERY_TIMEOUT_MS="${QUERY_TIMEOUT_MS:-0}"
 CSV_BASE="${CSV_BASE:-https://raw.githubusercontent.com/Flyer-Boy/NewApproach/refs/heads/main/NorthWindPLUS/Import}"

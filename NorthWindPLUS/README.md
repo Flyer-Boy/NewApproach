@@ -89,10 +89,10 @@ Approval routing depends on the PO amount and on the `ApprovalBase` / `ApprovalL
 |---|---|---|---|---|
 | Model version | v2.3.1 | v2.3.1 port | v2.3.1 port | v2.4 (no edge properties) |
 | Import | `.cypher` in Query console | `.cypher` in Query console | `.sh` via `redis-cli` | `.sh` via Quine REST API |
-| Simulation harness | `NorthwindPlus_Stress_Test.py` | `NorthwindPlus_Stress_Test_MemGraph.py` | `NorthwindPlus_Stress_Test_FalkorDB.py` | `NorthwindPlus_Stress_Test_Quine.py` |
+| Simulation harness | `NorthwindPlus_Stress_Test.py` | `NorthwindPlus_Stress_Test_MemGraph.py` | `NorthwindPlus_Stress_Test_FalkorDB.py` | `NorthwindPlus_Stress_Test_Quine.py`, **or** the `northwind-plus-simulation.yaml` recipe (no Python) |
 | Python dependency | `neo4j` driver | `neo4j` driver (Bolt) | `falkordb` | none (standard library) |
 | GRAPH TYPE schema | ✅ | — | — | — |
-| Business logic in the graph | Cypher | Cypher | Cypher | Cypher + **Standing Queries** |
+| Business logic in the graph | Cypher | Cypher | Cypher | Cypher + **Standing Queries** (+ ingest streams in the recipe) |
 | Windows launcher | `PySetup.bat` | `MPySetup.bat` | — | — |
 
 ---
@@ -127,7 +127,12 @@ NorthWindPLUS/
         ├── northwind-plus-quine-batch.sh                               Builds the full graph through the REST API
         ├── register-standing-queries.sh                                Moves the company's own rules into Standing Queries
         ├── northwind-plus-quine-recommendations.sh                     Optional recommendation layer
-        └── NorthwindPlus_Stress_Test_Quine.py                          Simulation loops (sq | loops | auto modes)
+        ├── NorthwindPlus_Stress_Test_Quine.py                          Simulation loops (sq | loops | auto modes)
+        └── Recipe_Version/
+            ├── Readme.md                       The simulation as a recipe — full walkthrough
+            ├── northwind-plus-simulation.yaml  Quine recipe: 7 ingest streams, 11 standing queries, 47 sample + 26 quick queries
+            ├── northwind-plus-quine-batch.sh   Batch loader with --import-only (load, then switch the simulation on)
+            └── register-standing-queries.sh    Standing queries over the REST API (for running without the recipe)
 ```
 
 > **About the CSV files.** The original Northwind CSVs published in [neo4j-graph-examples/northwind](https://github.com/neo4j-graph-examples/northwind) contain unescaped commas in some fields (mainly addresses for Brazil, France and Belgium, and some notes), which shifts columns during import. The files in `Import/` are fixed. The import scripts load them directly from this repo's raw GitHub URLs, so you don't need to download them for Neo4j or FalkorDB.
@@ -199,33 +204,28 @@ python NorthwindPlus_Stress_Test_MemGraph.py --loop customer-order --rate 6
 
 ## Quick start — FalkorDB
 
-Requires `redis-cli` on your path and a running FalkorDB instance.
+Requires `redis-cli` on your path and a running FalkorDB instance. The import script and the Python harness read the same environment variables, so you only set them once:
+
+```bash
+export FALKORDB_HOST=localhost
+export FALKORDB_PORT=6379
+export FALKORDB_GRAPH=northwind
+# optional: FALKORDB_USERNAME, FALKORDB_PASSWORD, FALKORDB_SSL=1
+```
 
 **1. Build the graph**
 
 ```bash
-export FALKOR_HOST=localhost
-export FALKOR_PORT=6379
-export GRAPH=northwind
-# optional: FALKOR_USER, FALKOR_PASSWORD, FALKOR_TLS=1, CSV_BASE, QUERY_TIMEOUT_MS
-
 ./NorthWind_PLUS_FalkorDB_Import_v2.3.1.sh            # import (default)
 ./NorthWind_PLUS_FalkorDB_Import_v2.3.1.sh all        # import + recommend + report + checks
 ```
 
-Sub-commands: `import`, `recommend`, `report` (Inventory Level Report), `checks` (data-quality checks), `all`. CSVs are read from GitHub by default; for local files, place them in FalkorDB's import folder and set `CSV_BASE=file:/`.
+Sub-commands: `import`, `recommend`, `report` (Inventory Level Report), `checks` (data-quality checks), `all`. CSVs are read from GitHub by default; for local files, place them in FalkorDB's import folder and set `CSV_BASE=file:/`. The import script also accepts `QUERY_TIMEOUT_MS` and `REDIS_CLI`, and still understands the older `FALKOR_*` / `GRAPH` names.
 
 **2. Run the loops**
 
-Note that the Python harness uses `FALKORDB_*` variable names, which differ from the import script's `FALKOR_*` names:
-
 ```bash
 pip install falkordb
-export FALKORDB_HOST=localhost
-export FALKORDB_PORT=6379
-export FALKORDB_GRAPH=northwind     # must match GRAPH used by the import script
-# optional: FALKORDB_USERNAME, FALKORDB_PASSWORD, FALKORDB_SSL=1
-
 python NorthwindPlus_Stress_Test_FalkorDB.py --loop customer-order --rate 6
 # ...same six loops as above
 ```
@@ -236,9 +236,39 @@ python NorthwindPlus_Stress_Test_FalkorDB.py --loop customer-order --rate 6
 
 Quine is a streaming graph, and it does not support properties on relationships. The Quine version therefore uses **model v2.4**, where every edge that carried data becomes an intermediate node — line items (`OrderItem`, `POItem`, `RFQItem`), decision traces (`VettingDecision`, `WarehouseDelivery`, `FinancePayment`) and so on. The principle "state = position" is unchanged.
 
-There are two ways to run it.
+There are three ways to run it.
 
-### A. The full NorthWind PLUS model (`Quine/Full_NorthWindPLUS/`)
+| | Option | Who drives the business |
+|---|---|---|
+| **A** | [The full model as a recipe](#a-the-full-model-as-a-recipe-quinefull_northwindplusrecipe_version) | Quine alone: ingest streams + standing queries, no Python |
+| **B** | [The full model with the Python harness](#b-the-full-model-with-the-python-harness-quinefull_northwindplus) | Python loops, with or without Standing Queries |
+| **C** | [The streaming "business day" demo](#c-the-streaming-business-day-demo-quine) | Quine alone, a self-contained five-minute day |
+
+### A. The full model as a recipe (`Quine/Full_NorthWindPLUS/Recipe_Version/`)
+
+The whole simulation runs from one Quine recipe, `northwind-plus-simulation.yaml`:
+
+- **Ingest streams** play the outside world: a Sales Rep entering customer orders, the warehouse shipping them, the Procurement Assistant raising POs, suppliers sending and resubmitting RFQs, goods arriving at the dock, and a slow threshold recalibration.
+- **Standing queries** apply the company's rules the moment a pattern appears: L1/L2/L3 PO vetting, buyer submission, RFQ vetting, on-order bookkeeping, LowStock re-evaluation and finance closure.
+
+Start Quine **with the recipe first**, then load the data:
+
+```bash
+cd Quine/Full_NorthWindPLUS/Recipe_Version
+
+# window 1 -- Quine with the recipe (the streams wait until the data is in)
+docker run --rm --name northwind-quine -p 8080:8080 -v "$PWD":/demo thatdot/quine -r /demo/northwind-plus-simulation.yaml
+
+# window 2 -- load the graph; its last step switches the simulation on
+bash ./northwind-plus-quine-batch.sh --import-only
+
+# window 3 -- watch the company act
+docker logs -f northwind-quine 2>&1 | grep --line-buffered -o '"alert":"[^"]*"'
+```
+
+Then explore at http://localhost:8080, using the 47 sample queries (live dashboards, gross profit, the Northwind sales reports, data-quality checks) and the right-click quick queries. The recipe runs on a throwaway store, so every run starts from empty. See the [Recipe_Version README](Quine/Full_NorthWindPLUS/Recipe_Version/Readme.md) for the streams, the standing queries, how to change the pace, and troubleshooting on Windows.
+
+### B. The full model with the Python harness (`Quine/Full_NorthWindPLUS/`)
 
 ```bash
 # Quine running WITHOUT a recipe (from WSL on Windows, or any Linux/macOS shell)
@@ -262,7 +292,7 @@ The harness has three modes:
 
 Without `--loop`, all loops of the chosen mode run in one process with a combined log. `--check` runs the data-quality invariants when you stop it; `--check-only` runs only those. See `Full_NorthWindPLUS/Readme.md` for every option.
 
-### B. The streaming "business day" demo (`Quine/`)
+### C. The streaming "business day" demo (`Quine/`)
 
 A self-contained recipe where the business runs as a live stream — one tick per second, 300 ticks per business day — and standing queries react the moment a pattern appears, including writing the next business step back into the graph.
 
@@ -322,7 +352,7 @@ The model is the same everywhere (v2.4 on Quine only removes edge properties). W
 
 - **Neo4j** — multi-statement transactions with `ZONED DATETIME` throughout; concurrency is protected with `apoc.lock.nodes` plus a re-check under lock; deadlocks are retried automatically as `TransientError`.
 - **FalkorDB** — write queries on a graph execute one at a time and each query is atomic, so the APOC locks are removed (the re-checks stay as a safety net). There are no multi-statement transactions, so eligibility checks run as parallel read-only queries and the action as a single write. Dates use `localdatetime()` (no zoned datetimes). The header of the import script lists every Cypher adaptation, including a workaround for an `OPTIONAL MATCH` bug reproduced on FalkorDB 4.22.1.
-- **Quine** — no edge properties (hence v2.4), identity through `idFrom()`, mutable counters updated with atomic adds, and part of the business logic moved into Standing Queries.
+- **Quine** — no edge properties (hence v2.4), identity through `idFrom()`, mutable counters updated with atomic adds, and part of the business logic moved into Standing Queries. In the recipe version, even the simulation runs inside Quine: the outside world arrives as ingest streams, and no Python is involved.
 
 ---
 

@@ -145,7 +145,7 @@ The app is a Vite + React 18 + TypeScript project (Chakra UI, TanStack Query). I
    npm install
    ```
 
-2. Set the connection in a `.env` file in that folder:
+2. Copy `.env.example` to `.env` in that folder and fill in your connection (`.env` is ignored by git):
 
    ```env
    VITE_APP_NEO4J_URI=neo4j+s://<your-instance>.databases.neo4j.io

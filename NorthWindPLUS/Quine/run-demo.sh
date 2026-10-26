@@ -8,6 +8,10 @@
 #                            fresh graph, repeat until Ctrl-C.
 #   ./run-demo.sh --port N   serve the UI/API on another port (default 8080).
 #
+# Needs Java and the Quine jar. Point QUINE_JAR at it, for example:
+#   QUINE_JAR=~/quine/quine-2.1.0.jar ./run-demo.sh
+# No Java? Use run-demo-docker.sh instead (Docker, Windows + WSL).
+#
 # Each day is a fresh JVM: this jar keeps its graph in memory, so a restart IS
 # the reset. Nothing is deleted from a running graph — rule 4 holds inside
 # every day. Run artefacts (quine.log, shipped-orders.jsonl) land in ./.run/
@@ -26,13 +30,12 @@ while [ $# -gt 0 ]; do
   case "$1" in
     --loop) LOOP=1; shift ;;
     --port) PORT="$2"; shift 2 ;;
-    -h|--help) sed -n '2,20p' "$0"; exit 0 ;;
+    -h|--help) sed -n '2,24p' "$0"; exit 0 ;;
     *) echo "unknown option: $1" >&2; exit 2 ;;
   esac
 done
 
 HERE="$(cd "$(dirname "$0")" && pwd)"
-PROJECT="$(cd "$HERE/../.." && pwd)"              # Outbound Campaign Working File/
 RECIPE="$HERE/northwind-plus-streaming.yaml"
 FEEDS="$HERE/feeds.json"
 RUN="$HERE/.run"
@@ -42,7 +45,16 @@ DAY_TICKS=300
 ALERTS='\[(LOW STOCK|RESTOCKED|RECOMMEND|AUTO-RESUBMIT|PO CLOSED|SHIPPED|TIER|BACKORDER|RELEASED)\][^"]*'
 
 [ -r "$RECIPE" ] || { echo "ERROR: missing $RECIPE" >&2; exit 1; }
-source "$PROJECT/_engine/resolve-jar.sh" || exit 1
+# Locate the Quine jar: $QUINE_JAR, or a quine*.jar next to this script.
+if [ -z "${QUINE_JAR:-}" ]; then
+  QUINE_JAR="$(ls -1 "$HERE"/quine*.jar 2>/dev/null | sort | tail -n 1)"
+fi
+if [ -z "${QUINE_JAR:-}" ] || [ ! -r "$QUINE_JAR" ]; then
+  echo "ERROR: Quine jar not found. Set QUINE_JAR=/path/to/quine.jar, or put a quine*.jar" >&2
+  echo "       in $HERE. No Java? Use ./run-demo-docker.sh instead." >&2
+  exit 1
+fi
+command -v java >/dev/null 2>&1 || { echo "ERROR: java is required (or use ./run-demo-docker.sh)" >&2; exit 1; }
 
 QPID=""; TPID=""
 cleanup() {

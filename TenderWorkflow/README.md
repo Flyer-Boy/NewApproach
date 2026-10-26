@@ -183,8 +183,8 @@ These are single illustrative runs in very different environments, not a benchma
 
 ```bash
 export MEMG_URI="bolt://localhost:7687"
-export MEMG_USERNAME="<user>"
-export MEMG_PASSWORD="<password>"
+export MEMG_USERNAME=""     # leave empty if Memgraph runs without authentication (the default)
+export MEMG_PASSWORD=""
 
 python Tender_Workflow_Random_Test_Generator_MemGraph.py --tenders 20 --seed 42
 ```
