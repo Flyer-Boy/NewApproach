@@ -61,7 +61,6 @@ The model's principles carry over unchanged:
 |---|---|
 | `northwind-plus-simulation.yaml` | The Quine recipe: 7 ingest streams, 11 standing queries, node styles, 47 sample queries, 26 quick queries and a status query. |
 | `northwind-plus-quine-batch.sh` | Builds the graph through Quine's REST API. Use it here with `--import-only`: import and setup only, then it switches the simulation on. |
-| `register-standing-queries.sh` | **Not needed with the recipe.** It registers the standing queries over the REST API for running Quine *without* a recipe, together with the Python harness in [`Full_NorthWindPLUS`](../Readme.md). It has the same fix as the recipe (see [How it was tested](#how-it-was-tested)). |
 | `Readme.md` | This file. |
 
 ---
