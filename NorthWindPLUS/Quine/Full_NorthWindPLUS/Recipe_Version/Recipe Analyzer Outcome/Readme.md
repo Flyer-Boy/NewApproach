@@ -22,7 +22,7 @@ The report covers `northwind-plus-simulation.yaml`: 7 ingest streams and 11 stan
 
 ## Analyzer errors worth reporting to thatDot
 
-Feedback this specific is the kind a tool author can use.
+Feedback:
 
 - **It doesn't count labels set in `CREATE`.** It reports `PurchaseOrder`, `RFQ`, `RFQItem`, `POItem`, `VettingDecision` and `WarehouseDelivery` as "never SET". The recipe itself creates each with its label, e.g. `CREATE (po:PurchaseOrder {PODate: …})` in `po-creation`.
 - **It mis-types edges written in one multi-part `CREATE`.** The relationships table shows `PurchaseOrder -[:HAS_SUPPLIER_NEW_RFQ]-> VettingDecision`, `PurchaseOrder -[:HAS_SUPPLIER_REJECTED_RFQ]-> VettingDecision` and `VettingDecision -[:IS_SUPPLIER_REJECTED_RFQ_STATE]-> RFQ`. The real nodes are `PoNewRFQ` and `PoRejectedRFQ`. It looks like it attaches the wrong node from the comma-separated pattern in `nw-buyer-submission`.
@@ -62,7 +62,7 @@ This could be a follow-up article: how state-as-position scales.
 
 - [ ] Decide whether to make `customer-order` idempotent (small change: the recipe only)
 - [ ] Decide whether to partition the three history Collections by month (bigger: the batch, the recipe, the report queries and the checks)
-- [ ] Send the two analyzer errors to thatDot
+
 
 ## Beyond this recipe: supernodes are a storage problem for every graph engine
 
