@@ -61,6 +61,7 @@ The model's principles carry over unchanged:
 |---|---|
 | `northwind-plus-simulation.yaml` | The Quine recipe: 7 ingest streams, 11 standing queries, node styles, 47 sample queries, 26 quick queries and a status query. |
 | `northwind-plus-quine-batch.sh` | Builds the graph through Quine's REST API. Use it here with `--import-only`: import and setup only, then it switches the simulation on. |
+| `Recipe Analyzer Outcome/` | A review of this recipe with thatDot's [Quine Recipe Analyzer](https://www.thatdot.com/quine/recipe-analyzer.html): which findings are by design, two analyzer errors, and what's worth acting on (an idempotent `customer-order` stream, and supernodes in the history Collections). It also holds the schema the analyzer extracted, in Mermaid, GraphML, GraphQL, JSON-LD, JSON Schema, Turtle and SHACL. See its [Readme](Recipe%20Analyzer%20Outcome/Readme.md). |
 | `Readme.md` | This file. |
 
 ---

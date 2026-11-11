@@ -52,7 +52,7 @@ This folder holds the *full* NorthWind PLUS implementation for Quine: the same 3
 | `NorthwindPlus_Stress_Test_Quine.py` | The simulation harness: Standing Query mode, or the original six loops. |
 | `northwind-plus-quine-recommendations.sh` | Optional collaborative-filtering layer (ratings and customer similarity). |
 | `NorthWind_PLUS_Graph_Data_Model_Import_v2.4 (Quine).cypher` | The v2.4 model as a commented Cypher script. **It still targets Neo4j** (it uses `LOAD CSV`, APOC and `CALL` subqueries). It's the reference for the edge-property-free model, not the Quine loader — use the `.sh` scripts for Quine. |
-| `Recipe_Version/` | The same model run as a Quine recipe (ingest streams + standing queries, no Python). Its batch loader adds `--import-only`, and its `register-standing-queries.sh` includes a fix for the PO-creation step. See its own [Readme](Recipe_Version/Readme.md). |
+| `Recipe_Version/` | The same model run as a Quine recipe (ingest streams + standing queries, no Python). Its batch loader adds `--import-only`. It also holds the thatDot Recipe Analyzer review of the recipe. See its own [Readme](Recipe_Version/Readme.md). |
 
 ---
 

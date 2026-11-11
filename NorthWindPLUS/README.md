@@ -1,8 +1,8 @@
 # NorthWind PLUS
 
-**A full Line-of-Business application running natively on a Labeled Property Graph — ported to Neo4j, Memgraph, FalkorDB and Quine.**
+**A full Line-of-Business application running natively on a Labeled Property Graph — ported to Neo4j, Memgraph, FalkorDB, Quine and Ultipa.**
 
-NorthWind PLUS rebuilds the classic Northwind database as a *Graph-Native* application and extends it into a complete, 360-degree business cycle: customer orders, low-stock detection, purchase orders with three levels of approval, supplier RFQs, warehouse receiving, finance closure and order fulfillment — all expressed in Cypher, inside the graph.
+NorthWind PLUS rebuilds the classic Northwind database as a *Graph-Native* application and extends it into a complete, 360-degree business cycle: customer orders, low-stock detection, purchase orders with three levels of approval, supplier RFQs, warehouse receiving, finance closure and order fulfillment — all expressed in Cypher (or, on Ultipa, ISO GQL), inside the graph.
 
 It is the proof of concept behind the article **[A Labeled Property Graph (LPG) Masterpiece](https://marcospinedo.substack.com/p/a-labeled-property-graph-lpg-masterpiece)**, and part of the broader [New Approach](../README.md) to building business applications *around* the graph rather than putting graphs around applications.
 
@@ -20,6 +20,7 @@ The ultimate test: six independent business processes, launched as separate OS p
 - [Quick start — Memgraph](#quick-start--memgraph)
 - [Quick start — FalkorDB](#quick-start--falkordb)
 - [Quick start — Quine](#quick-start--quine)
+- [Quick start — Ultipa](#quick-start--ultipa)
 - [The simulation loops](#the-simulation-loops)
 - [Schema and ontology](#schema-and-ontology)
 - [Engine differences worth knowing](#engine-differences-worth-knowing)
@@ -85,15 +86,15 @@ Approval routing depends on the PO amount and on the `ApprovalBase` / `ApprovalL
 
 ## Engine support at a glance
 
-| | Neo4j | Memgraph | FalkorDB | Quine |
-|---|---|---|---|---|
-| Model version | v2.3.1 | v2.3.1 port | v2.3.1 port | v2.4 (no edge properties) |
-| Import | `.cypher` in Query console | `.cypher` in Query console | `.sh` via `redis-cli` | `.sh` via Quine REST API |
-| Simulation harness | `NorthwindPlus_Stress_Test.py` | `NorthwindPlus_Stress_Test_MemGraph.py` | `NorthwindPlus_Stress_Test_FalkorDB.py` | `NorthwindPlus_Stress_Test_Quine.py`, **or** the `northwind-plus-simulation.yaml` recipe (no Python) |
-| Python dependency | `neo4j` driver | `neo4j` driver (Bolt) | `falkordb` | none (standard library) |
-| GRAPH TYPE schema | ✅ | — | — | — |
-| Business logic in the graph | Cypher | Cypher | Cypher | Cypher + **Standing Queries** (+ ingest streams in the recipe) |
-| Windows launcher | `PySetup.bat` | `MPySetup.bat` | — | — |
+| | Neo4j | Memgraph | FalkorDB | Quine | Ultipa |
+|---|---|---|---|---|---|
+| Model version | v2.3.1 | v2.3.1 port | v2.3.1 port | v2.4 (no edge properties) | v2.3.1 port (ISO GQL) |
+| Import | `.cypher` in Query console | `.cypher` in Query console | `.sh` via `redis-cli` | `.sh` via Quine REST API | `.gql` via `run_gql_script.py` (or Ultipa Manager) |
+| Simulation harness | `NorthwindPlus_Stress_Test.py` | `NorthwindPlus_Stress_Test_MemGraph.py` | `NorthwindPlus_Stress_Test_FalkorDB.py` | `NorthwindPlus_Stress_Test_Quine.py`, **or** the `northwind-plus-simulation.yaml` recipe (no Python) | `NorthwindPlus_Stress_Test_Ultipa.py` |
+| Python dependency | `neo4j` driver | `neo4j` driver (Bolt) | `falkordb` | none (standard library) | `ultipa` (imported as `gqldb`) |
+| GRAPH TYPE schema | ✅ | — | — | — | — |
+| Business logic in the graph | Cypher | Cypher | Cypher | Cypher + **Standing Queries** (+ ingest streams in the recipe) | GQL |
+| Windows launcher | `PySetup.bat` | `MPySetup.bat` | — | — | `PySetup_Ultipa.bat` |
 
 ---
 
@@ -113,6 +114,12 @@ NorthWindPLUS/
 ├── PySetup.bat                                            Windows: opens 8 loop windows against Neo4j
 ├── MPySetup.bat                                           Windows: opens 8 loop windows against Memgraph
 ├── AI_Agents_Food_For_Thought.md                          Ideas for an agentic layer (not yet built)
+├── Ultipa/                                                ISO GQL port for Ultipa GQLDB — see its README
+│   ├── README.md
+│   ├── NorthWind_PLUS_Graph_Data_Model_Import_v2.3.1_Ultipa_GQL.gql   The full model in GQL (sectioned: setup | live_views | recommendation | examples)
+│   ├── run_gql_script.py                                 Runs a section of the .gql file, statement by statement
+│   ├── NorthwindPlus_Stress_Test_Ultipa.py               Concurrency harness — Ultipa
+│   └── PySetup_Ultipa.bat                                Windows: opens 8 loop windows against Ultipa
 └── Quine/
     ├── README.md                     Streaming "business day" demo — full walkthrough
     ├── northwind-plus-streaming.yaml Quine recipe: seed + business streams + standing queries
@@ -132,10 +139,10 @@ NorthWindPLUS/
             ├── Readme.md                       The simulation as a recipe — full walkthrough
             ├── northwind-plus-simulation.yaml  Quine recipe: 7 ingest streams, 11 standing queries, 47 sample + 26 quick queries
             ├── northwind-plus-quine-batch.sh   Batch loader with --import-only (load, then switch the simulation on)
-            └── register-standing-queries.sh    Standing queries over the REST API (for running without the recipe)
+            └── Recipe Analyzer Outcome/        thatDot Recipe Analyzer review of the recipe, plus the schema it extracted (Mermaid, GraphML, JSON-LD, Turtle, SHACL…)
 ```
 
-> **About the CSV files.** The original Northwind CSVs published in [neo4j-graph-examples/northwind](https://github.com/neo4j-graph-examples/northwind) contain unescaped commas in some fields (mainly addresses for Brazil, France and Belgium, and some notes), which shifts columns during import. The files in `Import/` are fixed. The import scripts load them directly from this repo's raw GitHub URLs, so you don't need to download them for Neo4j or FalkorDB.
+> **About the CSV files.** The original Northwind CSVs published in [neo4j-graph-examples/northwind](https://github.com/neo4j-graph-examples/northwind) contain unescaped commas in some fields (mainly addresses for Brazil, France and Belgium, and some notes), which shifts columns during import. The files in `Import/` are fixed. The import scripts load them directly from this repo's raw GitHub URLs, so you don't need to download them for Neo4j, FalkorDB or Ultipa.
 
 ---
 
@@ -306,6 +313,32 @@ Then open http://localhost:8080. `Quine/README.md` explains what to watch for at
 
 ---
 
+## Quick start — Ultipa
+
+The [`Ultipa/`](Ultipa/README.md) folder ports the model and the six loops to **Ultipa GQLDB** in ISO GQL. You need an Ultipa GQLDB instance and Python 3.
+
+```bash
+cd Ultipa
+pip install --upgrade ultipa
+
+export ULTIPA_HOSTS="<host>:<port>"
+export ULTIPA_USER="root"
+export ULTIPA_PASSWORD="<password>"
+export ULTIPA_GRAPH="NorthWindPLUS"
+
+# 1. create the graph and build it (import + one pass of every workflow)
+python run_gql_script.py NorthWind_PLUS_Graph_Data_Model_Import_v2.3.1_Ultipa_GQL.gql --section setup
+
+# 2. one terminal per loop -- same six loops as above
+python NorthwindPlus_Stress_Test_Ultipa.py --loop customer-order --rate 6
+```
+
+**On Windows:** fill in the connection settings at the top of `Ultipa/PySetup_Ultipa.bat` and run it from that folder.
+
+See the [Ultipa README](Ultipa/README.md) for all the options, the TLS and timeout settings, and how the port handles concurrency without APOC.
+
+---
+
 ## The simulation loops
 
 Each loop is one workflow step running as an independent, rate-limited process, simulating a real-world actor (Sales, Procurement, Supplier, Warehouse, Finance) working on the same graph at the same time.
@@ -348,11 +381,12 @@ Both files start with a "known issues" header that documents modeling decisions,
 
 ## Engine differences worth knowing
 
-The model is the same everywhere (v2.4 on Quine only removes edge properties). What changes is how each engine handles the Cypher and the concurrency:
+The model is the same everywhere (v2.4 on Quine only removes edge properties). What changes is how each engine handles the queries and the concurrency:
 
 - **Neo4j** — multi-statement transactions with `ZONED DATETIME` throughout; concurrency is protected with `apoc.lock.nodes` plus a re-check under lock; deadlocks are retried automatically as `TransientError`.
 - **FalkorDB** — write queries on a graph execute one at a time and each query is atomic, so the APOC locks are removed (the re-checks stay as a safety net). There are no multi-statement transactions, so eligibility checks run as parallel read-only queries and the action as a single write. Dates use `localdatetime()` (no zoned datetimes). The header of the import script lists every Cypher adaptation, including a workaround for an `OPTIONAL MATCH` bug reproduced on FalkorDB 4.22.1.
 - **Quine** — no edge properties (hence v2.4), identity through `idFrom()`, mutable counters updated with atomic adds, and part of the business logic moved into Standing Queries. In the recipe version, even the simulation runs inside Quine: the outside world arrives as ingest streams, and no Python is involved.
+- **Ultipa GQLDB** — the whole model is rewritten in ISO GQL (`INSERT`, `RETURN … NEXT`, `LET`, `FILTER`, `FOR`). There's no APOC and no explicit lock: GQLDB detects write conflicts at commit (error 3011), so the harness runs each action in a transaction and retries it on a fresh snapshot, where its guard turns it into a no-op. To make sure edge-only changes conflict too, guarded actions increment an `OCCVersion` counter on the node they used to lock (it can be switched off with `OCC_TOUCH`). Dates use `local_datetime()`. The Ultipa README lists the GQLDB behaviours found while porting, such as anonymous `INSERT` elements storing null.
 
 ---
 
