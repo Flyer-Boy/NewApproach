@@ -64,7 +64,6 @@
 
 // ------------------------------------------------------------------------------------ //
 
-
 // This script will create the NorthWind Graph Data Model in Neo4j
 // It will load data from CSV files and create Nodes, Relationships, Indexes, and Constraints    
 // Use the CSV provided in the import folder (https://raw.githubusercontent.com/Flyer-Boy/NewApproach/refs/heads/main/NorthWindPLUS/Import/), as they have been fixed. 
@@ -79,9 +78,11 @@
 // Follow the instructions from line 1153 to 1240 to run the Python simulation loops.  Run the Queries on line 1317 onwards as the Python loops run. Enjoy!! 
 //--------------------------------------------------------------------------------------------------------------------------------------------------------------//
 
-
 // Let's clear all Nodes and Relationships before we start. 
 MATCH (n) DETACH DELETE n;
+
+// Let's clear all Indexes and Constraints before we start.
+// CALL apoc.schema.assert({}, {});
 
 //-- Loading Data from CSV files --//
 // We start by importing the Product Categories 
