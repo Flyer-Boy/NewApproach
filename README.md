@@ -169,6 +169,7 @@ The Quine work comes in three flavours, each with its own README:
 6. **NODES 2025 talk** — [video presentation of the concepts + POC demo](https://youtu.be/ExupBmmH1Rs), and the companion article with slides and extended transcript: [Rethinking Line of Business Applications: Graphs & Cypher as an Alternative to RDBMS & SQL](https://medium.com/@marcospinedo/rethinking-line-of-business-applications-graphs-cypher-as-an-alternative-to-rdbms-sql-fd1d204f99b7)
 7. **Ontology and schema enforcement** — [Graph-Native Business Applications with a Full Ontology — a practical use case of Neo4j's new GRAPH TYPE Schema enforcement](https://medium.com/@marcospinedo/graph-native-business-applications-with-a-full-ontology-a-practical-use-case-of-neo4js-new-graph-216c9bf20d22)
 8. **NorthWind PLUS** — [A Labeled Property Graph (LPG) Masterpiece](https://marcospinedo.substack.com/p/a-labeled-property-graph-lpg-masterpiece) — the ultimate test: six independent business processes running concurrently against the same live graph, putting all the concepts into practice.
+9. **A streaming Graph perspective** — [Running your entire business as a Nervous System](https://marcospinedo.substack.com/p/running-your-entire-business-as-a) — A streaming graph perspective on a 360°business cycle. The NorthWind PLUS POC running on a streaming Graph using Standing Queries. 
 
 I will keep adding content and prototypes as this New Approach evolves.
 
