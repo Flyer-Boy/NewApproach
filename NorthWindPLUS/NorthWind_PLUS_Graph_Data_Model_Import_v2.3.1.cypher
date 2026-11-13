@@ -82,7 +82,7 @@
 MATCH (n) DETACH DELETE n;
 
 // Let's clear all Indexes and Constraints before we start.
-// CALL apoc.schema.assert({}, {});
+   CALL apoc.schema.assert({}, {});
 
 //-- Loading Data from CSV files --//
 // We start by importing the Product Categories 

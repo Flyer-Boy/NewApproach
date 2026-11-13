@@ -1,0 +1,252 @@
+{
+  "_about": "Curated business meanings for the NorthWind PLUS model, taken from the comments in NorthWind_PLUS_Graph_Data_Model_Import_v2.3.2.cypher and the Python harness. The loader merges these with the GRAPH TYPE (exact names, types, keys) and the RDF/Turtle ontology (Entity vs Collection, rdfs:comment). Edit this file to teach the agent more about the business.",
+  "model_principles": [
+    "State lives in relationships, not properties: an entity's current state is which Collection (hub) node points at it, e.g. (:NewPoS)-[:IS_NEW_PO_STATE]->(:PurchaseOrder).",
+    "Collection labels end with a capital letter (PoS, NewPoS, OrderStatusOpeN). Singleton collections are matched by Name or Status, e.g. (:NewPoS {Name:\"NewPoS\"}), (:OrderStatusOpeN {Status:\"Open\"}).",
+    "Moving an entity to a new state = create the new IS_*_STATE edge and delete the old one. Nodes are never deleted.",
+    "Only three properties are updated in place (isotope nodes): InventoryLevel.UnitsInStock, OrderLevel.UnitsOnOrder, ReorderLevel.StockThreshold. RolE approval values change only through the governed Approval Policy Change.",
+    "PO cost = SUM(HAS_PO_ITEM.POqt * Product.UnitPrice * HAS_PO_ITEM.POPriceDiscount). Approval bands: RolE {Title:'Level1Approver'|'Level2Approver'|'Level3Approver'}.ApprovalBase/ApprovalLimit.",
+    "Order line values live on the relationship: HAS_ORDER_PRODUCT {Quantity, UnitPrice, Discount}. PO lines: HAS_PO_ITEM {POqt, POPriceDiscount}. RFQ lines: HAS_RFQ_ITEM {RFQqt, RFQcost}.",
+    "Employees reach their name through (:Employee)-[:HAS_PERSON]->(:Person {FirstName, LastName}) and their job through (:RolE {Title})-[:IS_ACTIVE_ROLE]->(:Employee).",
+    "Dates are ZONED DATETIME. ShipInfo.ShippedDate uses 9999-12-31 as a sentinel for never-shipped imported Orders; order state still comes from relationships."
+  ],
+  "node_types": {
+    "Product": "A product Northwind sells. Stock, on-order and reorder levels are separate isotope nodes; availability is a Collection (ProductStatusAvailablE / ProductStatusDiscontinueD).",
+    "ProductCategorY": "A product category (Beverages, Condiments, ...). Points to its Products via IS_PRODUCT_CATEGORY_OF.",
+    "Supplier": "A company that supplies Products and receives Purchase Orders. Has its own PO collections (SupplierNewPoS, SupplierOpenPoS, SupplierClosedPoS) so it sees only its own POs.",
+    "Customer": "A company that places Customer Orders.",
+    "Employee": "A Northwind employee. Name via HAS_PERSON -> Person; job title via RolE -[:IS_ACTIVE_ROLE]->.",
+    "Person": "Personal details (FirstName, LastName, ...) of an Employee.",
+    "RolE": "A job title (Sales Representative, Procurement Assistant, Level1Approver, Level2Approver, Level3Approver, Buyer, WarehouseClerk, Finance, ProcurementPolicyAdmin, ...). Level1/2/3Approver carry ApprovalBase/ApprovalLimit, the PO approval bands.",
+    "Territory": "A sales territory; HAS_EMPLOYEE points to the Employees covering it.",
+    "Regions": "A sales region grouping Territories.",
+    "Shipper": "A shipping company used for Customer Order shipments.",
+    "Order": "A Customer Order. Lines are HAS_ORDER_PRODUCT relationships to Products. State: OrderStatusOpeN or OrderStatusFulfilleD points at it.",
+    "PurchaseOrder": "A Purchase Order (PO) to a Supplier, created when Products run low. Moves through NewPoS -> (L1/L2/L3 vetting) -> ApprovedPoS or RejectedPoS -> SubmittedPoS (Buyer sends it to the Supplier) -> ClosedPoS (delivered and paid).",
+    "RFQ": "A Supplier's quote (Request For Quotation reply) for a submitted PO. The Buyer approves it (HAS_APPROVED_RFQ from the PO) or rejects it (PoRejectedRFQ); a rejected RFQ can be resubmitted (HAS_PREVIOUS_RFQ).",
+    "Address": "A postal address (Supplier, Customer, Person home, or Order shipment).",
+    "Contact": "Contact details for a Supplier or Customer.",
+    "Notes": "Free-text notes about an Employee.",
+    "ShipInfo": "Shipment details of a Customer Order (shipper, date, freight, address).",
+    "InventoryLevel": "Isotope node: current UnitsInStock of one Product. Updated by Warehouse delivery (+) and Order fulfillment (-).",
+    "OrderLevel": "Isotope node: UnitsOnOrder of one Product -- quantity confirmed by approved RFQs and not yet delivered.",
+    "ReorderLevel": "Isotope node: StockThreshold of one Product. PO Creation triggers when effective stock falls near this threshold.",
+    "PolicyChange": "Audit record of one change to the L1/L2/L3 approval bands: before/after limits, justification, date, who requested it (REQUESTED_BY) and which roles changed (CHANGED_ROLE).",
+    "CategorieS": "Collection of all Product Categories.",
+    "ShipperS": "Collection of all Shippers.",
+    "CustomerS": "Collection of all Customers.",
+    "RoleS": "Collection of all job titles (RolE).",
+    "EmployeeDirectorY": "Collection of all active Employees.",
+    "ProductStatusAvailablE": "Collection: Products currently available for sale (Status:'Available').",
+    "ProductStatusDiscontinueD": "Collection: discontinued Products (Status:'Discontinued').",
+    "OrderS": "Superset collection of Customer Order states (Open, Fulfilled, Canceled).",
+    "OrderStatusOpeN": "Collection: Customer Orders not yet shipped (Status:'Open').",
+    "OrderStatusFulfilleD": "Collection: Customer Orders shipped (Status:'Fulfilled'). The IS_FULFILLED_ORDER_STATE edge carries FulfillDate.",
+    "OrderStatusCanceleD": "Collection: canceled Customer Orders (declared, not used yet).",
+    "SupplierS": "Superset collection of Supplier vetting states.",
+    "PendingSupplierS": "Collection: Suppliers pending approval (declared, not used yet).",
+    "ApprovedSupplierS": "Collection: approved Suppliers (all current Suppliers).",
+    "RejectedSupplierS": "Collection: rejected Suppliers (declared, not used yet).",
+    "PoS": "Superset collection of PO states (NewPoS, ApprovedPoS, RejectedPoS, SubmittedPoS, ClosedPoS).",
+    "NewPoS": "Collection: POs awaiting approval vetting (L1/L2/L3).",
+    "ApprovedPoS": "Collection: POs fully approved, waiting for the Buyer to submit them to the Supplier.",
+    "RejectedPoS": "Collection: POs rejected at L1, L2 or L3. A rejected PO can be resubmitted as a new PO pointing back with HAS_PREVIOUS_PO.",
+    "SubmittedPoS": "Collection: POs submitted to the Supplier; they stay here through RFQ, delivery and payment until closed.",
+    "ClosedPoS": "Collection: POs delivered, paid and closed by Finance.",
+    "SupplierNewPoS": "Per-Supplier collection: new POs the Supplier has not quoted yet. Answers the Supplier's question 'Do I have any new POs?'.",
+    "SupplierOpenPoS": "Per-Supplier collection: POs the Supplier has quoted and must still follow up or deliver.",
+    "SupplierClosedPoS": "Per-Supplier collection: the Supplier's closed POs.",
+    "PoNewRFQ": "Per-PO collection: RFQs received for this PO and awaiting Buyer vetting.",
+    "PoRejectedRFQ": "Per-PO collection: RFQs the Buyer rejected for this PO."
+  },
+  "rel_types": {
+    "IS_NEW_PO_STATE": "The PO is awaiting approval vetting.",
+    "IS_APPROVED_PO_STATE": "The PO was fully approved (Date) and waits for the Buyer to submit it.",
+    "IS_REJECTED_PO_STATE": "The PO was rejected (Date).",
+    "IS_SUBMITTED_PO_STATE": "The Buyer submitted the PO to its Supplier (Date).",
+    "IS_CLOSED_PO_STATE": "The PO was paid and closed by Finance (Date, Comment).",
+    "HAS_PO_ITEM": "A PO line: POqt units of the Product at POPriceDiscount (fraction of UnitPrice, e.g. 0.7).",
+    "PO_FOR_SUPPLIER": "The Supplier the PO is addressed to.",
+    "PO_CREATED_BY": "The Procurement Assistant who created the PO.",
+    "HAS_PREVIOUS_PO": "This PO resubmits an earlier rejected PO (Resubmission_Justification). Chains show the full rejection/resubmission lineage.",
+    "HAS_L1_PO_APPROVAL": "Level 1 approved the PO (final if cost < L1 limit, otherwise passed up to L2).",
+    "HAS_L1_PO_REJECTION": "Level 1 rejected the PO.",
+    "HAS_L2_PO_APPROVAL": "Level 2 approved the PO (final if cost < L2 limit, otherwise passed up to L3).",
+    "HAS_L2_PO_REJECTION": "Level 2 rejected the PO.",
+    "HAS_L3_PO_APPROVAL": "Level 3 approved the PO.",
+    "HAS_L3_PO_REJECTION": "Level 3 rejected the PO.",
+    "HAS_BUYER_PO_APPROVAL": "The Buyer approved and submitted the PO to the Supplier.",
+    "HAS_WAREHOUSE_DELIVERY": "A Warehouse Clerk received the PO's products and updated inventory.",
+    "HAS_FINANCE_PAYMENT": "Finance paid the PO.",
+    "IS_SUPPLIER_NEW_PO_STATE": "The PO is new for the Supplier (not yet quoted).",
+    "IS_SUPPLIER_OPEN_PO_STATE": "The Supplier has quoted the PO and must follow up / deliver.",
+    "HAS_SUPPLIER_CLOSED_PO_STATE": "The PO is closed from the Supplier's side (naming exception: siblings are IS_SUPPLIER_*).",
+    "IS_RFQ_FOR_PO": "The PO this RFQ quotes.",
+    "RFQ_FROM_SUPPLIER": "The Supplier that sent the RFQ.",
+    "HAS_RFQ_ITEM": "An RFQ line: RFQqt units at RFQcost per unit.",
+    "HAS_PREVIOUS_RFQ": "This RFQ resubmits an earlier rejected RFQ (Justification).",
+    "HAS_BUYER_RFQ_APPROVAL": "The Buyer approved the RFQ.",
+    "HAS_BUYER_RFQ_REJECTION": "The Buyer rejected the RFQ.",
+    "HAS_APPROVED_RFQ": "The PO's accepted RFQ (Date). Units then count as UnitsOnOrder until delivered.",
+    "IS_SUPPLIER_NEW_RFQ": "The RFQ awaits Buyer vetting.",
+    "IS_SUPPLIER_REJECTED_RFQ_STATE": "The Buyer rejected the RFQ (Date).",
+    "HAS_ORDER_PRODUCT": "A Customer Order line: Quantity of the Product at UnitPrice with Discount (fraction).",
+    "HAS_ORDER_CUSTOMER": "The Customer who placed the Order.",
+    "SOLD_BY": "The Sales Representative who sold the Order.",
+    "IS_OPEN_ORDER_STATE": "The Customer Order is open (not shipped).",
+    "IS_FULFILLED_ORDER_STATE": "The Customer Order was shipped (FulfillDate).",
+    "HAS_WAREHOUSE_FULFILLMENT": "The Warehouse Clerk who picked, packed and shipped the Order (Date).",
+    "HAS_SHIPMENT_INFO": "The Order's shipment details.",
+    "HAS_INVENTORY_LEVEL": "The Product's current stock node.",
+    "HAS_SUPPLY_ORDER": "The Product's units-on-order node.",
+    "HAS_REORDER_LEVEL": "The Product's reorder threshold node.",
+    "IS_ACTIVE_ROLE": "The Employee currently holds this job title (StartDate; EndDate when it ended).",
+    "HAS_PERSON": "The Employee's personal details (name).",
+    "REPORTS_TO": "The Employee's manager.",
+    "SUPPLIES": "The Supplier supplies the Product.",
+    "HAS_PRODUCT_SUPPLIER": "The Product's Supplier (mirror of SUPPLIES).",
+    "IS_AVAILABLE_PRODUCT": "The Product is available for sale.",
+    "IS_DISCONTINUED_PRODUCT": "The Product is discontinued.",
+    "RATED": "Recommendation layer: Customer's purchase-frequency rating of a Product (Rating, 0-1).",
+    "SIMILARITY": "Recommendation layer: cosine similarity between two Customers' ratings (Similarity).",
+    "REQUESTED_BY": "The Employee who requested the approval-policy change.",
+    "CHANGED_ROLE": "An approver role whose band this policy change modified."
+  },
+  "workflow_steps": {
+    "Customer Ordering": {
+      "description": "Customers place Orders with 1-11 product lines; new Orders start Open.",
+      "rel_types": [
+        "HAS_ORDER_PRODUCT",
+        "HAS_ORDER_CUSTOMER",
+        "SOLD_BY",
+        "IS_OPEN_ORDER_STATE"
+      ]
+    },
+    "Order Fulfillment": {
+      "description": "A Warehouse Clerk ships the oldest Open Order whose every line has stock, decrementing inventory.",
+      "rel_types": [
+        "IS_FULFILLED_ORDER_STATE",
+        "HAS_WAREHOUSE_FULFILLMENT",
+        "HAS_SHIPMENT_INFO",
+        "HAS_INVENTORY_LEVEL"
+      ],
+      "keywords": [
+        "time to fulfill",
+        "waiting time",
+        "can be fulfilled"
+      ]
+    },
+    "Inventory & Reorder": {
+      "description": "Stock, units on order and reorder thresholds per Product; low effective stock triggers PO Creation.",
+      "rel_types": [
+        "HAS_INVENTORY_LEVEL",
+        "HAS_SUPPLY_ORDER",
+        "HAS_REORDER_LEVEL"
+      ]
+    },
+    "PO Creation": {
+      "description": "A Procurement Assistant creates one PO per Supplier whose Products fall near the reorder threshold.",
+      "rel_types": [
+        "IS_NEW_PO_STATE",
+        "HAS_PO_ITEM",
+        "PO_FOR_SUPPLIER",
+        "PO_CREATED_BY"
+      ]
+    },
+    "PO Vetting": {
+      "description": "L1/L2/L3 approvers approve, pass up or reject POs by cost band; rejected POs can be resubmitted.",
+      "rel_types": [
+        "HAS_L1_PO_APPROVAL",
+        "HAS_L1_PO_REJECTION",
+        "HAS_L2_PO_APPROVAL",
+        "HAS_L2_PO_REJECTION",
+        "HAS_L3_PO_APPROVAL",
+        "HAS_L3_PO_REJECTION",
+        "IS_APPROVED_PO_STATE",
+        "IS_REJECTED_PO_STATE",
+        "HAS_PREVIOUS_PO"
+      ],
+      "keywords": [
+        "vetting",
+        "approval level",
+        "resubmission lineage",
+        "on each state"
+      ]
+    },
+    "RFQ": {
+      "description": "The Buyer submits approved POs to Suppliers, Suppliers reply with RFQs, the Buyer approves, rejects or receives resubmissions.",
+      "rel_types": [
+        "HAS_BUYER_PO_APPROVAL",
+        "IS_SUBMITTED_PO_STATE",
+        "IS_RFQ_FOR_PO",
+        "RFQ_FROM_SUPPLIER",
+        "HAS_RFQ_ITEM",
+        "HAS_APPROVED_RFQ",
+        "HAS_BUYER_RFQ_APPROVAL",
+        "HAS_BUYER_RFQ_REJECTION",
+        "IS_SUPPLIER_REJECTED_RFQ_STATE",
+        "HAS_PREVIOUS_RFQ"
+      ]
+    },
+    "Warehouse & Finance": {
+      "description": "The Warehouse receives a PO's products (stock up, on-order down); Finance pays and closes the PO.",
+      "rel_types": [
+        "HAS_WAREHOUSE_DELIVERY",
+        "HAS_FINANCE_PAYMENT",
+        "IS_CLOSED_PO_STATE",
+        "HAS_SUPPLIER_CLOSED_PO_STATE"
+      ]
+    },
+    "Approval Policy": {
+      "description": "A ProcurementPolicyAdmin changes the L1/L2/L3 approval bands; every change is a PolicyChange record.",
+      "rel_types": [
+        "REQUESTED_BY",
+        "CHANGED_ROLE"
+      ],
+      "keywords": [
+        "approval band",
+        "approval policy",
+        "proposed bands"
+      ]
+    },
+    "Sales Analytics": {
+      "description": "Sales by employee, region, territory, category and customer.",
+      "rel_types": [
+        "SOLD_BY",
+        "HAS_ORDER_PRODUCT",
+        "HAS_TERRITORY",
+        "HAS_EMPLOYEE",
+        "IS_PRODUCT_CATEGORY_OF"
+      ]
+    },
+    "Recommendations": {
+      "description": "Collaborative filtering: Customer ratings and Customer similarity.",
+      "rel_types": [
+        "RATED",
+        "SIMILARITY"
+      ],
+      "keywords": [
+        "recommendation"
+      ]
+    },
+    "Data Quality": {
+      "description": "Consistency checks run during or after the simulation: things that should never happen (double states, negative stock, gaps between approval bands).",
+      "rel_types": [],
+      "keywords": [
+        "should not happen",
+        "contiguous",
+        "duplicate relationships"
+      ]
+    },
+    "Graph Statistics": {
+      "description": "Structural facts about the graph: schema, node/edge ratio, most-connected nodes.",
+      "rel_types": [],
+      "keywords": [
+        "schema",
+        "nodes to edges",
+        "outgoing vs. incoming",
+        "context trace"
+      ]
+    }
+  }
+}

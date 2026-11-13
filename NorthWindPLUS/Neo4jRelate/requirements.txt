@@ -1,0 +1,5 @@
+relate-db==1.0.1
+neo4j
+rdflib
+anthropic
+python-dotenv
