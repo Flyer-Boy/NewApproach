@@ -1362,11 +1362,11 @@ RETURN p.ProductName, Customers, Recommendation LIMIT 25;
 //
 // Set the parameters first (Aura Query console / Neo4j Browser), then run the preview and the change. The values below are an example;
 // to restore the original bands use 5000.00, 12500.00 and 500000.00.
-  :param requesterId => "25";
-  :param l1Limit => 8000.00;
-  :param l2Limit => 20000.00;
-  :param l3Limit => 500000.00;
-  :param justification => "Speed up vetting during the quarter-end restock.";
+// :param requesterId => "25";
+// :param l1Limit => 8000.00;
+// :param l2Limit => 20000.00;
+// :param l3Limit => 500000.00;
+// :param justification => "Speed up vetting during the quarter-end restock.";
 
 // Preview (read-only) -- how the current and the proposed bands route the POs awaiting vetting right now (final approval level by PO cost).
 // POs an approver has already passed up keep that vetting; this shows where each PO's cost falls, not a guaranteed outcome.

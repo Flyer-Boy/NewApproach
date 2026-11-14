@@ -16,11 +16,11 @@ from neo4j import GraphDatabase, NotificationDisabledClassification, unit_of_wor
 import logging
 
 # The sign-in query checks IS_ACTIVE_ROLE.EndDate, which no role has yet; Neo4j warns about unknown property
-# keys. Keep that noise out of the console (stage 4: pass such warnings to the agent instead).
+# keys. Keep that noise out of the console; warnings from the agent's own queries go back to the model instead.
 logging.getLogger("neo4j.notifications").setLevel(logging.ERROR)
 
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent / "kb"))
-from build_kb import is_write  # noqa: E402  (same write detection the knowledge store uses)
+from kb_write import is_write  # noqa: E402  (same write detection the knowledge store uses)
 
 QUERY_TIMEOUT_S = 20
 MAX_ROWS_FETCHED = 500
@@ -35,6 +35,16 @@ def _plain(value):
     if isinstance(value, (str, int, float, bool)) or value is None:
         return value
     return str(value)   # DateTime, Duration, etc. -> ISO-ish text
+
+
+def _warnings(summary) -> list[str]:
+    """Neo4j warnings (GQLSTATUS 01xxx) for a finished query, e.g. unknown label / property / relationship type."""
+    out = []
+    for status in getattr(summary, "gql_status_objects", None) or []:
+        code = getattr(status, "gql_status", "") or ""
+        if getattr(status, "is_notification", False) and code.startswith("01"):
+            out.append(f"{code}: {getattr(status, 'status_description', '')}")
+    return out
 
 
 class Aura:
@@ -68,12 +78,15 @@ class Aura:
                 rows.append(_plain(record.data()))
                 if len(rows) >= MAX_ROWS_FETCHED:
                     break
-            return rows
+            return rows, _warnings(result.consume())
 
         try:
             with self.driver.session(database=self.database) as session:
-                rows = session.execute_read(work)
-            return {"rows": rows, "row_count": len(rows), "capped": len(rows) >= MAX_ROWS_FETCHED}
+                rows, warnings = session.execute_read(work)
+            out = {"rows": rows, "row_count": len(rows), "capped": len(rows) >= MAX_ROWS_FETCHED}
+            if warnings:
+                out["warnings"] = warnings   # e.g. "property `Date` does not exist" -- lets the model fix its own Cypher
+            return out
         except Exception as exc:   # syntax errors, timeouts, unknown labels... the model can fix and retry
             return {"error": f"{type(exc).__name__}: {exc}"}
 
