@@ -47,12 +47,16 @@ class Voyage4NanoLocal(Embedder):
             from sentence_transformers import SentenceTransformer
         except ImportError as exc:
             raise SystemExit("EMBEDDINGS=voyage-4-nano needs: pip install sentence-transformers torch") from exc
+        import time
         self.dims = dims
+        t0 = time.time()
+        print("Loading voyageai/voyage-4-nano (first time: ~700 MB download from Hugging Face)...", flush=True)
         # truncate_dim: Matryoshka embeddings -- the leading dims are a valid smaller embedding (1024 = Voyage default)
         self.model = SentenceTransformer("voyageai/voyage-4-nano", trust_remote_code=True, truncate_dim=dims)
+        print(f"Model loaded in {time.time() - t0:.0f}s on {self.model.device}.", flush=True)
 
     def embed_documents(self, texts):
-        vecs = self.model.encode_document(texts, normalize_embeddings=True)
+        vecs = self.model.encode_document(texts, normalize_embeddings=True, show_progress_bar=len(texts) > 8)
         return [list(map(float, v)) for v in vecs]
 
     def embed_query(self, text):

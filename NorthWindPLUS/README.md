@@ -1,6 +1,6 @@
 # NorthWind PLUS
 
-**A full Line-of-Business application running natively on a Labeled Property Graph — ported to Neo4j, Memgraph, FalkorDB, Quine and Ultipa.**
+**A full Line-of-Business application running natively on a Labeled Property Graph — ported to Neo4j, Memgraph, FalkorDB, Quine and Ultipa, with an AI agent that runs alongside it on Relate by Neo4j.**
 
 NorthWind PLUS rebuilds the classic Northwind database as a *Graph-Native* application and extends it into a complete, 360-degree business cycle: customer orders, low-stock detection, purchase orders with three levels of approval, supplier RFQs, warehouse receiving, finance closure and order fulfillment — all expressed in Cypher (or, on Ultipa, ISO GQL), inside the graph.
 
@@ -24,6 +24,7 @@ The ultimate test: six independent business processes, launched as separate OS p
 - [The simulation loops](#the-simulation-loops)
 - [Schema and ontology](#schema-and-ontology)
 - [Engine differences worth knowing](#engine-differences-worth-knowing)
+- [The AI agent — Relate by Neo4j](#the-ai-agent--relate-by-neo4j)
 - [AI agents — food for thought](#ai-agents--food-for-thought)
 - [Further reading](#further-reading)
 
@@ -88,13 +89,14 @@ Approval routing depends on the PO amount and on the `ApprovalBase` / `ApprovalL
 
 | | Neo4j | Memgraph | FalkorDB | Quine | Ultipa |
 |---|---|---|---|---|---|
-| Model version | v2.3.1 | v2.3.1 port | v2.3.1 port | v2.4 (no edge properties) | v2.3.1 port (ISO GQL) |
+| Model version | v2.3.1 (v2.3.2 for the AI agent) | v2.3.1 port | v2.3.1 port | v2.4 (no edge properties) | v2.3.1 port (ISO GQL) |
 | Import | `.cypher` in Query console | `.cypher` in Query console | `.sh` via `redis-cli` | `.sh` via Quine REST API | `.gql` via `run_gql_script.py` (or Ultipa Manager) |
 | Simulation harness | `NorthwindPlus_Stress_Test.py` | `NorthwindPlus_Stress_Test_MemGraph.py` | `NorthwindPlus_Stress_Test_FalkorDB.py` | `NorthwindPlus_Stress_Test_Quine.py`, **or** the `northwind-plus-simulation.yaml` recipe (no Python) | `NorthwindPlus_Stress_Test_Ultipa.py` |
 | Python dependency | `neo4j` driver | `neo4j` driver (Bolt) | `falkordb` | none (standard library) | `ultipa` (imported as `gqldb`) |
 | GRAPH TYPE schema | ✅ | — | — | — | — |
 | Business logic in the graph | Cypher | Cypher | Cypher | Cypher + **Standing Queries** (+ ingest streams in the recipe) | GQL |
 | Windows launcher | `PySetup.bat` | `MPySetup.bat` | — | — | `PySetup_Ultipa.bat` |
+| AI agent | ✅ [Relate by Neo4j](Neo4jRelate/README.md) | — | — | — | — |
 
 ---
 
@@ -113,7 +115,16 @@ NorthWindPLUS/
 ├── NorthwindPlus_Stress_Test_FalkorDB.py                  Concurrency harness — FalkorDB
 ├── PySetup.bat                                            Windows: opens 8 loop windows against Neo4j
 ├── MPySetup.bat                                           Windows: opens 8 loop windows against Memgraph
-├── AI_Agents_Food_For_Thought.md                          Ideas for an agentic layer (not yet built)
+├── AI_Agents_Food_For_Thought.md                          Ideas for an agentic layer (the first agent is built: see Neo4jRelate/)
+├── Neo4jRelate/                                          AI agent on Relate by Neo4j, with model v2.3.2 — see its README
+│   ├── README.md
+│   ├── NorthWind_PLUS_Agent_Colab.ipynb                 Google Colab front end (knowledge store kept on Google Drive)
+│   ├── NorthWind_PLUS_Agent.ipynb                       Local Jupyter front end
+│   ├── run_loops.bat                                    Windows: the six loops, credentials read from .env
+│   ├── model/                                           v2.3.2: import script, GRAPH TYPE, RDF ontology, upgrade from v2.3.1, harness
+│   ├── kb/                                              The agent's knowledge graph in Relate: build, hybrid search, learning loop, embeddings
+│   ├── agent/                                           The agent (Claude + tools) and its read-only / governed access to Neo4j
+│   └── tests/                                           Offline tests (no API key, no Aura needed)
 ├── Ultipa/                                                ISO GQL port for Ultipa GQLDB — see its README
 │   ├── README.md
 │   ├── NorthWind_PLUS_Graph_Data_Model_Import_v2.3.1_Ultipa_GQL.gql   The full model in GQL (sectioned: setup | live_views | recommendation | examples)
@@ -186,6 +197,10 @@ python NorthwindPlus_Stress_Test.py --loop order-fulfillment --rate 4
 **On Windows:** fill in the four `SET NEO4J_...` lines at the top of `PySetup.bat` and run it. It opens eight console windows (two of them duplicate loops for extra contention), each waiting for you to press Enter.
 
 Then go back to the Query console and watch the graph change in real time.
+
+**4. (Optional) Add the AI agent**
+
+The [`Neo4jRelate/`](Neo4jRelate/README.md) folder adds model **v2.3.2** and an AI agent that answers questions about the running business, changes the approval limits under governance and learns new queries. Build the graph with its v2.3.2 import script (or upgrade a v2.3.1 database in place with `NorthWind_PLUS_v2.3.2_Upgrade_from_v2.3.1.cypher`), then open the Colab or Jupyter notebook. Its README has the details.
 
 ---
 
@@ -364,12 +379,15 @@ Ctrl+C stops a loop cleanly and prints a summary: executions, retries, errors an
 
 Vetting loops pick one eligible action per execution, weighted so that approvals and resubmissions dominate over rejections. When two processes race for the same item, the loser re-checks the item's eligibility, finds it already handled, and logs a harmless "lost the race" no-op instead of corrupting data. On Neo4j this is done by locking the chosen node with `apoc.lock.nodes` and re-checking the guard condition under the lock; the harness docstrings explain the bugs this closes (negative inventory, contradictory vetting outcomes, duplicate deliveries).
 
+**Fixed: zero-quantity purchase orders (Neo4j harness).** `po_resubmit` could create a PO line of **0 units** when a product's effective stock sat exactly on its eligibility boundary (`StockThreshold / 2` is integer division). A 0-cost PO matches no vetting action, not even rejection, so it would wait in `NewPoS` forever. The AI agent spotted it on its first live run, when it reported a PO worth 0.00 and flagged it as odd. `po_resubmit` and `po_creation` now skip non-positive lines and empty POs. The same quantity formula is used in the other engines' harnesses and import scripts, which haven't been patched yet.
+
 Play with the rates to simulate different loads — for example, the Windows launchers run customer orders at 60/min against two fulfillment and two vetting loops.
 
 ---
 
 ## Schema and ontology
 
+- **`Neo4jRelate/model/NorthwindPlusGraphType_v2.3.2.cypher`** and **`NorthwindPlusGraph_RDF-turtle_v2.3.2.ttl`** — the v2.3.2 versions, which add the `PolicyChange` node and its `REQUESTED_BY` / `CHANGED_ROLE` relationships. The AI agent builds its knowledge graph from these two files.
 - **`NorthwindPlusGraphType_v1.cypher`** — a Neo4j `GRAPH TYPE` declaring every node label, relationship type, key and required property in the model, so the database itself rejects structurally invalid writes.
 - **`NorthwindPlusGraph_RDF-turtle_v1.ttl`** — the same schema expressed in RDF/OWL. Two top-level classes, `:Entity` and `:Collection`, make the *Proper Noun Nodes vs. Collections* principle explicit, and `owl:hasKey` stands in for `REQUIRE … IS KEY`.
 
@@ -390,9 +408,19 @@ The model is the same everywhere (v2.4 on Quine only removes edge properties). W
 
 ---
 
+## The AI agent — Relate by Neo4j
+
+[`Neo4jRelate/`](Neo4jRelate/README.md) is the first agent built on top of NorthWind PLUS. It runs *alongside* the six loops, against the same live Neo4j Aura database:
+
+- **Answers business questions in plain language** ("Which suppliers get their quotes rejected most often?", "How many POs are waiting for approval?") by finding a proven Cypher template, adapting one, or writing new Cypher from the ontology, always in read-only transactions.
+- **Changes a business rule under governance.** The L1/L2/L3 approval limits live on role nodes and every vetting query reads them at execution time, so changing them changes how the next PO is vetted, with no code change and no restart. The agent can change them only for someone holding the new `ProcurementPolicyAdmin` role, after a preview and an explicit confirmation, and every change is recorded as a `PolicyChange` node.
+- **Learns.** Every question is kept as an `Interaction`; new queries that worked become templates once a person approves them, and later questions find them.
+
+Its knowledge (the ontology built from the GRAPH TYPE and the RDF file, the query library from the import script, the question history) lives in **[Relate by Neo4j](https://relatedb.ai/)**, an embedded graph database that runs inside the agent's process. The business data never leaves Aura. This fits the model's principles: the semantics an AI needs are already in the graph, so the agent reads them directly instead of relying on an ETL pipeline.
+
 ## AI agents — food for thought
 
-[`AI_Agents_Food_For_Thought.md`](AI_Agents_Food_For_Thought.md) explores what changes when an AI agent becomes another actor that reads graph context and writes decisions back — assisting PO vetting within the existing approval bands, learning from the `Comment` already recorded on every approval/rejection, and tuning approval levels. It also includes an example that turned out *not* to need AI (order-fulfillment fairness). None of it is built yet.
+[`AI_Agents_Food_For_Thought.md`](AI_Agents_Food_For_Thought.md) explores what changes when an AI agent becomes another actor that reads graph context and writes decisions back — assisting PO vetting within the existing approval bands, learning from the `Comment` already recorded on every approval/rejection, and tuning approval levels. It also includes an example that turned out *not* to need AI (order-fulfillment fairness). The [Relate agent](Neo4jRelate/README.md) now covers the question-answering side and governed tuning of approval levels; assisting PO vetting and learning from the `Comment`s remain ideas.
 
 ---
 

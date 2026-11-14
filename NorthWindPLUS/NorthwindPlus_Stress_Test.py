@@ -436,6 +436,7 @@ PO_VETTING_ACTIONS: list[VettingAction] = [
         OPTIONAL MATCH (p)<-[op:HAS_ORDER_PRODUCT]-(:Order)<-[:IS_OPEN_ORDER_STATE]-()
         WITH rpo, p, s, r, i, AlreadyPendingQty, SUM(coalesce(op.Quantity, 0)) AS OpenOrderQty
         WHERE i.UnitsInStock + AlreadyPendingQty - OpenOrderQty - (r.StockThreshold * 0.5) <= r.StockThreshold
+          AND (r.StockThreshold) - (i.UnitsInStock + AlreadyPendingQty - OpenOrderQty) + (r.StockThreshold / 2) > 0
         RETURN count(DISTINCT rpo) AS EligibleCount
         """,
         """
@@ -459,6 +460,10 @@ PO_VETTING_ACTIONS: list[VettingAction] = [
             Product: p,
             qty: (r.StockThreshold) - (i.UnitsInStock + AlreadyPendingQty - OpenOrderQty) + (r.StockThreshold / 2)
         }) AS orderItems
+        // A line can come out at 0 units when effective stock sits exactly on the eligibility boundary
+        // (and StockThreshold / 2 is integer division). A 0-cost PO matches no vetting action and would be
+        // stuck in NewPoS forever, so drop non-positive lines -- and skip the PO if none are left.
+        WITH rpo, e, n, s, [item IN orderItems WHERE item.qty > 0] AS orderItems
         WHERE size(orderItems) > 0
         CREATE (n)-[:IS_NEW_PO_STATE]->(po:PurchaseOrder {
             PONumber: "PO-" + left(randomUUID(), 5) + right(randomUUID(), 5),
@@ -857,6 +862,10 @@ WITH e, n, s, COLLECT({
     Product: p,
     qty: (r.StockThreshold) - (i.UnitsInStock + AlreadyPendingQty - OpenOrderQty) + (r.StockThreshold * 2)
 }) AS orderItems
+// Guard: a Product with StockThreshold 0 and no effective stock gives a 0-unit line. Drop non-positive lines
+// and skip the PO if none are left (a 0-cost PO would be stuck in NewPoS forever).
+WITH e, n, s, [item IN orderItems WHERE item.qty > 0] AS orderItems
+WHERE size(orderItems) > 0
 CREATE (n)-[:IS_NEW_PO_STATE]->(po:PurchaseOrder {
     PONumber: "PO-" + left(randomUUID(), 5) + right(randomUUID(), 5),
     PODate: datetime()

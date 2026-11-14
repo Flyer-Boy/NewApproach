@@ -120,11 +120,17 @@ EVAL = [
     md("""## {n}. Optional: retrieval with vs. without embeddings
 
 Builds two temporary stores (seed templates only) and checks whether the right template is in the top 3 for 12
-business questions. Without embeddings the baseline is 9/12 — the misses are vocabulary gaps ("quotes" vs. "RFQ",
+business questions. **Slow on a CPU runtime** (several minutes: ~700 MB model download, then embedding) -- progress
+prints as it goes. Without embeddings the baseline is 9/12 — the misses are vocabulary gaps ("quotes" vs. "RFQ",
 "negative" vs. "below zero", "approve" vs. "approval")."""),
-    code("""r = subprocess.run([sys.executable, str(PROJECT / "kb" / "eval_search.py"), "--compare", "voyage-4-nano"],
-                   capture_output=True, text=True)
-print(r.stdout[-4000:] or r.stderr[-4000:])"""),
+    code("""# Output streams as it runs. On Colab's CPU runtime this takes several minutes (model download + embedding);
+# a GPU runtime (Runtime -> Change runtime type -> T4 GPU) is much faster. Needs sentence-transformers (step 2 installs it
+# when EMBEDDINGS = "voyage-4-nano"; otherwise: pip install sentence-transformers).
+proc = subprocess.Popen([sys.executable, "-u", str(PROJECT / "kb" / "eval_search.py"), "--compare", "voyage-4-nano"],
+                        stdout=subprocess.PIPE, stderr=subprocess.STDOUT, text=True, bufsize=1)
+for line in proc.stdout:
+    print(line, end="")
+proc.wait()"""),
 ]
 
 
@@ -155,8 +161,7 @@ print("Project folder:", PROJECT)"""),
         code(SIGN_IN),
         *renumber(QUESTIONS, 4),
         *renumber(LEARNED, 5),
-        *renumber(EVAL, 6),
-        md("## 7. Done"),
+        md("## 6. Done"),
         code("""session.close()
 print("Closed the Aura connection and the knowledge store. What the agent learned stays in kb/northwind_kb.rl.")"""),
     ]
@@ -187,15 +192,16 @@ isn't lost when the runtime resets.
    `NEO4J_DATABASE` (both default to `neo4j`). Names must match exactly; your Aura database name may be the instance
    ID rather than `neo4j`.
 
-Then run the cells from the top (*Runtime → Run all* works too; the upload step waits for your file).""")),
+Then run the cells from the top (*Runtime → Run all* works too).""")),
         md("""## 1. Get the project
 
-If the project is on GitHub, put its URL in `REPO_URL`. Otherwise leave it empty and upload `relate-agent.zip`
-when the file picker appears."""),
+By default this clones the [NewApproach](https://github.com/Flyer-Boy/NewApproach) repository from GitHub (about
+14 MB) and uses its `NorthWindPLUS/Neo4jRelate` folder. To run your own copy instead, set `REPO_URL` to your fork,
+or set it to `""` and upload `relate-agent.zip` when the file picker appears."""),
         code("""import os, sys, subprocess, zipfile, json, logging, shutil
 from pathlib import Path
 
-REPO_URL = ""          # e.g. "https://github.com/<your-account>/<repo>.git" once published
+REPO_URL = "https://github.com/Flyer-Boy/NewApproach.git"   # set to "" to upload relate-agent.zip instead
 
 try:
     import google.colab  # noqa: F401
@@ -283,8 +289,7 @@ else:
         code(SIGN_IN),
         *renumber(QUESTIONS, 6),
         *renumber(LEARNED, 7),
-        *renumber(EVAL, 8),
-        md("## 9. Done — save the knowledge store to Drive"),
+        md("## 8. Done — save the knowledge store to Drive"),
         code("""session.close()
 if DRIVE_STORE:
     shutil.copy(store, DRIVE_STORE)

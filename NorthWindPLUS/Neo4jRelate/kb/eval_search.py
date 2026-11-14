@@ -58,13 +58,20 @@ def main():
         print(f"\n{sum(1 for _, r, _ in results if r)}/{len(results)} in top 3")
         return
 
+    import time
     from build_kb import build
+    from embeddings import get_embedder
     tmp = Path(tempfile.mkdtemp(prefix="kbeval-"))
+    t0 = time.time()
+    step = lambda msg: print(f"[{time.time() - t0:5.0f}s] {msg}", flush=True)
     try:
+        step("Building the store without embeddings...")
         build(tmp / "plain.rl", embeddings="none", fresh=True)
-        print(f"Building with {args.compare} (first run downloads the model)...")
-        build(tmp / "vec.rl", embeddings=args.compare, fresh=True)
-        plain, vec = KnowledgeBase(tmp / "plain.rl"), KnowledgeBase(tmp / "vec.rl")
+        step(f"Building the store with {args.compare}...")
+        embedder = get_embedder(args.compare)          # loaded once, used for the build and the queries
+        build(tmp / "vec.rl", embeddings=embedder, fresh=True)
+        step("Scoring 12 questions on both stores...")
+        plain, vec = KnowledgeBase(tmp / "plain.rl"), KnowledgeBase(tmp / "vec.rl", embedder=embedder)
         a, b = evaluate(plain), evaluate(vec)
         print(f"\n{'question':<58} {'no emb.':>8} {args.compare:>14}")
         for (q, r1, _), (_, r2, top2) in zip(a, b):
@@ -72,6 +79,7 @@ def main():
             print(f"{q:<58} {fmt(r1):>8} {fmt(r2):>14}")
         print(f"\n{'in top 3':<58} {sum(1 for _, r, _ in a if r):>6}/{len(a)} {sum(1 for _, r, _ in b if r):>12}/{len(b)}")
         plain.close(); vec.close()
+        step("Done.")
     finally:
         shutil.rmtree(tmp, ignore_errors=True)
 

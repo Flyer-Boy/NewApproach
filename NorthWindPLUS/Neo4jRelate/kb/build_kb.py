@@ -297,7 +297,7 @@ def build(store: Path, embeddings: str | None = None, fresh: bool = False) -> di
     if missing:
         raise SystemExit(f"semantics.json names things the GRAPH TYPE doesn't declare: {sorted(missing)}")
 
-    embedder = get_embedder(embeddings)
+    embedder = embeddings if hasattr(embeddings, "embed_documents") else get_embedder(embeddings)   # name or loaded embedder
     learned = {"templates": [], "interactions": []} if fresh else export_learned(store)
     for suffix in ("", "-wal", "-shm", "-journal"):
         Path(str(store) + suffix).unlink(missing_ok=True)
