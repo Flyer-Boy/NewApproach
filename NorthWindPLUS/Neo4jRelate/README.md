@@ -39,7 +39,7 @@ Relate fits that role well:
 - **Cheap to rebuild, safe to keep.** The knowledge store is generated from the model files in seconds, and what the
   agent learned is carried over on every rebuild.
 
-## The NorthWind PLUS business cycle (running on Aura)
+## The NorthWind PLUS business cycle (continuously running live on Aura)
 
 The six simulation loops drive this cycle continuously. Each box is a state the graph records as a relationship to a
 Collection node (`NewPoS`, `ApprovedPoS`, and so on), so moving a PO forward means moving a relationship.
@@ -131,7 +131,7 @@ flowchart LR
 
 ## What-if sandbox: pull to experiment, governed Cypher to commit
 
-Suggested by a Neo4j staff engineer after the first post: *pull a subgraph from Aura into the agent's context, so it
+Suggested by a Neo4j staff engineer (Tomas Riha) after the first post: *pull a subgraph from Aura into the agent's context, so it
 can mutate and experiment on it in isolation.* Asked *"what would happen if we raised L1 to 8000 and L2 to 20000?"*,
 the agent:
 
