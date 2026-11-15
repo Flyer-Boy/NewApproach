@@ -56,6 +56,43 @@ flowchart LR
     M[Model files<br/>GRAPH TYPE · RDF ontology<br/>import script · harness] -->|build_kb.py| R
 ```
 
+---
+
+## The NorthWind PLUS business cycle (running on Aura)
+
+```mermaid
+flowchart LR
+    subgraph Sales
+        CO[Customer Order<br/>created - Open] --> OF{All lines<br/>in stock?}
+        OF -- yes --> SH[Shipped - Fulfilled<br/>Inventory decremented]
+    end
+
+    subgraph Procurement
+        LS[Product below<br/>restock threshold] --> PO[PO created<br/>NewPoS]
+        PO --> V1[L1 vetting] --> V2[L2 vetting] --> V3[L3 vetting]
+        V1 & V2 & V3 -- reject --> RJ[RejectedPoS]
+        RJ -- resubmit --> PO
+        V1 & V2 & V3 -- approve --> AP[ApprovedPoS]
+        AP --> SUB[Buyer submits<br/>to Supplier]
+    end
+
+    subgraph Supplier
+        SUB --> RFQ[Supplier submits RFQ]
+        RFQ --> RV{RFQ vetting}
+        RV -- reject --> RR[Resubmit RFQ] --> RFQ
+    end
+
+    subgraph WF [Warehouse and Finance]
+        RV -- approve --> WH[Warehouse receives<br/>Inventory updated]
+        WH --> FI[Finance pays<br/>ClosedPoS]
+    end
+
+    WH -.restock.-> OF
+    OF -- no --> LS
+```
+
+
+
 1. **Build:** `kb/build_kb.py` turns the model files into a knowledge graph in relate. It reads the GRAPH TYPE
    (exact names and types), the RDF/Turtle ontology (Entity vs. Collection), curated business meanings, 53 queries
    from the import script and 19 actions from the simulation harness.
