@@ -39,6 +39,53 @@ Relate fits that role well:
 - **Cheap to rebuild, safe to keep.** The knowledge store is generated from the model files in seconds, and what the
   agent learned is carried over on every rebuild.
 
+## The NorthWind PLUS business cycle (running on Aura live!)
+
+The six simulation loops drive this cycle continuously. Each box is a state the graph records as a relationship to a
+Collection node (`NewPoS`, `ApprovedPoS`, and so on), so moving a PO forward means moving a relationship. (not "hidden" in a property code)
+
+```mermaid
+flowchart LR
+    subgraph Sales
+        CO[Customer Order<br/>created - Open] --> OF{All lines<br/>in stock?}
+        OF -- yes --> SH[Shipped - Fulfilled<br/>Inventory decremented]
+    end
+
+    subgraph Procurement
+        LS[Product below<br/>restock threshold] --> PO[PO created<br/>NewPoS]
+        PO --> V1[L1 vetting]
+        V1 -- above L1 limit --> V2[L2 vetting]
+        V2 -- above L2 limit --> V3[L3 vetting]
+        V1 & V2 & V3 -- reject --> RJ[RejectedPoS]
+        RJ -- resubmit --> PO
+        V1 & V2 & V3 -- approve<br/>within its band --> AP[ApprovedPoS]
+        AP --> SUB[Buyer submits<br/>to Supplier]
+    end
+
+    subgraph Supplier
+        SUB --> RFQ[Supplier submits RFQ]
+        RFQ --> RV{RFQ vetting}
+        RV -- reject --> RR[Supplier resubmits RFQ] --> RFQ
+    end
+
+    subgraph WF [Warehouse and Finance]
+        RV -- approve --> WH[Warehouse receives<br/>Inventory updated]
+        WH --> FI[Finance pays<br/>ClosedPoS]
+    end
+
+    subgraph GOV [Governance - v2.3.2]
+        PA([ProcurementPolicyAdmin<br/>through the agent]) --> PC[PolicyChange<br/>audit node]
+    end
+
+    PC -. sets L1/L2/L3 limits .-> V1 & V2 & V3
+    WH -.restock.-> OF
+    OF -- no --> LS
+```
+
+Open customer orders count against available stock, so a product can fall below its restock threshold before an
+order fails to ship. The L1/L2/L3 limits are read from the `RolE` nodes every time a PO is vetted, which is why a
+governed `PolicyChange` takes effect on the very next vetting cycle without touching the loops.
+
 ## Architecture
 
 ```mermaid
@@ -55,42 +102,6 @@ flowchart LR
 
     M[Model files<br/>GRAPH TYPE · RDF ontology<br/>import script · harness] -->|build_kb.py| R
 ```
-
-
-## The NorthWind PLUS business cycle (running on Aura)
-
-```mermaid
-flowchart LR
-    subgraph Sales
-        CO[Customer Order<br/>created - Open] --> OF{All lines<br/>in stock?}
-        OF -- yes --> SH[Shipped - Fulfilled<br/>Inventory decremented]
-    end
-
-    subgraph Procurement
-        LS[Product below<br/>restock threshold] --> PO[PO created<br/>NewPoS]
-        PO --> V1[L1 vetting] --> V2[L2 vetting] --> V3[L3 vetting]
-        V1 & V2 & V3 -- reject --> RJ[RejectedPoS]
-        RJ -- resubmit --> PO
-        V1 & V2 & V3 -- approve --> AP[ApprovedPoS]
-        AP --> SUB[Buyer submits<br/>to Supplier]
-    end
-
-    subgraph Supplier
-        SUB --> RFQ[Supplier submits RFQ]
-        RFQ --> RV{RFQ vetting}
-        RV -- reject --> RR[Resubmit RFQ] --> RFQ
-    end
-
-    subgraph WF [Warehouse and Finance]
-        RV -- approve --> WH[Warehouse receives<br/>Inventory updated]
-        WH --> FI[Finance pays<br/>ClosedPoS]
-    end
-
-    WH -.restock.-> OF
-    OF -- no --> LS
-```
-
-
 
 1. **Build:** `kb/build_kb.py` turns the model files into a knowledge graph in relate. It reads the GRAPH TYPE
    (exact names and types), the RDF/Turtle ontology (Entity vs. Collection), curated business meanings, 53 queries
@@ -117,8 +128,10 @@ flowchart LR
 | Provenance as a graph | `(:Interaction)-[:USED\|CREATED]->(:QueryTemplate)`: which question used or created which query | learning loop |
 
 Relate also has `relate pull` (Aura → local subgraph), `relate push` (local → Aura, merging on keys) and
-`relate serve` (Bolt/HTTP/MCP). This project doesn't use them yet; pushing learned templates to Aura is on the
-[parking lot](#status-and-parking-lot).
+`relate serve` (Bolt/HTTP/MCP). The next stage uses `pull` for a **what-if sandbox**: the agent copies the POs
+waiting for approval into a scratch relate store, rehearses a proposed approval-limit change there with the
+simulation's own vetting Cypher, and only then offers the governed change on Aura. See
+[DESIGN_what_if_sandbox.md](DESIGN_what_if_sandbox.md).
 
 ## The knowledge graph
 
@@ -258,13 +271,15 @@ A proof of concept is worth its surprises. These came from running against the l
 
 1. `model/NorthWind_PLUS_Graph_Data_Model_Import_v2.3.2.cypher`, **lines 95–1171**. This wipes the database and
    builds NorthWind PLUS v2.3.2. Optional: the Recommendation Engine, lines 1271–1334. To keep an existing v2.3.1
-   database instead, run `model/NorthWind_PLUS_v2.3.2_Upgrade_from_v2.3.1.cypher`.  This rebuilds the classic Northwind
-   database as a Graph-Native application and extends it into a complete, 360-degree business cycle: customer orders,
-   low-stock detection, purchase orders with three levels of approval, supplier RFQs, warehouse receiving, finance closure,
-   and order fulfillment. All of these run natively on the Graph from here on. That is, no more data ingestion, ETL/Data pipelines.
-3. `model/NorthwindPlusGraphType_v2.3.2.cypher` (the GRAPH TYPE schema). This adds a governance layer to the model, enforcing the ontology.
-4. Start the six loops. On Windows, `run_loops.bat` opens all six, reads credentials from `.env`, and uses rates that
-   let vetting and fulfillment keep up with new orders. Elsewhere, run `python model/NorthwindPlus_Stress_Test.py --loop <name> --rate <per minute>`, once per loop.
+   database instead, run `model/NorthWind_PLUS_v2.3.2_Upgrade_from_v2.3.1.cypher`.
+   The import rebuilds the classic Northwind database as a graph-native application and extends it into a complete,
+   360-degree business cycle: customer orders, low-stock detection, purchase orders with three levels of approval,
+   supplier RFQs, warehouse receiving, finance closure and order fulfillment. All of it runs natively on the graph from
+   here on: no data ingestion, no ETL or data pipelines.
+2. `model/NorthwindPlusGraphType_v2.3.2.cypher` (the GRAPH TYPE schema). This adds a governance layer to the model:
+   the database itself enforces the ontology.
+3. Start the six loops. On Windows, `run_loops.bat` opens all six, reads credentials from `.env`, and uses rates that
+   let vetting and fulfillment keep up with new orders. Run it from this folder, with `.env` filled in. Elsewhere, run `python model/NorthwindPlus_Stress_Test.py --loop <name> --rate <per minute>`, once per loop.
 
 ### 1a. Google Colab
 
@@ -299,16 +314,19 @@ account; it isn't included in a Claude Pro chat subscription.
 - *What is the number and value of purchase orders still waiting to be vetted?* Should find the template you just saved.
 - *Raise L1 to 8000 and L2 to 20000 to speed up vetting.* Preview, confirmation, `PolicyChange` audit.
 - *Who changed the approval limits, when and why?* Reads the audit trail back.
-- *What is the Total Revenue, and Gross Profit for the last 1 hour?* 
-- *What Available products urgently need to be restock to fulfill customer orders?* 
-- *What are our top 10 customers by revenue and by product quantity?*
-- *Who is doing the most PO vetting?*
-- *Where is procurement PO Vetting friction concentrated?*
-- *What supplier has the most rejected RFQs?*
-- *What Available products are less ordered?* 
-- *Who is our best sales person?*
-- *What is our best sales region?*
-- *What emplyee gives more discount to our customers?*
+- *What were total revenue and gross profit in the last hour?* Or the last 15 minutes: you're querying a live graph,
+  not a static one.
+- *Which available products urgently need restocking to fulfill customer orders?*
+- *Who are our top 10 customers by revenue, and by product quantity?*
+- *Who does the most PO vetting?*
+- *Where is the PO vetting friction concentrated?*
+- *Which supplier has the most rejected RFQs?* Close to the first question in different words, a good test of
+  template reuse.
+- *Which available products are ordered least?*
+- *Who is our best salesperson?*
+- *Which is our best sales region?*
+- *Which employee gives our customers the biggest discounts?*
+- *Which fulfillment clerk received the most supplier deliveries (POs)?* You can also ask about customer orders.
 
 ## Project layout
 
@@ -333,6 +351,7 @@ tests/                       offline tests (no API, no Aura)
 NorthWind_PLUS_Agent.ipynb         local Jupyter front end
 NorthWind_PLUS_Agent_Colab.ipynb   Google Colab front end
 run_loops.bat                      Windows: starts the six simulation loops (credentials read from .env)
+DESIGN_what_if_sandbox.md          next stage: rehearse changes on a pulled subgraph (relate pull)
 tools/make_notebooks.py            generates both notebooks
 ```
 
@@ -359,7 +378,10 @@ stand-in that enforces the Neo4j driver's transaction rules.
 - Full-text search matched whole words only ("rejected" didn't match "Rejection"). We didn't find a stemming
   analyzer, so embeddings or query rewriting cover that.
 - `pip install relate-db` installs the Python library; the `relate` command-line tool (`pull`, `push`, `serve`) is a
-  separate install.
+  separate install (`install.sh` / `install.ps1` from relatedb.ai). The Python API has no `pull`.
+- `relate pull` talks to Aura over the HTTP Query API, refuses a non-empty destination (a re-pull is never a merge),
+  and `relate push` never deletes on the remote. So a fresh scratch store per experiment, and governed Cypher, not
+  `push`, for changes that move state relationships.
 - `datetime()` comes back as a relate `Temporal` object in Python.
 
 ## Status and parking lot
@@ -370,6 +392,7 @@ stand-in that enforces the Neo4j driver's transaction rules.
 | 2 | Knowledge store + template search | Run live |
 | 3 | Agent with read queries and the governed change | Run live (terminal and Colab) |
 | 4 | Learning loop, provenance, warnings to the model, search-first enforcement, embeddings | Tested offline; in live testing |
+| 5 | What-if sandbox with `relate pull` (suggested by a Neo4j staff engineer) | Designed |
 
 **Parking lot**
 - Copy saved templates (and possibly the question history) into the Aura graph, so they can be queried next to the
