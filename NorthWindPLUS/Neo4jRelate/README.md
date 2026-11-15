@@ -56,7 +56,6 @@ flowchart LR
     M[Model files<br/>GRAPH TYPE · RDF ontology<br/>import script · harness] -->|build_kb.py| R
 ```
 
----
 
 ## The NorthWind PLUS business cycle (running on Aura)
 
