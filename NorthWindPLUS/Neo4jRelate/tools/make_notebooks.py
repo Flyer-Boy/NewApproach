@@ -13,8 +13,17 @@ LOAD_GRAPH = """1. Load the graph: in the Aura Query console, run `model/NorthWi
    from line 95 (*"// Let's clear all Nodes..."*) to line 1171. This **wipes the database** and builds NorthWind PLUS v2.3.2.
    Optionally also run the Recommendation Engine (lines 1271-1334).
    *(Already on v2.3.1 with data you want to keep? Run `model/NorthWind_PLUS_v2.3.2_Upgrade_from_v2.3.1.cypher` instead.)*
-2. Run `model/NorthwindPlusGraphType_v2.3.2.cypher` in the same console, to apply the GRAPH TYPE schema.
-3. Start the six Python loops (`model/NorthwindPlus_Stress_Test.py`, one process per `--loop`), so the data is moving."""
+   The import rebuilds the classic Northwind database as a graph-native application and extends it into a complete,
+   360-degree business cycle: customer orders, low-stock detection, purchase orders with three levels of approval,
+   supplier RFQs, warehouse receiving, finance closure and order fulfillment. All of it runs natively on the graph from
+   here on: no data ingestion, no ETL or data pipelines.
+2. Run `model/NorthwindPlusGraphType_v2.3.2.cypher` in the same console, to apply the GRAPH TYPE schema. This adds a
+   governance layer to the model: the database itself enforces the ontology.
+3. Start the six Python loops (`model/NorthwindPlus_Stress_Test.py`, one process per `--loop`), so the data is moving.
+   On Windows, run `run_loops.bat` from the `NorthWindPLUS/Neo4jRelate` folder on your own machine, with `.env` filled
+   in: it opens six consoles, one per business process, so you can watch what happens in the background.
+   Your graph-native system of record is now running on Neo4j Aura. Next, an AI agent answers questions about that live
+   graph, using its own embedded Relate graph."""
 
 INTRO = """# NorthWind PLUS business agent — Relate by Neo4j + Neo4j Aura + Claude{suffix}
 
@@ -87,6 +96,41 @@ Only EmployeeID 25 can apply it."""),
     code('# ask("Which products are at risk of running out?")'),
 ]
 
+WHATIF = [
+    md("""## {n}. What-if: rehearse a change before making it
+
+The agent pulls the POs waiting for approval from Aura into a **scratch relate store**, then runs the simulation's own
+vetting Cypher there twice: with today's limits and with the proposed ones, 5 runs each (the simulation picks POs and
+decisions at random). It compares approvals per level, rejections, POs left stuck and the cycles needed to clear the
+queue. Nothing is written to Aura; the scratch stores are deleted afterwards.
+
+The copy comes from `relate pull` when the `relate` command-line tool is installed, otherwise from a fallback copier
+through the Neo4j driver. The answer says which, and how old the snapshot is. Resubmitted POs aren't replayed yet: a
+rejection ends a PO's path in the rehearsal.
+
+> **If the what-if shows little or no difference between the two scenarios**, the queue is probably too short to
+> rehearse on. With the rates in `run_loops.bat`, the PO Vetting loop (12 per minute) clears new POs almost as fast as
+> PO Creation (1 per minute) makes them. To build a backlog:
+> - **pause the PO Vetting loop** (Ctrl+C in its window) for 10-15 minutes, run the what-if, then restart it; or
+> - **slow it down**: change its `--rate 12` to 2 or 3 in `run_loops.bat`;
+> - optionally **raise the Customer Order rate** (e.g. `--rate 6` to 12): POs include stock promised to open orders,
+>   so busier sales mean bigger POs, and more of them land in the L2 and L3 bands. Keep an eye on the fulfillment window.
+>
+> Also check how the waiting POs spread across the bands first, e.g. `ask("How are the POs waiting for approval spread
+> across the L1, L2 and L3 bands?")`. If almost all of them are under the L1 limit, raising it changes nothing.
+> And note what the rehearsal measures: the simulation gives every approval level the same speed, so higher limits
+> show up as fewer hand-offs between levels and fewer cycles to clear the queue, not as one level holding others up."""),
+    code('ask("What would happen to the approval queue if we raised L1 to 8000 and L2 to 20000? Run a what-if.")'),
+    md("If the rehearsal looks right, apply it: the `PolicyChange` justification will cite the what-if's ID."),
+    code('# ask("Apply those limits: L1 8000, L2 20000, L3 unchanged.")'),
+    code("""rows = session.kb._rows(\"\"\"MATCH (i:Interaction)-[:RAN]->(w:WhatIf)
+    RETURN w.id AS id, w.createdAt AS at, w.method AS method, w.queuePOs AS pos, w.currentLimits AS cur,
+           w.proposedLimits AS prop, w.appliedAs AS applied, i.question AS q ORDER BY at DESC LIMIT 10\"\"\")
+display(Markdown("**What-ifs run so far**\\n\\n| What-if | POs pulled | Current limits | Proposed | Pulled with | Applied as |\\n|---|---|---|---|---|---|\\n" +
+    "\\n".join(f"| {r['id']} | {r['pos']} | {' / '.join(f'{v:,.0f}' for v in r['cur'])} | {' / '.join(f'{v:,.0f}' for v in r['prop'])} | "
+               f"{r['method'].split(' ')[0]} | {r['applied'] or '-'} |" for r in rows) if rows else "_No what-if yet._"))"""),
+]
+
 LEARNED = [
     md("""## {n}. What the agent learned (from relate)
 
@@ -154,14 +198,18 @@ from IPython.display import Markdown, display
 import agent as northwind_agent
 from build_kb import build
 from kb_query import KnowledgeBase
-print("Project folder:", PROJECT)"""),
+print("Project folder:", PROJECT)
+import shutil
+cli = os.environ.get("RELATE_BIN") or shutil.which("relate")
+print("relate CLI:", cli or "not found -- the what-if (step 5) will copy data through the Neo4j driver instead of relate pull")"""),
         md(EMBED_MD.format(n=2, where_runs="on this machine")),
         code(STORE_CELL),
         md(SIGN_IN_MD.format(n=3)),
         code(SIGN_IN),
         *renumber(QUESTIONS, 4),
-        *renumber(LEARNED, 5),
-        md("## 6. Done"),
+        *renumber(WHATIF, 5),
+        *renumber(LEARNED, 6),
+        md("## 7. Done"),
         code("""session.close()
 print("Closed the Aura connection and the knowledge store. What the agent learned stays in kb/northwind_kb.rl.")"""),
     ]
@@ -245,6 +293,22 @@ print(r.stdout[-2000:] or "Installed.")
 if r.returncode:
     print(r.stderr[-3000:])
     raise RuntimeError("pip install failed (see above)")"""),
+        md("""The **relate command-line tool** gives the what-if section (step 7) `relate pull`. It isn't part of
+`pip install relate-db`; this cell runs relate's official installer, which checks the download's signature and puts
+the binary in `~/.local/bin`. Set `INSTALL_RELATE_CLI = False` to skip it: the what-if then copies the data through the
+Neo4j driver instead."""),
+        code("""INSTALL_RELATE_CLI = True
+
+cli = Path.home() / ".local" / "bin" / "relate"
+if INSTALL_RELATE_CLI and not cli.exists():
+    r = subprocess.run("curl -sSfL https://relatedb.ai/install.sh | bash", shell=True, capture_output=True, text=True)
+    print((r.stdout + r.stderr).strip()[-1500:])
+if cli.exists():
+    os.environ["RELATE_BIN"] = str(cli)
+    print(subprocess.run([str(cli), "--version"], capture_output=True, text=True).stdout.splitlines()[0],
+          "-- the what-if will use relate pull")
+else:
+    print("No relate CLI: the what-if will copy the data through the Neo4j driver instead.")"""),
         md("""## 3. Keys from Colab Secrets
 
 Required: `ANTHROPIC_API_KEY`, `NEO4J_URI`, `NEO4J_PASSWORD`. Optional: `NEO4J_USER` (or `NEO4J_USERNAME`, as in Aura's
@@ -288,8 +352,9 @@ else:
         md(SIGN_IN_MD.format(n=5)),
         code(SIGN_IN),
         *renumber(QUESTIONS, 6),
-        *renumber(LEARNED, 7),
-        md("## 8. Done — save the knowledge store to Drive"),
+        *renumber(WHATIF, 7),
+        *renumber(LEARNED, 8),
+        md("## 9. Done — save the knowledge store to Drive"),
         code("""session.close()
 if DRIVE_STORE:
     shutil.copy(store, DRIVE_STORE)

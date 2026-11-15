@@ -25,6 +25,7 @@ from __future__ import annotations
 
 import re
 import sys
+import json
 import uuid
 from pathlib import Path
 
@@ -224,6 +225,26 @@ class KnowledgeBase:
                           {"id": iid, "a": answer, "nq": new_queries, "mc": usage.get("model_calls", 0),
                            "it": usage.get("input_tokens", 0), "ot": usage.get("output_tokens", 0),
                            "cr": usage.get("cache_read_input_tokens") or 0})
+
+    def record_whatif(self, iid: str, employee_id: str, result: dict) -> str:
+        """Keeps a what-if rehearsal (sandbox/whatif.py) next to the question that ran it."""
+        cur, prop = result["scenarios"]["current"], result["scenarios"]["proposed"]
+        brief = {name: {k: s[k]["median"] for k in ("approved_L1", "approved_L2", "approved_L3", "rejected", "cycles")}
+                 | {"stuck_in_runs": s["stuck_in_runs"]} for name, s in (("current", cur), ("proposed", prop))}
+        self.conn.execute("""CREATE (w:WhatIf {id:$id, employeeId:$e, createdAt:datetime(), pulledAt:$pa, method:$m,
+                                               runs:$runs, queuePOs:$qn, queueValue:$qv,
+                                               currentLimits:$cl, proposedLimits:$pl, summary:$s})
+                             WITH w MATCH (i:Interaction {id:$iid}) CREATE (i)-[:RAN]->(w)""",
+                          {"id": result["whatIfId"], "e": employee_id, "pa": result["source"]["pulled_at"],
+                           "m": result["source"]["method"], "runs": result["runs_per_scenario"],
+                           "qn": result["queue_at_pull"]["pos"], "qv": result["queue_at_pull"]["value"],
+                           "cl": [cur["limits"][k] for k in ("l1Limit", "l2Limit", "l3Limit")],
+                           "pl": [prop["limits"][k] for k in ("l1Limit", "l2Limit", "l3Limit")],
+                           "s": json.dumps(brief), "iid": iid})
+        return result["whatIfId"]
+
+    def mark_whatif_applied(self, whatif_id: str, policy_change_id: str):
+        self.conn.execute("MATCH (w:WhatIf {id:$w}) SET w.appliedAs = $pc", {"w": whatif_id, "pc": policy_change_id})
 
     def record_use(self, iid: str, template_name: str) -> bool:
         rows = self._rows("""MATCH (i:Interaction {id:$id}), (q:QueryTemplate {name:$n})

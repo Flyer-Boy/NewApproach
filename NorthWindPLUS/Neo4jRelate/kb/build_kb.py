@@ -18,6 +18,7 @@ Knowledge graph written to relate:
                    ontologyVersion, useCount, embedding?})-[:USES]->(:NodeType), -[:TRAVERSES]->(:RelType),
                                                          -[:PART_OF {via}]->(:WorkflowStep)
   (:Interaction {question, answer, employeeId, model, usage...})-[:USED]->(:QueryTemplate), -[:CREATED]->(:QueryTemplate)
+  (:Interaction)-[:RAN]->(:WhatIf {id, limits, summary...})   what-if rehearsals (sandbox/whatif.py)
   (:ModelPrinciple {text}), (:KnowledgeBase {ontologyVersion, builtAt, embeddingModel, embeddingDims})
 
 Rebuilding keeps what the agent learned: templates it saved (source 'agent') and the Interaction history are
@@ -234,7 +235,7 @@ def seed_templates() -> list[dict]:
 
 def export_learned(store: Path) -> dict:
     if not store.exists():
-        return {"templates": [], "interactions": []}
+        return {"templates": [], "interactions": [], "whatifs": []}
     conn = relate.connect(str(store), read_only=True)
     try:
         templates = [dict(r["q"]) for r in conn.execute(
@@ -246,16 +247,19 @@ def export_learned(store: Path) -> dict:
             RETURN properties(i) AS props, collect(DISTINCT u.name) AS used, collect(DISTINCT c.name) AS created""")]
         uses = {r["n"]: r["c"] for r in conn.execute(
             "MATCH (q:QueryTemplate) WHERE q.useCount > 0 RETURN q.name AS n, q.useCount AS c")}
+        whatifs = [dict(r) for r in conn.execute("""
+            MATCH (w:WhatIf) OPTIONAL MATCH (i:Interaction)-[:RAN]->(w)
+            RETURN properties(w) AS props, i.id AS interaction""")]
     except Exception:                      # an older store without these labels/properties
-        templates, interactions, uses = [], [], {}
+        templates, interactions, uses, whatifs = [], [], {}, []
     finally:
         conn.close()
     for t in templates:
         t.pop("embedding", None)
         t.pop("createdAt", None)
-    for i in interactions:
+    for i in interactions + whatifs:
         i["props"] = {k: (str(v) if type(v).__name__ == "Temporal" else v) for k, v in i["props"].items()}
-    return {"templates": templates, "interactions": interactions, "useCounts": uses}
+    return {"templates": templates, "interactions": interactions, "useCounts": uses, "whatifs": whatifs}
 
 
 def restore_learned(conn, learned: dict, labels: set, rel_types: set, sem: dict) -> dict:
@@ -278,7 +282,12 @@ def restore_learned(conn, learned: dict, labels: set, rel_types: set, sem: dict)
             conn.execute(f"""MATCH (i:Interaction {{id:$id}}) UNWIND $names AS n
                              MATCH (q:QueryTemplate {{name:n}}) CREATE (i)-[:{rel}]->(q)""",
                          {"id": i["props"].get("id"), "names": names})
-    return {"learned_templates": restored, "needs_review": review, "interactions": len(learned["interactions"])}
+    for w in learned.get("whatifs") or []:   # what-if rehearsals (sandbox/whatif.py) and the question that ran them
+        conn.execute("""CREATE (w:WhatIf) SET w = $p
+                        WITH w MATCH (i:Interaction {id:$iid}) CREATE (i)-[:RAN]->(w)""",
+                     {"p": w["props"], "iid": w.get("interaction")})
+    return {"learned_templates": restored, "needs_review": review, "interactions": len(learned["interactions"]),
+            "whatifs": len(learned.get("whatifs") or [])}
 
 
 # ---------------------------------------------------------------------------

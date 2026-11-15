@@ -39,10 +39,10 @@ Relate fits that role well:
 - **Cheap to rebuild, safe to keep.** The knowledge store is generated from the model files in seconds, and what the
   agent learned is carried over on every rebuild.
 
-## The NorthWind PLUS business cycle (running on Aura live!)
+## The NorthWind PLUS business cycle (running on Aura)
 
 The six simulation loops drive this cycle continuously. Each box is a state the graph records as a relationship to a
-Collection node (`NewPoS`, `ApprovedPoS`, and so on), so moving a PO forward means moving a relationship. (not "hidden" in a property code)
+Collection node (`NewPoS`, `ApprovedPoS`, and so on), so moving a PO forward means moving a relationship.
 
 ```mermaid
 flowchart LR
@@ -126,11 +126,37 @@ flowchart LR
 | Single-writer lock | Stops two processes from writing the store at once (see *Lessons*) | notebooks close the old session first |
 | Graph traversal for retrieval | Question → matched concepts → templates that `USE`/`TRAVERSE` them, scored by specificity | `kb_query.search_templates` |
 | Provenance as a graph | `(:Interaction)-[:USED\|CREATED]->(:QueryTemplate)`: which question used or created which query | learning loop |
+| `relate pull` (CLI, over Aura's HTTP Query API) | Copies the POs waiting for approval into a scratch store, where a proposed limit change is rehearsed with the simulation's own Cypher | `sandbox/` |
+| Cheap file copies of a store | Each rehearsal run starts from a copy of the pulled store | `sandbox/whatif.py` |
 
-Relate also has `relate pull` (Aura → local subgraph), `relate push` (local → Aura, merging on keys) and
-`relate serve` (Bolt/HTTP/MCP). The next stage uses `pull` for a **what-if sandbox**: the agent copies the POs
-waiting for approval into a scratch relate store, rehearses a proposed approval-limit change there with the
-simulation's own vetting Cypher, and only then offers the governed change on Aura. See
+## What-if sandbox: pull to experiment, governed Cypher to commit
+
+Suggested by a Neo4j staff engineer after the first post: *pull a subgraph from Aura into the agent's context, so it
+can mutate and experiment on it in isolation.* Asked *"what would happen if we raised L1 to 8000 and L2 to 20000?"*,
+the agent:
+
+1. **pulls** the POs waiting for approval, their lines and products, the approver roles and the state nodes into a
+   scratch relate store, in one statement so Aura serves one consistent snapshot while the loops keep writing;
+2. **replays** the simulation's own PO-vetting Cypher (imported from the harness, minus the APOC lock lines) on file
+   copies of that store, with today's limits and with the proposed ones, 5 runs each;
+3. **compares** approvals per level, rejections, POs left stuck and the cycles needed to clear the queue, and flags
+   POs whose cost sits on a boundary no approval rule matches;
+4. records a `(:WhatIf)` node in relate next to the question. If the change is then applied, the `PolicyChange`
+   justification on Aura cites the what-if, and the `WhatIf` records which `PolicyChange` applied it.
+
+Nothing goes back with `relate push`: push never deletes on the remote, and in this model a state change deletes the
+old state relationship. Changes still go through the governed action.
+
+The copy comes from `relate pull` when the `relate` CLI is installed (`RELATE_BIN`, or on `PATH`; the Colab notebook
+installs it), otherwise from a fallback copier through the Neo4j driver.
+
+**Give it a queue to work on.** With the rates in `run_loops.bat`, PO Vetting (12 per minute) clears new POs almost as
+fast as PO Creation (1 per minute) makes them, so a what-if may show little difference between the scenarios. Pause the
+PO Vetting loop for 10-15 minutes (or lower its `--rate` to 2 or 3) to build a backlog; raising the Customer Order rate
+also makes POs bigger, pushing more of them into the L2 and L3 bands. The simulation gives every approval level the same
+speed, so higher limits show up as fewer hand-offs and fewer cycles to clear the queue, not as one level holding others up.
+
+Details and open points:
 [DESIGN_what_if_sandbox.md](DESIGN_what_if_sandbox.md).
 
 ## The knowledge graph
@@ -185,6 +211,7 @@ question
 | `run_read_query` | Runs Cypher on Aura; returns rows and any Neo4j warnings | refused until a search ran for the question · write keywords rejected · read transaction · 20 s timeout · 500-row cap (50 to the model) |
 | `save_template` | Saves a new query as a template | read queries only · must have run successfully this question · user approval · one per question |
 | `preview_approval_bands` | How proposed limits would route the POs waiting for approval | read-only template |
+| `what_if_approval_bands` | Rehearses proposed limits on a pulled copy of the queue (see *What-if sandbox*) | never writes to Aura · scratch stores deleted afterwards · recorded as a `WhatIf` node |
 | `change_approval_bands` | Changes the L1/L2/L3 limits together, with no gaps | role taken from the session · user confirmation · the Cypher re-checks role and limits · `PolicyChange` audit node |
 
 The full ontology (~17,000 characters) sits in the system prompt with prompt caching, so it's paid for once per
@@ -312,6 +339,7 @@ account; it isn't included in a Claude Pro chat subscription.
 - *Which suppliers get their quotes rejected most often?* Tests the rewording step and template reuse.
 - *How many POs are waiting for approval?* No template exists, so the agent writes new Cypher and offers to save it.
 - *What is the number and value of purchase orders still waiting to be vetted?* Should find the template you just saved.
+- *What would happen to the approval queue if we raised L1 to 8000 and L2 to 20000?* A what-if on a pulled copy.
 - *Raise L1 to 8000 and L2 to 20000 to speed up vetting.* Preview, confirmation, `PolicyChange` audit.
 - *Who changed the approval limits, when and why?* Reads the audit trail back.
 - *What were total revenue and gross profit in the last hour?* Or the last 15 minutes: you're querying a live graph,
@@ -344,6 +372,9 @@ kb/                          the knowledge store (Relate)
   kb_write.py                shared template writing (seed and learned templates get the same shape)
   embeddings.py              none | voyage-4-nano (local) | voyage-api | hash (tests)
   eval_search.py             retrieval check; --compare <provider> for with/without embeddings
+sandbox/                     what-if rehearsals on a pulled copy
+  pull.py                    relate pull (CLI), or the fallback copier through the Neo4j driver
+  whatif.py                  replays the harness's PO-vetting Cypher with current vs proposed limits
 agent/
   agent.py                   the agent (Anthropic SDK tool use)
   aura.py                    Neo4j side: read transactions with warnings, identity, governed write
@@ -360,6 +391,7 @@ tools/make_notebooks.py            generates both notebooks
 ```
 python tests/test_agent_offline.py     # 27 checks
 python tests/test_aura_driver_path.py  # 8 checks
+python tests/test_whatif_offline.py    # 22 checks; 25 with RELATE_BIN set to a relate CLI
 python kb/eval_search.py               # retrieval: 9/12 without embeddings
 ```
 
@@ -379,6 +411,8 @@ stand-in that enforces the Neo4j driver's transaction rules.
   analyzer, so embeddings or query rewriting cover that.
 - `pip install relate-db` installs the Python library; the `relate` command-line tool (`pull`, `push`, `serve`) is a
   separate install (`install.sh` / `install.ps1` from relatedb.ai). The Python API has no `pull`.
+- The relate installer fetches the latest CLI (1.0.2 today) while PyPI has `relate-db` 1.0.1: a store written by the
+  1.0.2 CLI opened fine in the 1.0.1 library in our tests.
 - `relate pull` talks to Aura over the HTTP Query API, refuses a non-empty destination (a re-pull is never a merge),
   and `relate push` never deletes on the remote. So a fresh scratch store per experiment, and governed Cypher, not
   `push`, for changes that move state relationships.
@@ -392,7 +426,7 @@ stand-in that enforces the Neo4j driver's transaction rules.
 | 2 | Knowledge store + template search | Run live |
 | 3 | Agent with read queries and the governed change | Run live (terminal and Colab) |
 | 4 | Learning loop, provenance, warnings to the model, search-first enforcement, embeddings | Tested offline; in live testing |
-| 5 | What-if sandbox with `relate pull` (suggested by a Neo4j staff engineer) | Designed |
+| 5 | What-if sandbox with `relate pull` (suggested by a Neo4j staff engineer) | Tested offline, including the real `relate pull` against `relate serve`; not yet run against Aura |
 
 **Parking lot**
 - Copy saved templates (and possibly the question history) into the Aura graph, so they can be queried next to the
@@ -401,6 +435,11 @@ stand-in that enforces the Neo4j driver's transaction rules.
 - Measure voyage-4-nano against the 9/12 baseline.
 
 ## Changelog
+
+- **Stage 5:** what-if sandbox (`sandbox/`): `relate pull` or a fallback copier, replay of the harness's PO-vetting
+  Cypher with current vs proposed limits (5 runs each, resubmissions not replayed), boundary-PO check,
+  `what_if_approval_bands` tool, `(:Interaction)-[:RAN]->(:WhatIf)` provenance kept on rebuild, `PolicyChange`
+  justification cites the what-if. Colab installs the relate CLI; both notebooks get a What-if section.
 
 - **Stage 4:** learning loop (`save_template` with approval, `Interaction` provenance, `useCount`, learning survives
   rebuilds, `needs-review` flagging); past questions as a retrieval path; optional embeddings with a vector index;

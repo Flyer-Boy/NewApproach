@@ -85,6 +85,7 @@ def make_session(employee_id, steps, answers=None, store=None):
     s.employee_id = employee_id
     s.user = s.aura.whoami(employee_id)
     s.messages = []
+    s.whatifs = {}
     s.policy_template = s.kb.template_by_title(agent_mod.POLICY_TEMPLATE_TITLE)
     s.preview_template = s.kb.template_by_title(agent_mod.PREVIEW_TEMPLATE_TITLE)
     s.log_path = STORE_DIR / f"log-{employee_id}.jsonl"

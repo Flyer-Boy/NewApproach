@@ -21,6 +21,7 @@ from __future__ import annotations
 
 import argparse
 import json
+import shutil
 import sys
 import time
 from datetime import datetime
@@ -32,15 +33,18 @@ from dotenv import load_dotenv
 ROOT = Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(ROOT / "kb"))
 sys.path.insert(0, str(ROOT / "agent"))
+sys.path.insert(0, str(ROOT / "sandbox"))
 from kb_query import KnowledgeBase  # noqa: E402
 from kb_write import is_write       # noqa: E402
 from aura import Aura               # noqa: E402
+import whatif                       # noqa: E402
 
 DEFAULT_MODEL = "claude-sonnet-5-5"
 MAX_ROWS_TO_MODEL = 50
 POLICY_TEMPLATE_TITLE = "Change the approval bands (governed)"
 PREVIEW_TEMPLATE_TITLE = "Preview (read-only) -- how the current and the proposed bands"
 POLICY_ROLE = "ProcurementPolicyAdmin"
+WHATIF_RUNS = 5
 
 TOOLS = [
     {
@@ -83,7 +87,7 @@ TOOLS = [
             "Offer to save a NEW query you wrote (not one from the library) as a reusable template, so later "
             "questions find it. Only for a read query that already ran successfully for this question and answers "
             "a question others are likely to ask. Generalize first: use $parameters instead of hard-coded values "
-            "(then run that version). The user is asked to approve in the terminal; nothing is saved otherwise."),
+            "(then run that version). The user is asked to approve (a prompt under the notebook cell, or in the terminal); nothing is saved otherwise."),
         "input_schema": {"type": "object", "properties": {
             "title": {"type": "string", "description": "Short business title, like the library's titles."},
             "description": {"type": "string", "description": "What it answers, in business words; mention parameters."},
@@ -93,7 +97,19 @@ TOOLS = [
     {
         "name": "preview_approval_bands",
         "description": ("Read-only: show how proposed L1/L2/L3 approval limits would route the POs currently "
-                        "awaiting vetting, next to the current limits. Always run this before proposing a change."),
+                        "awaiting vetting, next to the current limits: a quick look at who moves band. For what a change would "
+                        "do to the queue, use what_if_approval_bands. Run this before change_approval_bands."),
+        "input_schema": {"type": "object", "properties": {
+            "l1Limit": {"type": "number"}, "l2Limit": {"type": "number"}, "l3Limit": {"type": "number"}},
+            "required": ["l1Limit", "l2Limit", "l3Limit"]},
+    },
+    {
+        "name": "what_if_approval_bands",
+        "description": (
+            "Rehearse proposed L1/L2/L3 approval limits on a private copy of the live queue: pulls the POs waiting "
+            "for approval into a scratch relate store, then runs the simulation's own vetting logic there with the "
+            "current and with the proposed limits (5 runs each) and compares approvals per level, rejections, POs "
+            "left stuck and cycles to clear the queue. Never writes to Aura. Takes up to a minute."),
         "input_schema": {"type": "object", "properties": {
             "l1Limit": {"type": "number"}, "l2Limit": {"type": "number"}, "l3Limit": {"type": "number"}},
             "required": ["l1Limit", "l2Limit", "l3Limit"]},
@@ -103,7 +119,7 @@ TOOLS = [
         "description": (
             "Change the L1/L2/L3 PO approval limits (all three together; each level's base is derived from the "
             "level below, so no gaps). Only users with the ProcurementPolicyAdmin role may do this; the tool "
-            "checks the role and asks the user to confirm in the terminal before anything is written. Every "
+            "checks the role and asks the user to confirm (a prompt under the notebook cell, or in the terminal) before anything is written. Every "
             "change is recorded as a PolicyChange node. Run preview_approval_bands first."),
         "input_schema": {"type": "object", "properties": {
             "l1Limit": {"type": "number"}, "l2Limit": {"type": "number"}, "l3Limit": {"type": "number"},
@@ -132,6 +148,12 @@ How to work:
 - Ask a clarifying question when the request is ambiguous (e.g. which time window, which supplier).
 - Changes: only via change_approval_bands, only after preview_approval_bands, and only when the user asked for
   the change. You can't create, approve or delete anything else; say so if asked.
+- Limit changes: when the user asks what a change WOULD DO (its effect on the queue, approvals, speed), run
+  what_if_approval_bands directly; don't stop at the preview. Use preview_approval_bands alone only for a quick look
+  at which POs fall in which band, or when the user asks for the preview. Before change_approval_bands, if no what-if
+  was run for those limits in this conversation, offer one. Report it as a comparison of the two scenarios (medians, with the range when runs disagree), name POs that
+  would be stuck or only rejectable, say how old the snapshot is and that it doesn't replay resubmissions, and give
+  its whatIfId.
 
 The current user is {user}.
 """
@@ -151,6 +173,7 @@ class Session:
         self.employee_id = employee_id
         self.user = self.aura.whoami(employee_id)
         self.messages: list[dict] = []
+        self.whatifs: dict[tuple, str] = {}     # (l1, l2, l3) -> whatIfId, for this session
         # Fixed, governed tools are bound to their templates at startup (fails fast if the store is stale).
         self.policy_template = self.kb.template_by_title(POLICY_TEMPLATE_TITLE)
         self.preview_template = self.kb.template_by_title(PREVIEW_TEMPLATE_TITLE)
@@ -200,6 +223,8 @@ class Session:
             return self.save_template(args)
         if name == "preview_approval_bands":
             return self.aura.read(self.preview_template["cypher"], {k: args[k] for k in ("l1Limit", "l2Limit", "l3Limit")})
+        if name == "what_if_approval_bands":
+            return self.what_if(args)
         if name == "change_approval_bands":
             return self.change_bands(args)
         return {"error": f"Unknown tool {name}"}
@@ -238,6 +263,19 @@ class Session:
         self.saved = True
         return {"saved": saved}
 
+    def what_if(self, args: dict) -> dict:
+        limits = tuple(float(args[k]) for k in ("l1Limit", "l2Limit", "l3Limit"))
+        print(f"  ... rehearsing L1 {limits[0]:,.0f} / L2 {limits[1]:,.0f} / L3 {limits[2]:,.0f} on a pulled copy "
+              f"({WHATIF_RUNS} runs per scenario)")
+        try:
+            result = whatif.what_if(*limits, runs=WHATIF_RUNS, aura=self.aura)
+        except Exception as exc:
+            return {"error": f"The what-if couldn't run: {type(exc).__name__}: {exc}"}
+        if "whatIfId" in result:
+            self.kb.record_whatif(self.interaction_id, self.employee_id, result)
+            self.whatifs[limits] = result["whatIfId"]
+        return result
+
     def change_bands(self, args: dict) -> dict:
         # Identity comes from the session, never from the model.
         if POLICY_ROLE not in self.user["roles"]:
@@ -246,6 +284,9 @@ class Session:
         l1, l2, l3 = (float(args[k]) for k in ("l1Limit", "l2Limit", "l3Limit"))
         if not (0 < l1 < l2 < l3):
             return {"refused": "Limits must be positive and increasing (L1 < L2 < L3)."}
+        rehearsal = self.whatifs.get((l1, l2, l3))
+        if rehearsal and rehearsal not in args["justification"]:
+            args["justification"] = f"{args['justification']} [rehearsed in what-if {rehearsal}]"
         print(f"\n  >>> Confirm approval-band change requested by {self.user['name']}:"
               f"\n      L1 limit {l1:,.2f} | L2 {l1 + 0.01:,.2f}-{l2:,.2f} | L3 {l2 + 0.01:,.2f}-{l3:,.2f}"
               f"\n      Justification: {args['justification']}")
@@ -257,6 +298,8 @@ class Session:
         if "rows" in result and not result["rows"]:
             return {"refused": "The database refused the change (role or limit check failed). Nothing was written."}
         self.kb.record_use(self.interaction_id, self.policy_template["name"])
+        if rehearsal and result.get("rows"):
+            self.kb.mark_whatif_applied(rehearsal, result["rows"][0].get("PolicyChangeID"))
         return result
 
     # ---------------- conversation ----------------
@@ -303,6 +346,10 @@ class Session:
             return f"\"{args['query']}\" -> " + "; ".join(t["title"][:50] for t in output["templates"][:3])
         if "error" in output:
             return f"error: {output['error'][:120]}"
+        if "whatIfId" in output:
+            p = output["scenarios"]["proposed"]
+            return (f"{output['whatIfId']}: {output['queue_at_pull']['pos']} POs pulled via {output['source']['method']}; "
+                    f"proposed: median {p['cycles']['median']} cycles, {p['stuck_in_runs']} run(s) with stuck POs")
         if "saved" in output:
             return f"saved as template '{output['saved']['name']}'"
         if "rows" in output:
@@ -313,6 +360,7 @@ class Session:
     def close(self):
         self.aura.close()
         self.kb.close()
+        shutil.rmtree(whatif.SCRATCH, ignore_errors=True)   # pulled copies hold business data
 
 
 def main():
