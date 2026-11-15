@@ -299,6 +299,16 @@ account; it isn't included in a Claude Pro chat subscription.
 - *What is the number and value of purchase orders still waiting to be vetted?* Should find the template you just saved.
 - *Raise L1 to 8000 and L2 to 20000 to speed up vetting.* Preview, confirmation, `PolicyChange` audit.
 - *Who changed the approval limits, when and why?* Reads the audit trail back.
+- *What is the Total Revenue, and Gross Profit for the last 1 hour?* 
+- *What Available products urgently need to be restock to fulfill customer orders?* 
+- *What are our top 10 customers by revenue and by product quantity?*
+- *Who is doing the most PO vetting?*
+- *Where is procurement PO Vetting friction concentrated?*
+- *What supplier has the most rejected RFQs?*
+- *What Available products are less ordered?* 
+- *Who is our best sales person?*
+- *What is our best sales region?*
+- *What emplyee gives more discount to our customers?*
 
 ## Project layout
 
