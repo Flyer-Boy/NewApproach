@@ -258,9 +258,12 @@ A proof of concept is worth its surprises. These came from running against the l
 
 1. `model/NorthWind_PLUS_Graph_Data_Model_Import_v2.3.2.cypher`, **lines 95–1171**. This wipes the database and
    builds NorthWind PLUS v2.3.2. Optional: the Recommendation Engine, lines 1271–1334. To keep an existing v2.3.1
-   database instead, run `model/NorthWind_PLUS_v2.3.2_Upgrade_from_v2.3.1.cypher`.
-2. `model/NorthwindPlusGraphType_v2.3.2.cypher` (the GRAPH TYPE schema).
-3. Start the six loops. On Windows, `run_loops.bat` opens all six, reads credentials from `.env`, and uses rates that
+   database instead, run `model/NorthWind_PLUS_v2.3.2_Upgrade_from_v2.3.1.cypher`.  This rebuilds the classic Northwind
+   database as a Graph-Native application and extends it into a complete, 360-degree business cycle: customer orders,
+   low-stock detection, purchase orders with three levels of approval, supplier RFQs, warehouse receiving, finance closure,
+   and order fulfillment. All of these run natively on the Graph from here on. That is, no more data ingestion, ETL/Data pipelines.
+3. `model/NorthwindPlusGraphType_v2.3.2.cypher` (the GRAPH TYPE schema). This adds a governance layer to the model, enforcing the ontology.
+4. Start the six loops. On Windows, `run_loops.bat` opens all six, reads credentials from `.env`, and uses rates that
    let vetting and fulfillment keep up with new orders. Elsewhere, run `python model/NorthwindPlus_Stress_Test.py --loop <name> --rate <per minute>`, once per loop.
 
 ### 1a. Google Colab
