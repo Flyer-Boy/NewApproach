@@ -92,8 +92,25 @@ The agent previews first, then asks you to confirm in a text box under the cell:
 Only EmployeeID 25 can apply it."""),
     code('ask("Raise L1 to 8000 and L2 to 20000 to speed up vetting.")'),
     code('ask("Who changed the approval limits, when and why?")'),
-    md("### Your questions"),
-    code('# ask("Which products are at risk of running out?")'),
+    md("""### Your questions
+
+Some ideas to start from (also in the README's *Things to ask*). Remove the `#` in front of one line and run the
+cell, or copy a line into a new cell and change it: another time window, a top 5 instead of a top 10, another level.
+One question per cell keeps each answer next to its question."""),
+    code('''# ask("What were total revenue and gross profit in the last hour?")        # or: in the last 15 minutes
+# ask("Which available products urgently need restocking to fulfill customer orders?")
+# ask("Who are our top 10 customers by revenue, and by product quantity?")
+# ask("Who does the most PO vetting?")
+# ask("Where is the PO vetting friction concentrated?")
+# ask("Which supplier has the most rejected RFQs?")
+# ask("Which available products are ordered least?")
+# ask("Who is our best salesperson?")
+# ask("Which is our best sales region?")
+# ask("Which employee gives our customers the biggest discounts?")
+# ask("Which fulfillment clerk received the most supplier deliveries (POs)?")   # or: customer orders
+# ask("How are the POs waiting for approval spread across the L1, L2 and L3 bands?")
+# ask("Which products are at risk of running out?")'''),
+    code('# ask("")'),
 ]
 
 WHATIF = [
