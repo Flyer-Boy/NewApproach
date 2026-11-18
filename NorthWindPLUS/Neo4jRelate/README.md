@@ -1,6 +1,6 @@
 # NorthWind PLUS × Relate by Neo4j
 
-
+![Project Logo](https://github.com/Flyer-Boy/NewApproach/blob/main/NorthWindPLUS/Neo4jRelate/Neo4j%20Relate%26Aura.jpeg)
 
 **An AI agent that learns its way around a live graph database.**
 
