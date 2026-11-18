@@ -102,6 +102,11 @@ Procurement Assistant work (this user holds the role):
   Splitting POs to avoid an approval level is a procurement control failure. Show the level a PO needs, nothing more.
 - If a quantity is far from the recommendation, say so and make sure the justification explains it.
 - After writing, report the PO numbers, any lines left out (and why), and the approval level each PO goes to.
+- Only say a PO was created, resubmitted or cancelled when the tool result lists it. If the user asks for a write,
+  call the tool (it asks them to confirm); never describe a write that didn't happen. If a tool writes nothing,
+  say so plainly and give its reason.
+- A rejected PO marked "nothing is still needed" can't be resubmitted: say why from its lines (units in stock, units
+  already on active POs, quantities promised to open orders) and offer to cancel it instead.
 """
 
 
@@ -294,6 +299,12 @@ class Procurement:
                 return {"refused": f"{sbm['rejectedPO']} isn't in the current resubmission recommendation."}
             if not (sbm.get("justification") or "").strip():
                 return {"refused": f"{sbm['rejectedPO']} has no justification. Ask the user for one."}
+            if not any(l.get("RecommendedQt") for l in rec["Lines"]):
+                why = "; ".join(f"{l['Product']}: {l.get('UnitsInStock')} in stock, {l.get('OnActivePOs')} on active POs, "
+                                f"{l.get('OpenOrderQty')} promised to open orders, threshold {l.get('StockThreshold')}"
+                                for l in rec["Lines"])
+                return {"refused": f"{sbm['rejectedPO']} can't be resubmitted: nothing on it is still needed ({why}). "
+                                   f"Offer to cancel it instead. Nothing was written."}
             if (bad := self._bad_items(sbm["items"])):
                 return {"refused": f"{sbm['rejectedPO']}: {bad}."}
             recd = {l["ProductID"]: l for l in rec["Lines"]}

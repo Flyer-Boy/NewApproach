@@ -379,6 +379,11 @@ class Session:
             return f"\"{args['query']}\" -> " + "; ".join(t["title"][:50] for t in output["templates"][:3])
         if "error" in output:
             return f"error: {output['error'][:120]}"
+        if name == "recommend_resubmissions" and "rows" in output:
+            still = sum(1 for r in output["rows"] if r.get("EstimatedCost"))
+            return f"{len(output['rows'])} rejected PO(s): {still} can be resubmitted, {len(output['rows']) - still} have nothing still needed"
+        if name == "recommend_restock" and "rows" in output:
+            return f"{len(output['rows'])} PO(s) recommended" + (" -- WARNING: a loop still seems to be running" if "warning" in output else "")
         if "whatIfId" in output:
             p = output["scenarios"]["proposed"]
             return (f"{output['whatIfId']}: {output['queue_at_pull']['pos']} POs pulled via {output['source']['method']}; "
@@ -388,7 +393,8 @@ class Session:
         if "created" in output:
             return f"created {', '.join(c['PONumber'] for c in output['created']) or 'nothing'}; {len(output['left_out'])} line(s) left out"
         if "resubmitted" in output:
-            return f"resubmitted {', '.join(c['ResubmittedFrom'] + ' as ' + c['PONumber'] for c in output['resubmitted']) or 'nothing'}"
+            done = ', '.join(c['ResubmittedFrom'] + ' as ' + c['PONumber'] for c in output['resubmitted']) or 'nothing'
+            return f"resubmitted {done}; {len(output['not_resubmitted'])} not resubmitted, {len(output['left_out'])} line(s) left out"
         if "cancelled" in output:
             return f"cancelled {', '.join(output['cancelled']) or 'nothing'}"
         if "rows" in output:

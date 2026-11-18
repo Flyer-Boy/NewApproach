@@ -174,6 +174,10 @@ def main():
           and rs["PO-R1"]["Rejection"]["Level"] == "L1")
     check("PO-R2 (discontinued product) is flagged as a candidate for cancelling",
           rs["PO-R2"]["EstimatedCost"] == 0 and "cancelling" in rs["PO-R2"]["ApprovalLevelNeeded"])
+    nothing = bernard.tool("resubmit_purchase_orders", {"resubmissions": [
+        {"rejectedPO": "PO-R2", "items": [{"productId": "4", "qty": 40}], "justification": "Try again."}]})
+    check("resubmitting a PO with nothing still needed is refused up front, with the reason and the cancel option",
+          "refused" in nothing and "nothing on it is still needed" in nothing["refused"] and "cancel" in nothing["refused"])
     res, _ = quiet(bernard.tool, "resubmit_purchase_orders", {"resubmissions": [
         {"rejectedPO": "PO-R1", "items": [{"productId": "1", "qty": 25}], "justification": "Lower quantity, as L1 asked."}]})
     check("PO-R1 resubmitted as a new PO", len(res["resubmitted"]) == 1 and res["resubmitted"][0]["ResubmittedFrom"] == "PO-R1")
