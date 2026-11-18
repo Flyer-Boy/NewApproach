@@ -1,0 +1,3 @@
+# Optional: semantic search with voyage-4-nano run locally (EMBEDDINGS=voyage-4-nano)
+sentence-transformers>=5
+torch
