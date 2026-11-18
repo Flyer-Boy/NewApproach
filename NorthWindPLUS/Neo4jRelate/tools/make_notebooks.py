@@ -192,7 +192,11 @@ The agent never suggests splitting a PO to fit under a lower approval limit, and
 **This needs `SIMULATION_MODE = "agents"`** (set in step "Sign in", then rerun it) and the loops started with
 `run_loops_agents.bat`. In `"full"` mode the loops create and resubmit POs, so the agent offers no PO tools and only
 answers questions about them."""),
-    code('sign_in("16")      # Albert Camus, Procurement Assistant'),
+    code('''sign_in("16")      # Albert Camus, Procurement Assistant
+if session.mode != "agents":
+    print("\\nSIMULATION_MODE is 'full', so the agent offers no PO tools (in full mode the loops create POs). "
+          "If you started run_loops_agents.bat: set SIMULATION_MODE = 'agents' in step 'Sign in', rerun that cell, "
+          "then this one.")'''),
     code('ask("What needs restocking?")'),
     md("Reply in your own words, for example the line below: which POs to create, any quantity changes, and why."),
     code('# ask("Create PO 1 as recommended, and PO 2 with 20 units fewer of the first product. Justification: restock ahead of the weekend orders.")'),

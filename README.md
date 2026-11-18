@@ -6,7 +6,7 @@ This repository contains the scripts, data and prototype code behind my articles
 
 It holds four proofs of concept, from a Ride-Hailing app to a full 360-degree procurement and order-fulfillment system that runs six business processes concurrently against the same live graph — now on **Neo4j, Memgraph, FalkorDB, Quine and Ultipa**. On Quine, that business even runs itself: a single recipe streams in customers, suppliers and deliveries, and standing queries apply the company's rules inside the graph, with no application code.
 
-And on Neo4j, an **AI agent** now works alongside the live simulation: it answers business questions, changes a business rule under governance, and **learns** new queries as people approve them. It keeps its own knowledge graph in **[Relate by Neo4j](https://relatedb.ai/)**, Neo4j's new embedded graph database for AI agents, while the business stays in Neo4j Aura.
+And on Neo4j, an **AI agent** now works alongside the live simulation: it answers business questions, changes a business rule under governance, **learns** new queries as people approve them, and has started to **take over part of the simulation's work**: a Procurement Assistant creates and resubmits purchase orders with the agent's recommendations, with a full audit trail. It keeps its own knowledge graph in **[Relate by Neo4j](https://relatedb.ai/)**, Neo4j's new embedded graph database for AI agents, while the business stays in Neo4j Aura.
 
 ---
 
@@ -64,7 +64,7 @@ I'm aware that current graph databases are not fully optimized for this approach
 | [**RideHailing**](RideHailing) | The core concepts in a familiar domain: passengers, drivers, cars and bookings moving between states | Full **React + TypeScript** prototype app running directly on the graph |
 | [**TenderWorkflow**](TenderWorkflow) | A tendering system with intertwined workflows — vendor, tender and bid vetting with multi-level approvals — where the graph is both the data and the logic layer | Full ontology, Neo4j **GRAPH TYPE** schema, RDF/Turtle ontology, Python random test generator |
 | [**NorthWind**](NorthWind) | The classic Northwind database, remodeled with a Graph mentality | Cleaned CSV import files |
-| [**NorthWindPLUS**](NorthWindPLUS) | Northwind extended into a full 360-degree business cycle: customer orders, low-stock detection, POs with 3-level vetting, supplier RFQs, warehouse, finance and order fulfillment | Six concurrent Python simulation loops stress-testing the graph; ported to 5 graph databases (including an ISO GQL version for Ultipa); on Quine, the business rules run as Standing Queries — and a **recipe version** runs the whole simulation inside the graph; on Neo4j, an **AI agent built on Relate by Neo4j** answers questions about the live business, changes approval limits under governance and learns — see the [NorthWindPLUS README](NorthWindPLUS/README.md) and the [agent's README](NorthWindPLUS/Neo4jRelate/README.md) |
+| [**NorthWindPLUS**](NorthWindPLUS) | Northwind extended into a full 360-degree business cycle: customer orders, low-stock detection, POs with 3-level vetting, supplier RFQs, warehouse, finance and order fulfillment | Six concurrent Python simulation loops stress-testing the graph; ported to 5 graph databases (including an ISO GQL version for Ultipa); on Quine, the business rules run as Standing Queries — and a **recipe version** runs the whole simulation inside the graph; on Neo4j, an **AI agent built on Relate by Neo4j** answers questions about the live business, changes approval limits under governance, learns, and takes over PO creation with a Procurement Assistant — see the [NorthWindPLUS README](NorthWindPLUS/README.md) and the [agent's README](NorthWindPLUS/Neo4jRelate/README.md) |
 
 The Cypher scripts are heavily commented and explain what each block does and why, so they work well as a learning resource for applying the principles above.
 
@@ -79,11 +79,11 @@ I started with Neo4j and keep testing the models on other graph databases. When 
 | RideHailing | ✅ | ✅ | | | |
 | TenderWorkflow | ✅ (v7.1, GRAPH TYPE) | ✅ (v7.1) | 🧪 beta (v7.1) | | |
 | NorthWind | ✅ | | | | |
-| NorthWindPLUS | ✅ (v2.3.1, GRAPH TYPE; v2.3.2 + AI agent on Relate) | ✅ | ✅ | ✅ (v2.4, Standing Queries + recipe) | ✅ (v2.3.1, ISO GQL) |
+| NorthWindPLUS | ✅ (v2.3.1, GRAPH TYPE; v2.3.3 + AI agent on Relate) | ✅ | ✅ | ✅ (v2.4, Standing Queries + recipe) | ✅ (v2.3.1, ISO GQL) |
 
 Quine doesn't support properties on relationships, so the Quine version uses **model v2.4**, in which every edge that carried data becomes a small node. The principles are unchanged.
 
-On Neo4j, **model v2.3.2** (in [`NorthWindPLUS/Neo4jRelate/model`](NorthWindPLUS/Neo4jRelate/model)) adds what the AI agent needs: a `ProcurementPolicyAdmin` role and a `PolicyChange` audit node, so the L1/L2/L3 approval limits can be changed safely while the simulation runs, with every change recorded in the graph.
+On Neo4j, **model v2.3.3** (in [`NorthWindPLUS/Neo4jRelate/model`](NorthWindPLUS/Neo4jRelate/model)) adds what the AI agent needs: a `ProcurementPolicyAdmin` role and a `PolicyChange` audit node (v2.3.2), so the L1/L2/L3 approval limits can be changed safely while the simulation runs; and an audit trail for agents and people working next to the loops (v2.3.3): `Source`, `Justification` and `RecommendedQt` on purchase-order decisions, a `CancelledPoS` state, and contiguous approval bands.
 
 The Ultipa version is written in **ISO GQL** rather than Cypher, with the same model, nodes, relationships and properties as the Neo4j version.
 
@@ -101,7 +101,7 @@ The easiest way in is **Neo4j**:
 
 > ⚠️ Most scripts begin with `MATCH (n) DETACH DELETE n` to clear the database. Run them on an empty or disposable database.
 
-The GRAPH TYPE schema scripts (`TenderGraphType v1.cypher`, `NorthwindPlusGraphType_v1.cypher`, `NorthwindPlusGraphType_v2.3.2.cypher`) use Neo4j's GRAPH TYPE schema enforcement, introduced as a preview in Neo4j 2026.02 / Cypher 25. Check that your Neo4j version supports it before running them.
+The GRAPH TYPE schema scripts (`TenderGraphType v1.cypher`, `NorthwindPlusGraphType_v1.cypher`, `NorthwindPlusGraphType_v2.3.3.cypher`) use Neo4j's GRAPH TYPE schema enforcement, introduced as a preview in Neo4j 2026.02 / Cypher 25. Check that your Neo4j version supports it before running them.
 
 The Python simulators need Python 3 and the driver for your database (for example `pip install neo4j`). Connection settings are passed as environment variables, described at the top of each script.
 
@@ -167,7 +167,7 @@ And on Neo4j, an AI agent works alongside the simulation:
 
 | Folder | What it is |
 |---|---|
-| [`NorthWindPLUS/Neo4jRelate`](NorthWindPLUS/Neo4jRelate/README.md) | **An AI agent that learns its way around the live graph.** It answers business questions in plain language, changes the approval limits under governance (role check, preview, confirmation, audit trail), and saves new queries as reusable knowledge once a person approves them. Its knowledge graph (ontology, query library, question history) lives in **Relate by Neo4j**; the business stays in Neo4j Aura. Runs in Google Colab or Jupyter, with model v2.3.2. On its first live run it found a bug in the simulation itself. |
+| [`NorthWindPLUS/Neo4jRelate`](NorthWindPLUS/Neo4jRelate/README.md) | **An AI agent that learns its way around the live graph.** It answers business questions in plain language, changes the approval limits under governance (role check, preview, confirmation, audit trail), and saves new queries as reusable knowledge once a person approves them. In *agents* mode, a Procurement Assistant takes over PO creation and resubmission from the loops: the agent recommends, the person decides and justifies, governed Cypher writes. Its knowledge graph (ontology, query library, question history) lives in **Relate by Neo4j**; the business stays in Neo4j Aura. Runs in Google Colab or Jupyter, with model v2.3.3. On its first live run it found a bug in the simulation itself. |
 
 ---
 

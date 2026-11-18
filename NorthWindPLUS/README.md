@@ -89,7 +89,7 @@ Approval routing depends on the PO amount and on the `ApprovalBase` / `ApprovalL
 
 | | Neo4j | Memgraph | FalkorDB | Quine | Ultipa |
 |---|---|---|---|---|---|
-| Model version | v2.3.1 (v2.3.2 for the AI agent) | v2.3.1 port | v2.3.1 port | v2.4 (no edge properties) | v2.3.1 port (ISO GQL) |
+| Model version | v2.3.1 (v2.3.3 for the AI agent) | v2.3.1 port | v2.3.1 port | v2.4 (no edge properties) | v2.3.1 port (ISO GQL) |
 | Import | `.cypher` in Query console | `.cypher` in Query console | `.sh` via `redis-cli` | `.sh` via Quine REST API | `.gql` via `run_gql_script.py` (or Ultipa Manager) |
 | Simulation harness | `NorthwindPlus_Stress_Test.py` | `NorthwindPlus_Stress_Test_MemGraph.py` | `NorthwindPlus_Stress_Test_FalkorDB.py` | `NorthwindPlus_Stress_Test_Quine.py`, **or** the `northwind-plus-simulation.yaml` recipe (no Python) | `NorthwindPlus_Stress_Test_Ultipa.py` |
 | Python dependency | `neo4j` driver | `neo4j` driver (Bolt) | `falkordb` | none (standard library) | `ultipa` (imported as `gqldb`) |
@@ -115,15 +115,17 @@ NorthWindPLUS/
 ├── NorthwindPlus_Stress_Test_FalkorDB.py                  Concurrency harness — FalkorDB
 ├── PySetup.bat                                            Windows: opens 8 loop windows against Neo4j
 ├── MPySetup.bat                                           Windows: opens 8 loop windows against Memgraph
-├── AI_Agents_Food_For_Thought.md                          Ideas for an agentic layer (the first agent is built: see Neo4jRelate/)
-├── Neo4jRelate/                                          AI agent on Relate by Neo4j, with model v2.3.2 — see its README
+├── AI_Agents_Food_For_Thought.md                          Ideas for an agentic layer (the first agents are built: see Neo4jRelate/)
+├── Neo4jRelate/                                          AI agent on Relate by Neo4j, with model v2.3.3 — see its README
 │   ├── README.md
 │   ├── NorthWind_PLUS_Agent_Colab.ipynb                 Google Colab front end (knowledge store kept on Google Drive)
 │   ├── NorthWind_PLUS_Agent.ipynb                       Local Jupyter front end
-│   ├── run_loops.bat                                    Windows: the six loops, credentials read from .env
-│   ├── model/                                           v2.3.2: import script, GRAPH TYPE, RDF ontology, upgrade from v2.3.1, harness
+│   ├── run_loops_full.bat                               Windows: full mode, all six loops (credentials read from .env)
+│   ├── run_loops_agents.bat                             Windows: agents mode, five loops; PO creation and resubmission by the agent
+│   ├── model/                                           v2.3.3: import script, GRAPH TYPE, RDF ontology, upgrades from v2.3.1 and v2.3.2, harness
 │   ├── kb/                                              The agent's knowledge graph in Relate: build, hybrid search, learning loop, embeddings
-│   ├── agent/                                           The agent (Claude + tools) and its read-only / governed access to Neo4j
+│   ├── agent/                                           The agent (Claude + tools, offered by role) and its read-only / governed access to Neo4j
+│   ├── sandbox/                                         What-if rehearsals on a subgraph copied from Aura with relate pull
 │   └── tests/                                           Offline tests (no API key, no Aura needed)
 ├── Ultipa/                                                ISO GQL port for Ultipa GQLDB — see its README
 │   ├── README.md
@@ -200,7 +202,7 @@ Then go back to the Query console and watch the graph change in real time.
 
 **4. (Optional) Add the AI agent**
 
-The [`Neo4jRelate/`](Neo4jRelate/README.md) folder adds model **v2.3.2** and an AI agent that answers questions about the running business, changes the approval limits under governance and learns new queries. Build the graph with its v2.3.2 import script (or upgrade a v2.3.1 database in place with `NorthWind_PLUS_v2.3.2_Upgrade_from_v2.3.1.cypher`), then open the Colab or Jupyter notebook. Its README has the details.
+The [`Neo4jRelate/`](Neo4jRelate/README.md) folder adds model **v2.3.3** and an AI agent that answers questions about the running business, rehearses and changes the approval limits under governance, learns new queries, and, in its *agents* mode, takes over PO creation and resubmission from the loops with a Procurement Assistant. Build the graph with its v2.3.3 import script (or upgrade a v2.3.2 database in place with `NorthWind_PLUS_v2.3.3_Upgrade_from_v2.3.2.cypher`), start the loops with `run_loops_full.bat` or `run_loops_agents.bat`, then open the Colab or Jupyter notebook. Its README has the details.
 
 ---
 
@@ -387,7 +389,7 @@ Play with the rates to simulate different loads — for example, the Windows lau
 
 ## Schema and ontology
 
-- **`Neo4jRelate/model/NorthwindPlusGraphType_v2.3.2.cypher`** and **`NorthwindPlusGraph_RDF-turtle_v2.3.2.ttl`** — the v2.3.2 versions, which add the `PolicyChange` node and its `REQUESTED_BY` / `CHANGED_ROLE` relationships. The AI agent builds its knowledge graph from these two files.
+- **`Neo4jRelate/model/NorthwindPlusGraphType_v2.3.3.cypher`** and **`NorthwindPlusGraph_RDF-turtle_v2.3.3.ttl`** — the agent's versions. v2.3.2 added the `PolicyChange` node and its `REQUESTED_BY` / `CHANGED_ROLE` relationships; v2.3.3 adds an audit trail for agents and people acting next to the loops (`Source`, `Justification` and `RecommendedQt`), the `CancelledPoS` state, and contiguous approval bands. The AI agent builds its knowledge graph from these two files.
 - **`NorthwindPlusGraphType_v1.cypher`** — a Neo4j `GRAPH TYPE` declaring every node label, relationship type, key and required property in the model, so the database itself rejects structurally invalid writes.
 - **`NorthwindPlusGraph_RDF-turtle_v1.ttl`** — the same schema expressed in RDF/OWL. Two top-level classes, `:Entity` and `:Collection`, make the *Proper Noun Nodes vs. Collections* principle explicit, and `owl:hasKey` stands in for `REQUIRE … IS KEY`.
 
@@ -410,17 +412,19 @@ The model is the same everywhere (v2.4 on Quine only removes edge properties). W
 
 ## The AI agent — Relate by Neo4j
 
-[`Neo4jRelate/`](Neo4jRelate/README.md) is the first agent built on top of NorthWind PLUS. It runs *alongside* the six loops, against the same live Neo4j Aura database:
+[`Neo4jRelate/`](Neo4jRelate/README.md) is the first agent built on top of NorthWind PLUS. It runs against the same live Neo4j Aura database as the loops, in one of two modes: *full* (alongside all six loops) or *agents* (where it takes over part of the simulation's work):
 
 - **Answers business questions in plain language** ("Which suppliers get their quotes rejected most often?", "How many POs are waiting for approval?") by finding a proven Cypher template, adapting one, or writing new Cypher from the ontology, always in read-only transactions.
 - **Changes a business rule under governance.** The L1/L2/L3 approval limits live on role nodes and every vetting query reads them at execution time, so changing them changes how the next PO is vetted, with no code change and no restart. The agent can change them only for someone holding the new `ProcurementPolicyAdmin` role, after a preview and an explicit confirmation, and every change is recorded as a `PolicyChange` node.
+- **Rehearses before changing.** A what-if copies the POs waiting for approval into a scratch Relate store with `relate pull` and replays the simulation's own vetting Cypher with the current and proposed limits.
+- **Takes over a business process (agents mode).** A Procurement Assistant asks what needs restocking; the agent recommends POs with the loop's own rule; the person accepts, changes quantities and justifies each PO; governed Cypher writes them. Rejected POs are resubmitted or cancelled the same way. Every PO records who, when, why, `Source: "agent"` and the recommended quantity next to the one ordered.
 - **Learns.** Every question is kept as an `Interaction`; new queries that worked become templates once a person approves them, and later questions find them.
 
 Its knowledge (the ontology built from the GRAPH TYPE and the RDF file, the query library from the import script, the question history) lives in **[Relate by Neo4j](https://relatedb.ai/)**, an embedded graph database that runs inside the agent's process. The business data never leaves Aura. This fits the model's principles: the semantics an AI needs are already in the graph, so the agent reads them directly instead of relying on an ETL pipeline.
 
 ## AI agents — food for thought
 
-[`AI_Agents_Food_For_Thought.md`](AI_Agents_Food_For_Thought.md) explores what changes when an AI agent becomes another actor that reads graph context and writes decisions back — assisting PO vetting within the existing approval bands, learning from the `Comment` already recorded on every approval/rejection, and tuning approval levels. It also includes an example that turned out *not* to need AI (order-fulfillment fairness). The [Relate agent](Neo4jRelate/README.md) now covers the question-answering side and governed tuning of approval levels; assisting PO vetting and learning from the `Comment`s remain ideas.
+[`AI_Agents_Food_For_Thought.md`](AI_Agents_Food_For_Thought.md) explores what changes when an AI agent becomes another actor that reads graph context and writes decisions back — assisting PO vetting within the existing approval bands, learning from the `Comment` already recorded on every approval/rejection, and tuning approval levels. It also includes an example that turned out *not* to need AI (order-fulfillment fairness). The [Relate agent](Neo4jRelate/README.md) now covers the question-answering side, governed tuning of approval levels, and PO creation and resubmission with a person in charge; assisting PO vetting and learning from the `Comment`s remain ideas (v2.3.3 already records `Source` on every vetting decision, ready for a vetting agent).
 
 ---
 

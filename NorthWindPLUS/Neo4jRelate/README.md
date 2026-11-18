@@ -46,6 +46,40 @@ Relate fits that role well:
 - **Cheap to rebuild, safe to keep.** The knowledge store is generated from the model files in seconds, and what the
   agent learned is carried over on every rebuild.
 
+## Why it works: a graph-native system of record
+
+Relate gives the agent a place to think, but what makes this proof of concept work is how the system of record on
+Aura is modeled. NorthWind PLUS is **graph-native**: every state and every piece of business context is an explicit
+relationship, not a property or a status column. The graph doesn't only hold the data; it's a **state and context
+machine** that an agent can read directly.
+
+- **State is a relationship to a Collection node.** A PO waiting for approval is linked to `NewPoS`; approval moves
+  that link to `ApprovedPoS`. "What's waiting?" is a pattern match, not a filter on a status field whose values only
+  the application knows.
+- **Context lives on the edges.** Who approved or rejected a PO, when, why, and whether a loop or a person with the
+  agent made the decision are properties of the relationship that records the decision (`HAS_L1_PO_REJECTION
+  {Date, Comment, Source}`, `PO_CREATED_BY {Date, Justification, Source}`). Nothing is overwritten.
+- **Rules are data.** The approval limits sit on the `RolE` nodes and are read at the moment each PO is vetted, so a
+  governed change takes effect immediately and is itself recorded as a `PolicyChange`.
+- **Nodes are never deleted.** History stays in the graph, so the trail behind any decision is a traversal away.
+
+That's why each piece of the agent can stay simple. Its ontology comes straight from the GRAPH TYPE and RDF files;
+its questions are pattern matches on live state; its writes are fixed Cypher that moves a relationship and records
+why; a what-if pulls a subgraph that carries its own states and rules; and the audit trail exists because the model
+records decisions as edges, not because the agent adds logging. With the same data in tables and status columns,
+the agent would first have to rebuild that meaning from application code. Here it reads the meaning from the graph,
+**live**, while the business runs.
+
+```cypher
+// Everything an agent needs to explain one PO's history: its states, decisions, who, when and why
+MATCH (po:PurchaseOrder {PONumber: $po})
+OPTIONAL MATCH (state)-[s]->(po) WHERE state:NewPoS OR state:ApprovedPoS OR state:RejectedPoS OR state:CancelledPoS
+OPTIONAL MATCH (po)-[d]->(e:Employee)-[:HAS_PERSON]->(p:Person)
+RETURN labels(state)[0] AS CurrentState,
+       collect({decision: type(d), by: p.FirstName + " " + p.LastName, date: toString(d.Date),
+                why: coalesce(d.Comment, d.Justification), source: d.Source}) AS Decisions
+```
+
 ## The NorthWind PLUS business cycle (running on Aura)
 
 Five simulation loops and a Procurement Assistant (with the agent) drive this cycle continuously. Each box is a state
@@ -520,7 +554,7 @@ stand-in that enforces the Neo4j driver's transaction rules.
 | 3 | Agent with read queries and the governed change | Run live (terminal and Colab) |
 | 4 | Learning loop, provenance, warnings to the model, search-first enforcement, embeddings | Tested offline; in live testing |
 | 5 | What-if sandbox with `relate pull` (suggested by a Neo4j staff engineer) | Run live (Colab) |
-| 6 | Model v2.3.3 + Procurement Assistant agent: PO creation and resubmission handed from the loops to a person with the agent; two run modes (full, agents) | Tested offline; not yet applied to Aura |
+| 6 | Model v2.3.3 + Procurement Assistant agent: PO creation and resubmission handed from the loops to a person with the agent; two run modes (full, agents) | Run live (Colab, agents mode): 27 POs created with changes, vetted by the loop; 16 rejected POs resubmitted or cancelled |
 
 **Parking lot**
 - Copy saved templates (and possibly the question history) into the Aura graph, so they can be queried next to the
