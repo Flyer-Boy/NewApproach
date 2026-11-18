@@ -3,8 +3,8 @@
 TOY = """
 CREATE (rs:RoleS {Name:"RoleS"}), (ed:EmployeeDirectorY {Name:"EmployeeDirectorY"}),
   (l1:RolE {Title:"Level1Approver", ApprovalBase:0.00, ApprovalLimit:5000.00, Rules:"old"}),
-  (l2:RolE {Title:"Level2Approver", ApprovalBase:5000.01, ApprovalLimit:12500.00, Rules:"old"}),
-  (l3:RolE {Title:"Level3Approver", ApprovalBase:12500.01, ApprovalLimit:500000.00, Rules:"old"}),
+  (l2:RolE {Title:"Level2Approver", ApprovalBase:5000.00, ApprovalLimit:12500.00, Rules:"old"}),
+  (l3:RolE {Title:"Level3Approver", ApprovalBase:12500.00, ApprovalLimit:500000.00, Rules:"old"}),
   (pp:RolE {Title:"ProcurementPolicyAdmin"}),
   (pp)-[:IS_ACTIVE_ROLE {StartDate:datetime()}]->(olivia:Employee {EmployeeID:"25", Email:"Olivia.Bennett@northwind.com"})-[:HAS_PERSON]->(:Person {FirstName:"Olivia", LastName:"Bennett"}),
   (l1)-[:IS_ACTIVE_ROLE {StartDate:datetime()}]->(gloria:Employee {EmployeeID:"12", Email:"Gloria.Gaynor@northwind.com"})-[:HAS_PERSON]->(:Person {FirstName:"Gloria", LastName:"Gaynor"}),

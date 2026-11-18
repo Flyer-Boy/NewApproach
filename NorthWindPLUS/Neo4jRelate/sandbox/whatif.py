@@ -30,16 +30,16 @@ import relate
 ROOT = Path(__file__).resolve().parent.parent
 HARNESS = ROOT / "model" / "NorthwindPlus_Stress_Test.py"
 SCRATCH = ROOT / "whatif"
-LOOP_RATE_PER_MINUTE = 12        # the PO Vetting loop's rate in run_loops.bat
+LOOP_RATE_PER_MINUTE = 12        # the PO Vetting loop's rate in run_loops_full.bat / run_loops_agents.bat
 EXCLUDED = {"po_resubmit"}
 LEVELS = {"l1": "L1", "l2": "L2", "l3": "L3"}
 
 SET_LIMITS = """
 MATCH (l1:RolE {Title:"Level1Approver"}), (l2:RolE {Title:"Level2Approver"}), (l3:RolE {Title:"Level3Approver"})
 SET l1.ApprovalLimit = toFloat($l1Limit),
-    l2.ApprovalBase  = toFloat($l1Limit) + 0.01,
+    l2.ApprovalBase  = toFloat($l1Limit),
     l2.ApprovalLimit = toFloat($l2Limit),
-    l3.ApprovalBase  = toFloat($l2Limit) + 0.01,
+    l3.ApprovalBase  = toFloat($l2Limit),
     l3.ApprovalLimit = toFloat($l3Limit)
 RETURN count(*) AS n
 """   # the same SET as the governed change on Aura, without the role check and the PolicyChange audit node
@@ -131,20 +131,17 @@ def _summarize(runs: list[dict]) -> dict:
 
 
 def boundary_pos(queue: dict, limits: dict) -> list[dict]:
-    """POs no approval action can match under these limits: cost exactly on a limit (only a rejection fits), or
-    inside the one-cent gap above L1 or L2, or above L3 (nothing fits at all)."""
-    l1, l2, l3 = limits["l1Limit"], limits["l2Limit"], limits["l3Limit"]
+    """POs no approval action can match under these limits. Since v2.3.3 the bands are contiguous (a level approves
+    ApprovalBase < cost <= ApprovalLimit, and the next level starts at that limit), so only a cost of 0 or less, or
+    above the L3 limit, has no path."""
+    l3 = limits["l3Limit"]
     out = []
     for po, c in queue.items():
         why = None
         if c <= 0:
             why = "cost is 0 or less: no action matches"
-        elif c >= l3:
-            why = "cost is at or above the L3 limit: no action matches, not even a rejection"
-        elif c in (l1, l2):
-            why = "cost equals a limit exactly: only a rejection matches"
-        elif l1 < c <= l1 + 0.01 or l2 < c <= l2 + 0.01:
-            why = "cost is inside the one-cent gap between levels: no action matches"
+        elif c > l3:
+            why = "cost is above the L3 limit: no action matches, not even a rejection"
         if why:
             out.append({"po": po, "cost": round(c, 2), "why": why})
     return out

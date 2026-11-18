@@ -233,6 +233,11 @@ def iterate_customer_order(driver: Driver, stats: RunStats, database: str) -> No
 # ending up with both an L1 approval and an L1 rejection). See the
 # module-level concurrency-safety note at the top of this file.
 #
+# v2.3.3: the bands are contiguous. Each level approves ApprovalBase < POCost <= ApprovalLimit, and each
+# level's ApprovalBase equals the previous level's ApprovalLimit, so every cost from 0 to the L3 limit has a
+# path (before, a cost exactly on a limit, or inside the 0.01 gap between levels, could get stuck).
+# Every decision written here carries Source:"simulation" (agents write Source:"agent").
+#
 # KNOWN GAP (mirrors the original script -- no L3 passthrough exists): a PO
 # costing more than Level3Approver's ApprovalLimit has no approval path at
 # all. This loop won't invent one -- such a PO will simply never appear
@@ -281,7 +286,7 @@ PO_VETTING_ACTIONS: list[VettingAction] = [
         CALL apoc.lock.nodes([po])
         WITH a, ro, l, np, po, POCost
         WHERE {_L1_NOT_VETTED}
-        CREATE (po)-[:HAS_L1_PO_REJECTION {{Date:datetime(), Comment:"Rejected by L1 (stress test)."}}]->(l),
+        CREATE (po)-[:HAS_L1_PO_REJECTION {{Date:datetime(), Source:"simulation", Comment:"Rejected by L1 (stress test)."}}]->(l),
                (a)-[:IS_REJECTED_PO_STATE {{Date:datetime()}}]->(po)
         DELETE np
         RETURN po.PONumber AS PONumber, POCost AS Cost
@@ -289,19 +294,19 @@ PO_VETTING_ACTIONS: list[VettingAction] = [
     ),
     VettingAction(
         "l1_approve_final", 5,
-        _po_level_eligibility("Level1Approver", "", _L1_NOT_VETTED, "POCost > ro.ApprovalBase AND POCost < ro.ApprovalLimit"),
+        _po_level_eligibility("Level1Approver", "", _L1_NOT_VETTED, "POCost > ro.ApprovalBase AND POCost <= ro.ApprovalLimit"),
         f"""
         MATCH (l:Employee)<-[:IS_ACTIVE_ROLE]-(ro:RolE {{Title:"Level1Approver"}}), (a:ApprovedPoS {{Name:"ApprovedPoS"}})
         WITH a, ro, l ORDER BY rand() LIMIT 1
         MATCH (:NewPoS {{Name:"NewPoS"}})-[np]->(po:PurchaseOrder)-[id:HAS_PO_ITEM]->(i:Product)
         WHERE {_L1_NOT_VETTED}
         WITH a, ro, l, np, po, SUM((id.POqt * (i.UnitPrice * id.POPriceDiscount))) AS POCost
-        WHERE POCost > ro.ApprovalBase AND POCost < ro.ApprovalLimit
+        WHERE POCost > ro.ApprovalBase AND POCost <= ro.ApprovalLimit
         WITH a, ro, l, np, po, POCost ORDER BY rand() LIMIT 1
         CALL apoc.lock.nodes([po])
         WITH a, ro, l, np, po, POCost
         WHERE {_L1_NOT_VETTED}
-        CREATE (po)-[:HAS_L1_PO_APPROVAL {{Date:datetime(), Comment:"Approved by L1 (stress test)."}}]->(l),
+        CREATE (po)-[:HAS_L1_PO_APPROVAL {{Date:datetime(), Source:"simulation", Comment:"Approved by L1 (stress test)."}}]->(l),
                (a)-[:IS_APPROVED_PO_STATE {{Date:datetime()}}]->(po)
         DELETE np
         RETURN po.PONumber AS PONumber, POCost AS Cost
@@ -321,7 +326,7 @@ PO_VETTING_ACTIONS: list[VettingAction] = [
         CALL apoc.lock.nodes([po])
         WITH ro, l, np, po, POCost
         WHERE {_L1_NOT_VETTED}
-        CREATE (po)-[:HAS_L1_PO_APPROVAL {{Date:datetime(), Comment:"Approved by L1, passed to L2 (stress test)."}}]->(l)
+        CREATE (po)-[:HAS_L1_PO_APPROVAL {{Date:datetime(), Source:"simulation", Comment:"Approved by L1, passed to L2 (stress test)."}}]->(l)
         RETURN po.PONumber AS PONumber, POCost AS Cost
         """,
     ),
@@ -339,7 +344,7 @@ PO_VETTING_ACTIONS: list[VettingAction] = [
         CALL apoc.lock.nodes([po])
         WITH a, ro, l, np, po, POCost
         WHERE {_L2_NOT_VETTED}
-        CREATE (po)-[:HAS_L2_PO_REJECTION {{Date:datetime(), Comment:"Rejected by L2 (stress test)."}}]->(l),
+        CREATE (po)-[:HAS_L2_PO_REJECTION {{Date:datetime(), Source:"simulation", Comment:"Rejected by L2 (stress test)."}}]->(l),
                (a)-[:IS_REJECTED_PO_STATE {{Date:datetime()}}]->(po)
         DELETE np
         RETURN po.PONumber AS PONumber, POCost AS Cost
@@ -347,19 +352,19 @@ PO_VETTING_ACTIONS: list[VettingAction] = [
     ),
     VettingAction(
         "l2_approve_final", 5,
-        _po_level_eligibility("Level2Approver", "", f"{_L2_PREREQ} AND {_L2_NOT_VETTED}", "POCost > ro.ApprovalBase AND POCost < ro.ApprovalLimit"),
+        _po_level_eligibility("Level2Approver", "", f"{_L2_PREREQ} AND {_L2_NOT_VETTED}", "POCost > ro.ApprovalBase AND POCost <= ro.ApprovalLimit"),
         f"""
         MATCH (l:Employee)<-[:IS_ACTIVE_ROLE]-(ro:RolE {{Title:"Level2Approver"}}), (a:ApprovedPoS {{Name:"ApprovedPoS"}})
         WITH a, ro, l ORDER BY rand() LIMIT 1
         MATCH (:NewPoS {{Name:"NewPoS"}})-[np]->(po:PurchaseOrder)-[id:HAS_PO_ITEM]->(i:Product), {_L2_PREREQ}
         WHERE {_L2_NOT_VETTED}
         WITH a, ro, l, np, po, SUM((id.POqt * (i.UnitPrice * id.POPriceDiscount))) AS POCost
-        WHERE POCost > ro.ApprovalBase AND POCost < ro.ApprovalLimit
+        WHERE POCost > ro.ApprovalBase AND POCost <= ro.ApprovalLimit
         WITH a, ro, l, np, po, POCost ORDER BY rand() LIMIT 1
         CALL apoc.lock.nodes([po])
         WITH a, ro, l, np, po, POCost
         WHERE {_L2_NOT_VETTED}
-        CREATE (po)-[:HAS_L2_PO_APPROVAL {{Date:datetime(), Comment:"Approved by L2 (stress test)."}}]->(l),
+        CREATE (po)-[:HAS_L2_PO_APPROVAL {{Date:datetime(), Source:"simulation", Comment:"Approved by L2 (stress test)."}}]->(l),
                (a)-[:IS_APPROVED_PO_STATE {{Date:datetime()}}]->(po)
         DELETE np
         RETURN po.PONumber AS PONumber, POCost AS Cost
@@ -379,25 +384,25 @@ PO_VETTING_ACTIONS: list[VettingAction] = [
         CALL apoc.lock.nodes([po])
         WITH ro, l, np, po, POCost
         WHERE {_L2_NOT_VETTED}
-        CREATE (po)-[:HAS_L2_PO_APPROVAL {{Date:datetime(), Comment:"Approved by L2, passed to L3 (stress test)."}}]->(l)
+        CREATE (po)-[:HAS_L2_PO_APPROVAL {{Date:datetime(), Source:"simulation", Comment:"Approved by L2, passed to L3 (stress test)."}}]->(l)
         RETURN po.PONumber AS PONumber, POCost AS Cost
         """,
     ),
     VettingAction(
         "l3_reject", 1,
-        _po_level_eligibility("Level3Approver", "", f"{_L3_PREREQ} AND {_L3_NOT_VETTED}", "POCost > ro.ApprovalBase AND POCost < ro.ApprovalLimit"),
+        _po_level_eligibility("Level3Approver", "", f"{_L3_PREREQ} AND {_L3_NOT_VETTED}", "POCost > ro.ApprovalBase AND POCost <= ro.ApprovalLimit"),
         f"""
         MATCH (l:Employee)<-[:IS_ACTIVE_ROLE]-(ro:RolE {{Title:"Level3Approver"}}), (a:RejectedPoS {{Name:"RejectedPoS"}})
         WITH a, ro, l ORDER BY rand() LIMIT 1
         MATCH (:NewPoS {{Name:"NewPoS"}})-[np]->(po:PurchaseOrder)-[id:HAS_PO_ITEM]->(i:Product), {_L3_PREREQ}
         WHERE {_L3_NOT_VETTED}
         WITH a, ro, l, np, po, SUM((id.POqt * (i.UnitPrice * id.POPriceDiscount))) AS POCost
-        WHERE POCost > ro.ApprovalBase AND POCost < ro.ApprovalLimit
+        WHERE POCost > ro.ApprovalBase AND POCost <= ro.ApprovalLimit
         WITH a, ro, l, np, po, POCost ORDER BY rand() LIMIT 1
         CALL apoc.lock.nodes([po])
         WITH a, ro, l, np, po, POCost
         WHERE {_L3_NOT_VETTED}
-        CREATE (po)-[:HAS_L3_PO_REJECTION {{Date:datetime(), Comment:"Rejected by L3 (stress test)."}}]->(l),
+        CREATE (po)-[:HAS_L3_PO_REJECTION {{Date:datetime(), Source:"simulation", Comment:"Rejected by L3 (stress test)."}}]->(l),
                (a)-[:IS_REJECTED_PO_STATE {{Date:datetime()}}]->(po)
         DELETE np
         RETURN po.PONumber AS PONumber, POCost AS Cost
@@ -405,19 +410,19 @@ PO_VETTING_ACTIONS: list[VettingAction] = [
     ),
     VettingAction(
         "l3_approve_final", 5,
-        _po_level_eligibility("Level3Approver", "", f"{_L3_PREREQ} AND {_L3_NOT_VETTED}", "POCost > ro.ApprovalBase AND POCost < ro.ApprovalLimit"),
+        _po_level_eligibility("Level3Approver", "", f"{_L3_PREREQ} AND {_L3_NOT_VETTED}", "POCost > ro.ApprovalBase AND POCost <= ro.ApprovalLimit"),
         f"""
         MATCH (l:Employee)<-[:IS_ACTIVE_ROLE]-(ro:RolE {{Title:"Level3Approver"}}), (a:ApprovedPoS {{Name:"ApprovedPoS"}})
         WITH a, ro, l ORDER BY rand() LIMIT 1
         MATCH (:NewPoS {{Name:"NewPoS"}})-[np]->(po:PurchaseOrder)-[id:HAS_PO_ITEM]->(i:Product), {_L3_PREREQ}
         WHERE {_L3_NOT_VETTED}
         WITH a, ro, l, np, po, SUM((id.POqt * (i.UnitPrice * id.POPriceDiscount))) AS POCost
-        WHERE POCost > ro.ApprovalBase AND POCost < ro.ApprovalLimit
+        WHERE POCost > ro.ApprovalBase AND POCost <= ro.ApprovalLimit
         WITH a, ro, l, np, po, POCost ORDER BY rand() LIMIT 1
         CALL apoc.lock.nodes([po])
         WITH a, ro, l, np, po, POCost
         WHERE {_L3_NOT_VETTED}
-        CREATE (po)-[:HAS_L3_PO_APPROVAL {{Date:datetime(), Comment:"Approved by L3 (stress test)."}}]->(l),
+        CREATE (po)-[:HAS_L3_PO_APPROVAL {{Date:datetime(), Source:"simulation", Comment:"Approved by L3 (stress test)."}}]->(l),
                (a)-[:IS_APPROVED_PO_STATE {{Date:datetime()}}]->(po)
         DELETE np
         RETURN po.PONumber AS PONumber, POCost AS Cost
@@ -470,8 +475,8 @@ PO_VETTING_ACTIONS: list[VettingAction] = [
             PODate: datetime()
         })
         CREATE (s)<-[:PO_FOR_SUPPLIER]-(po)
-        CREATE (po)-[:PO_CREATED_BY]->(e)
-        CREATE (po)-[:HAS_PREVIOUS_PO {Resubmission_Justification: "Auto-resubmitted after rejection (stress test)."}]->(rpo)
+        CREATE (po)-[:PO_CREATED_BY {Date:datetime(), Source:"simulation"}]->(e)
+        CREATE (po)-[:HAS_PREVIOUS_PO {Resubmission_Justification: "Auto-resubmitted after rejection (stress test).", Date: datetime(), Source: "simulation"}]->(rpo)
         WITH po, orderItems, rpo
         UNWIND orderItems AS item
         MATCH (p:Product {ProductID: item.Product.ProductID})
@@ -514,8 +519,15 @@ def iterate_weighted_actions(driver: Driver, stats: RunStats, database: str,
     log.info(f"[{action_name}] {details}")
 
 
+# v2.3.3: in SIMULATION_MODE=agents, resubmitting rejected POs moves to the Procurement Assistant agent, and
+# run_loops_agents.bat starts the PO Vetting
+# loop with --no-resubmit, so the loop and the agent never both resubmit.
+NO_RESUBMIT = False
+
+
 def iterate_po_vetting(driver: Driver, stats: RunStats, database: str) -> None:
-    iterate_weighted_actions(driver, stats, database, PO_VETTING_ACTIONS,
+    actions = [a for a in PO_VETTING_ACTIONS if not (NO_RESUBMIT and a.name == "po_resubmit")]
+    iterate_weighted_actions(driver, stats, database, actions,
                               "No eligible PO Vetting action this cycle (no NewPoS/RejectedPoS items awaiting action)")
 
 
@@ -571,7 +583,7 @@ RFQ_VETTING_ACTIONS: list[VettingAction] = [
         CALL apoc.lock.nodes([po])
         WITH bu, su, s, po, snp
         MATCH (a:ApprovedPoS {Name:"ApprovedPoS"})-[ap]->(po)
-        CREATE (po)-[:HAS_BUYER_PO_APPROVAL {Date:datetime(), Comment:"Submitted to Supplier by Buyer (stress test)."}]->(bu),
+        CREATE (po)-[:HAS_BUYER_PO_APPROVAL {Date:datetime(), Source:"simulation", Comment:"Submitted to Supplier by Buyer (stress test)."}]->(bu),
                (su)-[:IS_SUBMITTED_PO_STATE {Date:datetime()}]->(po),
                (snp)-[:IS_SUPPLIER_NEW_PO_STATE {Date:datetime()}]->(po),
                (po)-[:HAS_SUPPLIER_NEW_RFQ]->(:PoNewRFQ {Name:"PoNewRFQ"}),
@@ -630,7 +642,7 @@ RFQ_VETTING_ACTIONS: list[VettingAction] = [
         CALL apoc.lock.nodes([rfq])
         WITH bu, po, pnr, rfq, prr
         MATCH (pnr)-[r:IS_SUPPLIER_NEW_RFQ]->(rfq)
-        CREATE (rfq)-[:HAS_BUYER_RFQ_REJECTION {{Date:datetime(), Comment:"Rejected by Buyer (stress test)."}}]->(bu),
+        CREATE (rfq)-[:HAS_BUYER_RFQ_REJECTION {{Date:datetime(), Source:"simulation", Comment:"Rejected by Buyer (stress test)."}}]->(bu),
                 (prr)-[:IS_SUPPLIER_REJECTED_RFQ_STATE {{Date:datetime()}}]->(rfq)
         DELETE r
         RETURN rfq.RFQNumber AS RFQNumber, po.PONumber AS PONumber
@@ -660,7 +672,7 @@ RFQ_VETTING_ACTIONS: list[VettingAction] = [
         UNWIND items AS item
         WITH bu, po, rfq, r, item.rfi AS rfi, item.p AS p
         MATCH (inv)<-[:HAS_INVENTORY_LEVEL]-(p)-[:HAS_SUPPLY_ORDER]-(suo)
-        MERGE (rfq)-[:HAS_BUYER_RFQ_APPROVAL {{Date:datetime(), Comment:"Approved by Buyer (stress test)."}}]->(bu)
+        MERGE (rfq)-[:HAS_BUYER_RFQ_APPROVAL {{Date:datetime(), Source:"simulation", Comment:"Approved by Buyer (stress test)."}}]->(bu)
         MERGE (po)-[:HAS_APPROVED_RFQ {{Date:datetime()}}]->(rfq)
         SET   suo.UnitsOnOrder = suo.UnitsOnOrder + rfi.RFQqt
         DELETE r
@@ -763,7 +775,7 @@ WAREHOUSE_FINANCE_ACTIONS: list[VettingAction] = [
         WITH wc, po, items
         WHERE NOT (po)-[:HAS_WAREHOUSE_DELIVERY]->()
 
-        CREATE (po)-[:HAS_WAREHOUSE_DELIVERY {Date:datetime(), Comment:"The products have been received as per PO at the Warehouse and the Inventory Levels have been updated accordingly (stress test)."}]->(wc)
+        CREATE (po)-[:HAS_WAREHOUSE_DELIVERY {Date:datetime(), Source:"simulation", Comment:"The products have been received as per PO at the Warehouse and the Inventory Levels have been updated accordingly (stress test)."}]->(wc)
         WITH po, items
         UNWIND items AS item
         WITH po, item.p AS p, item.rfi AS rfi
@@ -802,7 +814,7 @@ WAREHOUSE_FINANCE_ACTIONS: list[VettingAction] = [
         CALL apoc.lock.nodes([po])
         WITH f, cpo, scp, r1, r2, po
         WHERE NOT (po)-[:HAS_FINANCE_PAYMENT]->()
-        CREATE (po)-[:HAS_FINANCE_PAYMENT {Date:datetime(), Comment:"The PO has been paid by Finance and the PO is now closed (stress test)."}]->(f)
+        CREATE (po)-[:HAS_FINANCE_PAYMENT {Date:datetime(), Source:"simulation", Comment:"The PO has been paid by Finance and the PO is now closed (stress test)."}]->(f)
         CREATE (cpo)-[:IS_CLOSED_PO_STATE {Date:datetime(), Comment:"The PO has been paid by Finance and the PO is now closed (stress test)."}]->(po)
         CREATE (scp)-[:HAS_SUPPLIER_CLOSED_PO_STATE {Date:datetime(), Comment:"The PO has been paid by Finance and the PO is now closed (stress test)."}]->(po)
         DELETE r1, r2
@@ -871,7 +883,7 @@ CREATE (n)-[:IS_NEW_PO_STATE]->(po:PurchaseOrder {
     PODate: datetime()
 })
 CREATE (s)<-[:PO_FOR_SUPPLIER]-(po)
-CREATE (po)-[:PO_CREATED_BY]->(e)
+CREATE (po)-[:PO_CREATED_BY {Date:datetime(), Source:"simulation"}]->(e)
 WITH po, orderItems, s
 UNWIND orderItems AS item
 MATCH (p:Product {ProductID: item.Product.ProductID})
@@ -966,7 +978,7 @@ CREATE (i:ShipInfo {ShippmentID:"SH-"+randomUUID(), ShippedDate:datetime(), Ship
        (i)-[:HAS_SHIPPER]->(s),
        (i)-[:HAS_SHIPMENT_ADDRESS]->(a),
        (f)-[:IS_FULFILLED_ORDER_STATE {FulfillDate: datetime()}]->(o),
-       (o)-[:HAS_WAREHOUSE_FULFILLMENT {Date:datetime(), Comment:"Order picked, packed, and shipped by the Warehouse Clerk."}]->(wc)
+       (o)-[:HAS_WAREHOUSE_FULFILLMENT {Date:datetime(), Source:"simulation", Comment:"Order picked, packed, and shipped by the Warehouse Clerk."}]->(wc)
 DELETE r
 
 WITH o, lines
@@ -1056,7 +1068,11 @@ def main() -> None:
                          help="Which workflow step to run repeatedly.")
     parser.add_argument("--rate", type=float, default=6.0, help="Executions per minute (default: 6).")
     parser.add_argument("--duration", type=float, default=None, help="Stop after this many seconds (default: run until Ctrl+C).")
+    parser.add_argument("--no-resubmit", action="store_true",
+                        help="po-vetting only: leave rejected POs to the Procurement Assistant agent (v2.3.3).")
     args = parser.parse_args()
+    global NO_RESUBMIT
+    NO_RESUBMIT = args.no_resubmit
 
     if args.loop not in LOOPS:
         log.error(f"Loop '{args.loop}' is defined on the CLI but not implemented yet -- only {list(LOOPS.keys())} are wired up so far.")

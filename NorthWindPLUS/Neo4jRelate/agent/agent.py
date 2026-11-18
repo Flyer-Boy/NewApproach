@@ -21,6 +21,7 @@ from __future__ import annotations
 
 import argparse
 import json
+import os
 import shutil
 import sys
 import time
@@ -38,6 +39,7 @@ from kb_query import KnowledgeBase  # noqa: E402
 from kb_write import is_write       # noqa: E402
 from aura import Aura               # noqa: E402
 import whatif                       # noqa: E402
+import procurement                  # noqa: E402
 
 DEFAULT_MODEL = "claude-sonnet-5-5"
 MAX_ROWS_TO_MODEL = 50
@@ -45,6 +47,9 @@ POLICY_TEMPLATE_TITLE = "Change the approval bands (governed)"
 PREVIEW_TEMPLATE_TITLE = "Preview (read-only) -- how the current and the proposed bands"
 POLICY_ROLE = "ProcurementPolicyAdmin"
 WHATIF_RUNS = 5
+# full:   all six simulation loops run; the agent answers questions, runs what-ifs and changes approval limits.
+# agents: PO creation and resubmission are handed to a Procurement Assistant with the agent (five loops run).
+SIMULATION_MODES = ("full", "agents")
 
 TOOLS = [
     {
@@ -117,8 +122,8 @@ TOOLS = [
     {
         "name": "change_approval_bands",
         "description": (
-            "Change the L1/L2/L3 PO approval limits (all three together; each level's base is derived from the "
-            "level below, so no gaps). Only users with the ProcurementPolicyAdmin role may do this; the tool "
+            "Change the L1/L2/L3 PO approval limits (all three together; each level starts where the level below "
+            "ends, so no gaps). Only users with the ProcurementPolicyAdmin role may do this; the tool "
             "checks the role and asks the user to confirm (a prompt under the notebook cell, or in the terminal) before anything is written. Every "
             "change is recorded as a PolicyChange node. Run preview_approval_bands first."),
         "input_schema": {"type": "object", "properties": {
@@ -129,7 +134,8 @@ TOOLS = [
 ]
 
 RULES = """You are the NorthWind PLUS business assistant. You answer questions about a LIVE procurement and
-order-fulfillment simulation running on Neo4j, and you can make one governed change (the PO approval bands).
+order-fulfillment simulation running on Neo4j, and you carry out the governed actions the signed-in user's roles
+allow (only the tools you are given; each one checks the role again and asks the user to confirm).
 
 How to work:
 - Rewrite the question into the model's vocabulary, then search_templates (required before any query). If a
@@ -146,8 +152,9 @@ How to work:
   with $parameters). The user decides whether it's kept.
 - Never invent numbers. If the data doesn't answer the question, say so.
 - Ask a clarifying question when the request is ambiguous (e.g. which time window, which supplier).
-- Changes: only via change_approval_bands, only after preview_approval_bands, and only when the user asked for
-  the change. You can't create, approve or delete anything else; say so if asked.
+- Changes: only through your governed tools, and only when the user asked for the change. Approval bands: only via
+  change_approval_bands, after preview_approval_bands. You can't create, approve or delete anything else; say so if
+  asked, and name the role that could.
 - Limit changes: when the user asks what a change WOULD DO (its effect on the queue, approvals, speed), run
   what_if_approval_bands directly; don't stop at the preview. Use preview_approval_bands alone only for a quick look
   at which POs fall in which band, or when the user asks for the preview. Before change_approval_bands, if no what-if
@@ -156,7 +163,7 @@ How to work:
   its whatIfId.
 
 The current user is {user}.
-"""
+{role_rules}"""
 
 
 def _norm(cypher: str) -> str:
@@ -173,20 +180,41 @@ class Session:
         self.employee_id = employee_id
         self.user = self.aura.whoami(employee_id)
         self.messages: list[dict] = []
-        self.whatifs: dict[tuple, str] = {}     # (l1, l2, l3) -> whatIfId, for this session
-        # Fixed, governed tools are bound to their templates at startup (fails fast if the store is stale).
-        self.policy_template = self.kb.template_by_title(POLICY_TEMPLATE_TITLE)
-        self.preview_template = self.kb.template_by_title(PREVIEW_TEMPLATE_TITLE)
+        self._setup_tools()
         logs = ROOT / "agent" / "logs"
         logs.mkdir(exist_ok=True)
         self.log_path = logs / f"session-{datetime.now():%Y%m%d-%H%M%S}.jsonl"
         self.system = self._system_prompt()
         self._reset_question_state()
 
+    def _setup_tools(self):
+        """Tools are offered by role: everyone can ask; governed actions only for the roles that may take them.
+        Fixed, governed tools are bound to their templates here (fails fast if the store is stale)."""
+        self.whatifs: dict[tuple, str] = {}     # (l1, l2, l3) -> whatIfId, for this session
+        self.policy_template = self.kb.template_by_title(POLICY_TEMPLATE_TITLE)
+        self.preview_template = self.kb.template_by_title(PREVIEW_TEMPLATE_TITLE)
+        self.procurement = procurement.Procurement(self)
+        self.mode = (os.environ.get("SIMULATION_MODE") or "full").strip().lower()
+        if self.mode not in SIMULATION_MODES:
+            raise SystemExit(f"SIMULATION_MODE must be one of {', '.join(SIMULATION_MODES)} (got {self.mode!r}).")
+        roles = self.user["roles"]
+        self.tools = [t for t in TOOLS if t["name"] != "change_approval_bands" or POLICY_ROLE in roles]
+        if self.procurement.allowed():
+            self.tools += procurement.TOOLS
+        self.offered = {t["name"] for t in self.tools}
+
     def _system_prompt(self):
         user_line = f"{self.user['name']} (EmployeeID {self.employee_id}, roles: {', '.join(self.user['roles']) or 'none'})"
+        if self.procurement.allowed():
+            role_rules = procurement.RULES
+        elif procurement.ROLE in self.user["roles"]:
+            role_rules = ("\nSIMULATION_MODE is 'full': the simulation's loops create and resubmit POs, so you can answer "
+                          "questions about procurement but not create, resubmit or cancel POs. If asked, say that "
+                          "SIMULATION_MODE=agents (with run_loops_agents.bat) hands those jobs to the Procurement Assistant.\n")
+        else:
+            role_rules = ""
         return [
-            {"type": "text", "text": RULES.format(user=user_line)},
+            {"type": "text", "text": RULES.format(user=user_line, role_rules=role_rules)},
             {"type": "text",
              "text": "Model principles:\n- " + "\n- ".join(self.kb.principles()) + "\n\n" + self.kb.full_schema(),
              "cache_control": {"type": "ephemeral"}},   # the big, stable part: cached across turns
@@ -210,6 +238,11 @@ class Session:
     # ---------------- tools ----------------
 
     def tool(self, name: str, args: dict) -> dict:
+        if name not in self.offered:
+            return {"refused": f"The {name} tool isn't available to {self.user['name']} (roles: "
+                               f"{', '.join(self.user['roles']) or 'none'})."}
+        if name in procurement.NAMES:
+            return self.procurement.handle(name, args)
         if name == "search_templates":
             self.searched = True
             hits = self.kb.search_templates(args["query"], k=5)
@@ -288,7 +321,7 @@ class Session:
         if rehearsal and rehearsal not in args["justification"]:
             args["justification"] = f"{args['justification']} [rehearsed in what-if {rehearsal}]"
         print(f"\n  >>> Confirm approval-band change requested by {self.user['name']}:"
-              f"\n      L1 limit {l1:,.2f} | L2 {l1 + 0.01:,.2f}-{l2:,.2f} | L3 {l2 + 0.01:,.2f}-{l3:,.2f}"
+              f"\n      L1 up to {l1:,.2f} | L2 above {l1:,.2f} up to {l2:,.2f} | L3 above {l2:,.2f} up to {l3:,.2f}"
               f"\n      Justification: {args['justification']}")
         if not self.confirm("      Apply this change? [y/N] "):
             return {"refused": "The user did not confirm the change. Nothing was written."}
@@ -314,7 +347,7 @@ class Session:
         answer = "I stopped after too many steps without an answer. Try narrowing the question."
         for _ in range(12):   # tool-use rounds per question
             response = self.client.messages.create(
-                model=self.model, max_tokens=4096, system=self.system, tools=TOOLS, messages=self.messages)
+                model=self.model, max_tokens=4096, system=self.system, tools=self.tools, messages=self.messages)
             usage["model_calls"] += 1
             for k, v in response.usage.model_dump().items():
                 if isinstance(v, (int, float)):
@@ -352,6 +385,12 @@ class Session:
                     f"proposed: median {p['cycles']['median']} cycles, {p['stuck_in_runs']} run(s) with stuck POs")
         if "saved" in output:
             return f"saved as template '{output['saved']['name']}'"
+        if "created" in output:
+            return f"created {', '.join(c['PONumber'] for c in output['created']) or 'nothing'}; {len(output['left_out'])} line(s) left out"
+        if "resubmitted" in output:
+            return f"resubmitted {', '.join(c['ResubmittedFrom'] + ' as ' + c['PONumber'] for c in output['resubmitted']) or 'nothing'}"
+        if "cancelled" in output:
+            return f"cancelled {', '.join(output['cancelled']) or 'nothing'}"
         if "rows" in output:
             w = f", {len(output['warnings'])} warning(s)" if output.get("warnings") else ""
             return f"{output.get('row_count', len(output['rows']))} row(s){w}"
@@ -367,9 +406,14 @@ def main():
     ap = argparse.ArgumentParser(description="NorthWind PLUS business agent (relate + Neo4j Aura + Claude).")
     ap.add_argument("--as-employee", required=True, help="EmployeeID of the user (stands in for a login).")
     ap.add_argument("--model", default=DEFAULT_MODEL)
+    ap.add_argument("--mode", choices=SIMULATION_MODES, help="Overrides SIMULATION_MODE from .env: full (six loops) "
+                    "or agents (a Procurement Assistant with the agent creates and resubmits POs).")
     args = ap.parse_args()
+    if args.mode:
+        os.environ["SIMULATION_MODE"] = args.mode
     s = Session(args.as_employee, args.model)
-    print(f"NorthWind PLUS agent -- signed in as {s.user['name']} ({', '.join(s.user['roles']) or 'no roles'}).")
+    print(f"NorthWind PLUS agent -- signed in as {s.user['name']} ({', '.join(s.user['roles']) or 'no roles'}), "
+          f"SIMULATION_MODE={s.mode}.")
     print(f"Model {s.model}. Knowledge store: ontology {s.kb.ontology_version}, embeddings {s.kb.embedding_model}. "
           f"Log: {s.log_path.relative_to(ROOT)}. Type 'quit' to exit.\n")
     try:

@@ -110,7 +110,7 @@ try:
 except SystemExit as e:
     check("unknown employee gives a clear message", "No Employee with EmployeeID '999'" in str(e) and "2 Employees" in str(e))
 
-tmpl = (ROOT / "model" / "NorthWind_PLUS_Graph_Data_Model_Import_v2.3.2.cypher").read_text(encoding="utf-8")
+tmpl = (ROOT / "model" / "NorthWind_PLUS_Graph_Data_Model_Import_v2.3.3.cypher").read_text(encoding="utf-8")
 i = tmpl.index('MATCH (:RolE {Title:"ProcurementPolicyAdmin"})-[ar:IS_ACTIVE_ROLE]')
 governed = tmpl[i:tmpl.index(";", i)]
 g = aura.run_governed(governed, {"requesterId": "25", "l1Limit": 8000.0, "l2Limit": 20000.0, "l3Limit": 500000.0, "justification": "test"})

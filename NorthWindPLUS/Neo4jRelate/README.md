@@ -1,27 +1,34 @@
 # NorthWind PLUS × Relate by Neo4j
 
+![Project Logo](https://github.com/Flyer-Boy/NewApproach/blob/main/NorthWindPLUS/Neo4jRelate/Neo4j%20Relate%26Aura.jpeg)
+
 **An AI agent that learns its way around a live graph database.**
 
 [![Open in Colab](https://colab.research.google.com/assets/colab-badge.svg)](https://colab.research.google.com/github/Flyer-Boy/NewApproach/blob/main/NorthWindPLUS/Neo4jRelate/NorthWind_PLUS_Agent_Colab.ipynb)
 
 Part of [A New Approach to Application Development using Graphs](../../README.md) · built on the [NorthWind PLUS](../README.md) proof of concept.
 
-A business agent answers questions about a *live* NorthWind PLUS simulation running on Neo4j Aura. It makes one
-governed change while the simulation runs (the L1/L2/L3 purchase-order approval limits), and it **learns**: every
-question is remembered, and new queries a person approves become reusable knowledge that later questions find.
+A business agent answers questions about a *live* NorthWind PLUS simulation running on Neo4j Aura, takes the governed
+actions the signed-in person's roles allow, and **learns**: every question is remembered, and new queries a person
+approves become reusable knowledge that later questions find.
+
+Its actions so far: a policy admin can rehearse and change the L1/L2/L3 purchase-order approval limits, and a
+**Procurement Assistant now does what one of the simulation loops used to do**: the agent recommends which POs to
+create or resubmit, and the person accepts, changes or cancels them, with a justification on each. It's the first step
+of handing the simulation's jobs from Python loops to people working with agents, with a full audit trail.
 
 Neo4j Aura stays the system of record. The agent's knowledge (the ontology, a library of proven Cypher, the question
 history, everything it has learned) lives in **[Relate by Neo4j](https://relatedb.ai/)**, an embedded graph database
 that runs inside the agent's own Python process.
 
 > Proof of concept. Relate 1.0.1 · Neo4j Aura with GRAPH TYPE (Cypher 25) · Claude through the Anthropic SDK ·
-> NorthWind PLUS model v2.3.2
+> NorthWind PLUS model v2.3.3
 
 ---
 
 ## Why Relate
 
-Production graphs and agents need different things. Aura holds the business: six simulation loops write orders,
+Production graphs and agents need different things. Aura holds the business: the simulation loops write orders,
 purchase orders, quotes, deliveries and payments to it continuously. An agent needs a place of its own to *think*:
 what the model means, which queries work, what was asked before and what answered it. It shouldn't clutter the system
 of record or wait on it.
@@ -39,10 +46,11 @@ Relate fits that role well:
 - **Cheap to rebuild, safe to keep.** The knowledge store is generated from the model files in seconds, and what the
   agent learned is carried over on every rebuild.
 
-## The NorthWind PLUS business cycle (continuously running live on Aura)
+## The NorthWind PLUS business cycle (running on Aura)
 
-The six simulation loops drive this cycle continuously. Each box is a state the graph records as a relationship to a
-Collection node (`NewPoS`, `ApprovedPoS`, and so on), so moving a PO forward means moving a relationship.
+Five simulation loops and a Procurement Assistant (with the agent) drive this cycle continuously. Each box is a state
+the graph records as a relationship to a Collection node (`NewPoS`, `ApprovedPoS`, and so on), so moving a PO forward
+means moving a relationship.
 
 ```mermaid
 flowchart LR
@@ -52,13 +60,14 @@ flowchart LR
     end
 
     subgraph Procurement
-        LS[Product below<br/>restock threshold] --> PO[PO created<br/>NewPoS]
+        LS[Product below<br/>restock threshold] --> PAG([Procurement Assistant<br/>+ agent recommendation]) --> PO[PO created<br/>NewPoS]
         PO --> V1[L1 vetting]
         V1 -- above L1 limit --> V2[L2 vetting]
         V2 -- above L2 limit --> V3[L3 vetting]
         V1 & V2 & V3 -- reject --> RJ[RejectedPoS]
-        RJ -- resubmit --> PO
-        V1 & V2 & V3 -- approve<br/>within its band --> AP[ApprovedPoS]
+        RJ -- resubmit --> PAG
+        RJ -- cancel --> CX[CancelledPoS]
+        V1 & V2 & V3 -- approve<br/>cost up to its limit --> AP[ApprovedPoS]
         AP --> SUB[Buyer submits<br/>to Supplier]
     end
 
@@ -73,7 +82,7 @@ flowchart LR
         WH --> FI[Finance pays<br/>ClosedPoS]
     end
 
-    subgraph GOV [Governance - v2.3.2]
+    subgraph GOV [Governance]
         PA([ProcurementPolicyAdmin<br/>through the agent]) --> PC[PolicyChange<br/>audit node]
     end
 
@@ -84,7 +93,9 @@ flowchart LR
 
 Open customer orders count against available stock, so a product can fall below its restock threshold before an
 order fails to ship. The L1/L2/L3 limits are read from the `RolE` nodes every time a PO is vetted, which is why a
-governed `PolicyChange` takes effect on the very next vetting cycle without touching the loops.
+governed `PolicyChange` takes effect on the very next vetting cycle without touching the loops. Since v2.3.3 the bands
+are contiguous: each level approves base < cost ≤ limit and the next level starts at that limit, so every cost up to
+the L3 limit has a path.
 
 ## Architecture
 
@@ -96,15 +107,15 @@ flowchart LR
         A <-->|Cypher: search, schema,<br/>learn, provenance| R[(Relate<br/>northwind_kb.rl)]
     end
 
-    A -->|read-only Cypher<br/>read transactions| N[(Neo4j Aura<br/>NorthWind PLUS v2.3.2)]
-    A -->|governed write<br/>role check + confirm| N
-    L[Six simulation loops<br/>run_loops.bat] -->|continuous writes| N
+    A -->|read-only Cypher<br/>read transactions| N[(Neo4j Aura<br/>NorthWind PLUS v2.3.3)]
+    A -->|governed writes by role<br/>approval limits · POs<br/>role check + confirm| N
+    L[Simulation loops<br/>run_loops_full.bat: 6<br/>run_loops_agents.bat: 5] -->|continuous writes| N
 
     M[Model files<br/>GRAPH TYPE · RDF ontology<br/>import script · harness] -->|build_kb.py| R
 ```
 
 1. **Build:** `kb/build_kb.py` turns the model files into a knowledge graph in relate. It reads the GRAPH TYPE
-   (exact names and types), the RDF/Turtle ontology (Entity vs. Collection), curated business meanings, 53 queries
+   (exact names and types), the RDF/Turtle ontology (Entity vs. Collection), curated business meanings, 59 queries
    from the import script and 19 actions from the simulation harness.
 2. **Ask:** the agent rewrites the question into the model's vocabulary, searches relate, and then runs a matching
    template, adapts one, or writes new Cypher from the ontology. It runs the query on Aura and answers.
@@ -131,7 +142,7 @@ flowchart LR
 
 ## What-if sandbox: pull to experiment, governed Cypher to commit
 
-Suggested by a Neo4j staff engineer (Tomas Riha) after the first post: *pull a subgraph from Aura into the agent's context, so it
+Suggested by a Neo4j staff engineer after the first post: *pull a subgraph from Aura into the agent's context, so it
 can mutate and experiment on it in isolation.* Asked *"what would happen if we raised L1 to 8000 and L2 to 20000?"*,
 the agent:
 
@@ -140,7 +151,7 @@ the agent:
 2. **replays** the simulation's own PO-vetting Cypher (imported from the harness, minus the APOC lock lines) on file
    copies of that store, with today's limits and with the proposed ones, 5 runs each;
 3. **compares** approvals per level, rejections, POs left stuck and the cycles needed to clear the queue, and flags
-   POs whose cost sits on a boundary no approval rule matches;
+   POs no approval rule can match (since v2.3.3's contiguous bands, only a cost of 0 or above the L3 limit);
 4. records a `(:WhatIf)` node in relate next to the question. If the change is then applied, the `PolicyChange`
    justification on Aura cites the what-if, and the `WhatIf` records which `PolicyChange` applied it.
 
@@ -150,7 +161,7 @@ old state relationship. Changes still go through the governed action.
 The copy comes from `relate pull` when the `relate` CLI is installed (`RELATE_BIN`, or on `PATH`; the Colab notebook
 installs it), otherwise from a fallback copier through the Neo4j driver.
 
-**Give it a queue to work on.** With the rates in `run_loops.bat`, PO Vetting (12 per minute) clears new POs almost as
+**Give it a queue to work on.** With the rates in the `run_loops_*.bat` files, PO Vetting (12 per minute) clears new POs almost as
 fast as PO Creation (1 per minute) makes them, so a what-if may show little difference between the scenarios. Pause the
 PO Vetting loop for 10-15 minutes (or lower its `--rate` to 2 or 3) to build a backlog; raising the Customer Order rate
 also makes POs bigger, pushing more of them into the L2 and L3 bands. The simulation gives every approval level the same
@@ -158,6 +169,44 @@ speed, so higher limits show up as fewer hand-offs and fewer cycles to clear the
 
 Details and open points:
 [DESIGN_what_if_sandbox.md](DESIGN_what_if_sandbox.md).
+
+## Procurement Assistant: the first loop handed to a person and an agent
+
+In `agents` mode (see *Two ways to run*), the `po-creation` loop isn't started, and the `po-vetting` loop stops
+resubmitting rejected POs (`--no-resubmit`). Signed in as a Procurement Assistant (`--as-employee 16 --mode agents`, or
+`sign_in("16")` in a notebook with `SIMULATION_MODE = "agents"`):
+
+1. *"What needs restocking?"* The agent runs the loop's own rule (effective stock = in stock + on active POs −
+   promised to open customer orders, near the restock threshold) and lists one PO per Supplier: products, recommended
+   quantities, estimated cost and **the approval level it will need**.
+2. The person answers in their own words (*"create 1 as recommended, and 2 with 20 fewer units; justification:
+   …"*). The agent shows the final list and asks for confirmation; nothing is written before that.
+3. A governed Cypher template writes each PO in one transaction. It re-checks the role, locks the products, and
+   **recomputes what's still needed**, so a line covered since the recommendation (by another assistant, say) is left
+   out and reported rather than ordered twice.
+4. *"Which rejected POs should I resubmit or cancel?"* Each one comes with who rejected it, at which level and why,
+   and what's still needed now. The person resubmits it (a new PO pointing back with `HAS_PREVIOUS_PO`) or cancels it
+   (it moves to the new `CancelledPoS` state).
+
+Every PO records who created it, when, why and `Source: "agent"`, with the recommended quantity next to the one
+ordered. So a single query shows where people overrode the agent, and why:
+
+```cypher
+MATCH (po:PurchaseOrder)-[c:PO_CREATED_BY {Source:"agent"}]->(:Employee)-[:HAS_PERSON]->(p:Person),
+      (po)-[it:HAS_PO_ITEM]->(pr:Product)
+WHERE it.RecommendedQt IS NULL OR it.POqt <> it.RecommendedQt
+RETURN po.PONumber, p.FirstName + " " + p.LastName AS By, pr.ProductName, it.RecommendedQt, it.POqt, c.Justification
+```
+
+Guard rails, in code and in the Cypher: the role is checked again in the database; one justification per PO; one PO
+per Supplier per batch, and **the agent never suggests splitting or trimming a PO to fit under a lower approval
+limit** (a classic procurement control failure); quantities far from the recommendation (over 3× or under a third)
+are flagged in the confirmation.
+
+The model change was designed for the vetting agents that come next: every decision relationship (approvals,
+rejections, Buyer decisions, deliveries, payments) can carry `Source: "simulation"` or `"agent"` next to its existing
+`Date` and `Comment`, so loops and agents can work side by side and still be told apart. See
+[DESIGN_procurement_agent.md](DESIGN_procurement_agent.md).
 
 ## The knowledge graph
 
@@ -178,13 +227,14 @@ Details and open points:
 (:ModelPrinciple {text})   (:KnowledgeBase {ontologyVersion, embeddingModel, embeddingDims})
 ```
 
-Seeded from model v2.3.2: **47 node types, 86 relationship types, 151 properties, 12 workflow steps, 72 templates**.
-The templates are 51 read queries, 1 governed action, 1 admin-only write and 19 simulation actions.
+Seeded from model v2.3.3: **48 node types, 89 relationship types, 175 properties, 13 workflow steps, 78 templates**.
+The templates are 54 read queries, 4 governed actions (the approval-limit change, and creating, resubmitting and
+cancelling POs), 1 admin-only write and 19 simulation actions.
 
 | Template governance | Meaning |
 |---|---|
 | `read` | The agent may run it, always in a read transaction |
-| `governed` | The approval-limit change: role checked, user confirms, audit node written |
+| `governed` | The approval-limit change and the PO commands: role checked in the database, user confirms, audit trail written |
 | `admin` | Maintenance writes (e.g. the restock "cheat"); never offered to the agent |
 | `simulation` | The loops' own actions; background knowledge only |
 
@@ -212,7 +262,9 @@ question
 | `save_template` | Saves a new query as a template | read queries only · must have run successfully this question · user approval · one per question |
 | `preview_approval_bands` | How proposed limits would route the POs waiting for approval | read-only template |
 | `what_if_approval_bands` | Rehearses proposed limits on a pulled copy of the queue (see *What-if sandbox*) | never writes to Aura · scratch stores deleted afterwards · recorded as a `WhatIf` node |
-| `change_approval_bands` | Changes the L1/L2/L3 limits together, with no gaps | role taken from the session · user confirmation · the Cypher re-checks role and limits · `PolicyChange` audit node |
+| `change_approval_bands` | Changes the L1/L2/L3 limits together, with no gaps | ProcurementPolicyAdmin only · user confirmation · the Cypher re-checks role and limits · `PolicyChange` audit node |
+| `recommend_restock`, `recommend_resubmissions` | What needs a new PO, and what to do with rejected POs (see *Procurement Assistant*) | Procurement Assistant only · read-only templates |
+| `create_purchase_orders`, `resubmit_purchase_orders`, `cancel_rejected_purchase_orders` | Write the POs the person accepted | Procurement Assistant only · a recommendation first · one justification per PO · one PO per Supplier per batch · user confirmation · the Cypher re-checks role and need · `Source`, `Justification`, `RecommendedQt` recorded |
 
 The full ontology (~17,000 characters) sits in the system prompt with prompt caching, so it's paid for once per
 session. Neo4j warnings (for example *"property `Date` does not exist"*) go back to the model so it can fix its own
@@ -222,11 +274,14 @@ Cypher, and counts and totals must come from Cypher rather than the model's arit
 
 - **Identity comes from the session, never from the model.** `--as-employee 25` (or `EMPLOYEE_ID` in the notebooks)
   stands in for a login. The agent checks that person's roles in Aura.
+- **Tools are offered by role.** A Procurement Assistant gets the PO tools; only a ProcurementPolicyAdmin gets the
+  approval-limit change; everyone can ask questions and run what-ifs. A tool that isn't offered is refused even if
+  called, and every governed template checks the role again inside the database transaction.
 - **Writes are fixed templates, not model-written Cypher.** The approval-limit change is a tested Cypher statement
   that checks the `ProcurementPolicyAdmin` role *inside the database transaction*, rejects limits that would leave a
   gap between levels (a gap strands POs forever), and records a `PolicyChange` node with before/after values and the
   justification.
-- **A person confirms every write**: approval-limit changes and saved templates alike.
+- **A person confirms every write**: approval-limit changes, POs and saved templates alike.
 
 ## The learning loop
 
@@ -280,7 +335,7 @@ A proof of concept is worth its surprises. These came from running against the l
   PO worth 0.00 and flagged it as odd. The cause was the `po_resubmit` action. When effective stock sat exactly at its
   eligibility limit, the quantity formula (with integer division in `StockThreshold / 2`) produced a line of **0
   units**. A 0-cost PO matches no vetting action, not even rejection, so it would have sat in the queue forever. Both
-  PO-creating actions now skip non-positive lines. The six loops had run for a long time without surfacing this.
+  PO-creating actions now skip non-positive lines. The loops had run for a long time without surfacing this.
 - **A rule in the prompt isn't a guarantee.** The model once skipped the template search and claimed "no template
   fit". Searching first is now enforced in code: `run_read_query` refuses until a search has run.
 - **Counts belong in the database.** The model once summarized 28 rows as 29 by adding up groups itself. Totals now
@@ -292,21 +347,44 @@ A proof of concept is worth its surprises. These came from running against the l
   transactions, so timeouts go through `@unit_of_work`. Anaconda's older `brotli` broke the Anthropic SDK's HTTP
   client, so `brotli>=1.2.0` is pinned. Newer Aura instances may use the instance ID as both user and database name.
 
+## Two ways to run
+
+Same model (v2.3.3), same agent, same notebook. Pick how much of the business the simulation runs:
+
+| | **Full simulation** | **Agents** |
+|---|---|---|
+| Loops | all six: `run_loops_full.bat` | five: `run_loops_agents.bat` (no PO Creation; PO Vetting with `--no-resubmit`) |
+| `SIMULATION_MODE` | `full` (the default) | `agents` |
+| Who creates and resubmits POs | the loops | a Procurement Assistant with the agent, with a justification on each |
+| What the agent does | answers questions, runs what-ifs, changes the approval limits (policy admin) | all of that, plus recommends, creates, resubmits and cancels POs (Procurement Assistant) |
+| Good for | watching an agent work next to a busy, fully simulated business | the start of handing the simulation's jobs to people working with agents |
+
+Set the mode in `.env` (`SIMULATION_MODE=full` or `agents`), with `--mode` on the terminal agent, or in the notebook's
+sign-in cell. The mode must match the loops you started. In `full` mode a Procurement Assistant gets no PO tools, so the
+agent never competes with the loops. In `agents` mode, if the PO Creation loop is still writing (a simulated PO in the
+last 3 minutes), the agent shows recommendations but refuses to create POs until it stops. Switching modes needs no
+model change, only a different `.bat` file and setting.
+
+The code as the first article described it (model v2.3.2, before the agents mode) is kept as the git tag
+`v2.3.2-agent`, for reference. To run that experience today, use `full` mode: it's the same agent on the newer model.
+
 ## Quick start
 
 ### 0. Load the model into Neo4j Aura (Aura Query console)
 
-1. `model/NorthWind_PLUS_Graph_Data_Model_Import_v2.3.2.cypher`, **lines 95–1171**. This wipes the database and
-   builds NorthWind PLUS v2.3.2. Optional: the Recommendation Engine, lines 1271–1334. To keep an existing v2.3.1
-   database instead, run `model/NorthWind_PLUS_v2.3.2_Upgrade_from_v2.3.1.cypher`.
+1. `model/NorthWind_PLUS_Graph_Data_Model_Import_v2.3.3.cypher`, **lines 109–1186**. This wipes the database and
+   builds NorthWind PLUS v2.3.3. Optional: the Recommendation Engine, lines 1286–1349. To keep an existing v2.3.2
+   database instead, stop the loops and run `model/NorthWind_PLUS_v2.3.3_Upgrade_from_v2.3.2.cypher`, which lists
+   its steps (from v2.3.1, run the v2.3.2 upgrade first).
    The import rebuilds the classic Northwind database as a graph-native application and extends it into a complete,
    360-degree business cycle: customer orders, low-stock detection, purchase orders with three levels of approval,
    supplier RFQs, warehouse receiving, finance closure and order fulfillment. All of it runs natively on the graph from
    here on: no data ingestion, no ETL or data pipelines.
-2. `model/NorthwindPlusGraphType_v2.3.2.cypher` (the GRAPH TYPE schema). This adds a governance layer to the model:
+2. `model/NorthwindPlusGraphType_v2.3.3.cypher` (the GRAPH TYPE schema). This adds a governance layer to the model:
    the database itself enforces the ontology.
-3. Start the six loops. On Windows, `run_loops.bat` opens all six, reads credentials from `.env`, and uses rates that
-   let vetting and fulfillment keep up with new orders. Run it from this folder, with `.env` filled in. Elsewhere, run `python model/NorthwindPlus_Stress_Test.py --loop <name> --rate <per minute>`, once per loop.
+3. Start the loops in one of the two modes (see *Two ways to run* below), and set `SIMULATION_MODE` in `.env` to
+   match. On Windows, `run_loops_full.bat` opens all six loops and `run_loops_agents.bat` five; both read credentials
+   from `.env` and use rates that let vetting and fulfillment keep up with new orders. Run it from this folder, with `.env` filled in. Elsewhere, run `python model/NorthwindPlus_Stress_Test.py --loop <name> --rate <per minute>`, once per loop.
 
 ### 1a. Google Colab
 
@@ -324,6 +402,7 @@ pip install -r requirements.txt           # + requirements-embeddings.txt for vo
 python kb/build_kb.py                     # add --embeddings voyage-4-nano for semantic search
 python agent/agent.py --as-employee 25    # Olivia Bennett, ProcurementPolicyAdmin: can change the limits
 python agent/agent.py --as-employee 12    # Gloria Gaynor, Level1Approver: can ask, can't change them
+python agent/agent.py --as-employee 16 --mode agents   # Albert Camus, Procurement Assistant: creates, resubmits and cancels POs
 ```
 
 Or open `NorthWind_PLUS_Agent.ipynb` from the project folder (Jupyter, e.g. from Anaconda). It shares its question,
@@ -356,15 +435,23 @@ account; it isn't included in a Claude Pro chat subscription.
 - *Which employee gives our customers the biggest discounts?*
 - *Which fulfillment clerk received the most supplier deliveries (POs)?* You can also ask about customer orders.
 
+As a Procurement Assistant (EmployeeID 16, 17 or 18), in `agents` mode:
+
+- *What needs restocking?* Then accept some, change a quantity, and give a justification per PO.
+- *Which rejected POs should I resubmit or cancel?*
+- *Show the POs created, resubmitted or cancelled through the agent, and where the recommendation was changed.*
+- *Split the Exotic Liquids PO in two so each half goes to L1.* The agent should decline.
+
 ## Project layout
 
 ```
-model/                       NorthWind PLUS v2.3.2
-  NorthWind_PLUS_Graph_Data_Model_Import_v2.3.2.cypher   import script + query examples
-  NorthwindPlusGraphType_v2.3.2.cypher                   GRAPH TYPE schema
-  NorthwindPlusGraph_RDF-turtle_v2.3.2.ttl               RDF/OWL ontology
-  NorthWind_PLUS_v2.3.2_Upgrade_from_v2.3.1.cypher       in-place upgrade
-  NorthwindPlus_Stress_Test.py                           the six simulation loops
+model/                       NorthWind PLUS v2.3.3
+  NorthWind_PLUS_Graph_Data_Model_Import_v2.3.3.cypher   import script + query examples + governed commands
+  NorthwindPlusGraphType_v2.3.3.cypher                   GRAPH TYPE schema
+  NorthwindPlusGraph_RDF-turtle_v2.3.3.ttl               RDF/OWL ontology
+  NorthWind_PLUS_v2.3.3_Upgrade_from_v2.3.2.cypher       in-place upgrade from v2.3.2
+  NorthWind_PLUS_v2.3.2_Upgrade_from_v2.3.1.cypher       in-place upgrade from v2.3.1
+  NorthwindPlus_Stress_Test.py                           the simulation loops (po-creation kept, not started)
 kb/                          the knowledge store (Relate)
   semantics.json             curated business meanings -- edit to teach the agent
   build_kb.py                builds northwind_kb.rl; keeps learned knowledge on rebuild
@@ -378,11 +465,14 @@ sandbox/                     what-if rehearsals on a pulled copy
 agent/
   agent.py                   the agent (Anthropic SDK tool use)
   aura.py                    Neo4j side: read transactions with warnings, identity, governed write
+  procurement.py             Procurement Assistant tools: recommendations, create / resubmit / cancel POs
 tests/                       offline tests (no API, no Aura)
 NorthWind_PLUS_Agent.ipynb         local Jupyter front end
 NorthWind_PLUS_Agent_Colab.ipynb   Google Colab front end
-run_loops.bat                      Windows: starts the six simulation loops (credentials read from .env)
-DESIGN_what_if_sandbox.md          next stage: rehearse changes on a pulled subgraph (relate pull)
+run_loops_full.bat                 Windows: full mode, all six simulation loops (credentials read from .env)
+run_loops_agents.bat               Windows: agents mode, five loops; PO creation and resubmission by the agent
+DESIGN_what_if_sandbox.md          the what-if sandbox (relate pull)
+DESIGN_procurement_agent.md        the Procurement Assistant agent and model v2.3.3
 tools/make_notebooks.py            generates both notebooks
 ```
 
@@ -392,6 +482,7 @@ tools/make_notebooks.py            generates both notebooks
 python tests/test_agent_offline.py     # 27 checks
 python tests/test_aura_driver_path.py  # 8 checks
 python tests/test_whatif_offline.py    # 22 checks; 25 with RELATE_BIN set to a relate CLI
+python tests/test_procurement_offline.py  # 40 checks
 python kb/eval_search.py               # retrieval: 9/12 without embeddings
 ```
 
@@ -399,7 +490,9 @@ The offline tests use relate twice: as the agent's knowledge store, and as a sta
 NorthWind PLUS graph, which works because both speak Cypher. A scripted client stands in for Claude, issuing real
 tool calls and reading real results. The tests cover search-first enforcement, write rejection, role checks,
 confirmations, the approval-limit change and its audit node, saving and re-finding a learned template, learning that
-survives a rebuild, `needs-review` flagging, and vector search. The driver test runs the real `aura.py` against a
+survives a rebuild, `needs-review` flagging, vector search, and the Procurement Assistant: tools by role, the
+recommendations against the loop's formulas, every guard rail, the audit properties, a concurrent PO covering a line,
+resubmit and cancel, and the harness's `--no-resubmit`, contiguous bands and `Source`. The driver test runs the real `aura.py` against a
 stand-in that enforces the Neo4j driver's transaction rules.
 
 ## Relate notes and limits we hit
@@ -426,7 +519,8 @@ stand-in that enforces the Neo4j driver's transaction rules.
 | 2 | Knowledge store + template search | Run live |
 | 3 | Agent with read queries and the governed change | Run live (terminal and Colab) |
 | 4 | Learning loop, provenance, warnings to the model, search-first enforcement, embeddings | Tested offline; in live testing |
-| 5 | What-if sandbox with `relate pull` (suggested by a Neo4j staff engineer) | Tested offline, including the real `relate pull` against `relate serve`; not yet run against Aura |
+| 5 | What-if sandbox with `relate pull` (suggested by a Neo4j staff engineer) | Run live (Colab) |
+| 6 | Model v2.3.3 + Procurement Assistant agent: PO creation and resubmission handed from the loops to a person with the agent; two run modes (full, agents) | Tested offline; not yet applied to Aura |
 
 **Parking lot**
 - Copy saved templates (and possibly the question history) into the Aura graph, so they can be queried next to the
@@ -435,6 +529,14 @@ stand-in that enforces the Neo4j driver's transaction rules.
 - Measure voyage-4-nano against the 9/12 baseline.
 
 ## Changelog
+
+- **Stage 6 / model v2.3.3:** Procurement Assistant agent (`agent/procurement.py`): restock and resubmission
+  recommendations, governed create / resubmit / cancel commands, tools offered by role. Model: `Date`,
+  `Justification`, `Source` on `PO_CREATED_BY`; `RecommendedQt` on `HAS_PO_ITEM`; `Date`, `Source` on
+  `HAS_PREVIOUS_PO`; `Source` on every decision relationship; new `CancelledPoS` state and `PO_CANCELLED_BY`;
+  contiguous approval bands. Harness: `Source:"simulation"`, contiguous bands, `--no-resubmit`. Two ways to run:
+  `run_loops_full.bat` (six loops, `SIMULATION_MODE=full`, the default) or `run_loops_agents.bat` (five loops,
+  `SIMULATION_MODE=agents`); in agents mode the PO tools refuse to write while the PO Creation loop is still on. Notebooks: a Procurement section, `sign_in()`, and a rebuild when the model version changes.
 
 - **Stage 5:** what-if sandbox (`sandbox/`): `relate pull` or a fallback copier, replay of the harness's PO-vetting
   Cypher with current vs proposed limits (5 runs each, resubmissions not replayed), boundary-PO check,

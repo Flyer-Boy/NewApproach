@@ -100,14 +100,15 @@ def main():
           prop["passed_on_L1"]["max"] <= 1 and prop["passed_on_L2"]["max"] == 0)
     check("never more cycles than hand-offs allow (5 POs, 8 at most today, 6 proposed)",
           cur["cycles"]["max"] <= 8 and prop["cycles"]["max"] <= 6)
-    check("PO-5 (exactly 5,000) flagged under current limits: only a rejection matches",
-          [b["po"] for b in r["boundary_pos"]["current"]] == ["PO-5"] and r["boundary_pos"]["proposed"] == [])
+    check("contiguous bands: PO-5 (exactly 5,000) has a path, nothing flagged",
+          r["boundary_pos"]["current"] == [] and r["boundary_pos"]["proposed"] == [])
     check("scratch stores are deleted afterwards", not (whatif.SCRATCH / r["whatIfId"]).exists())
     check("refuses limits Aura would refuse", "refused" in whatif.what_if(9000, 8000, 500000, pulled_store=pulled))
 
-    # 3. The one-cent gap: a PO there can't even be rejected once L1 passes it on
-    gap = whatif.boundary_pos({"PO-2": 4200.0}, {"l1Limit": 4199.995, "l2Limit": 20000.0, "l3Limit": 500000.0})
-    check("a cost inside the one-cent gap is flagged", gap and "gap" in gap[0]["why"])
+    # 3. Boundaries that remain: above the L3 limit, and a cost of 0
+    edge = whatif.boundary_pos({"PO-X": 600000.0, "PO-Y": 0.0, "PO-Z": 500000.0},
+                               {"l1Limit": 5000.0, "l2Limit": 12500.0, "l3Limit": 500000.0})
+    check("above L3 and zero cost flagged; exactly the L3 limit is fine", sorted(b["po"] for b in edge) == ["PO-X", "PO-Y"])
 
     # 4. Through the agent: what-if, then the governed change citing it
     store = TMP / "kb.rl"

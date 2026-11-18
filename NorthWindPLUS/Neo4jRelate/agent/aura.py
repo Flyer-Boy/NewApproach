@@ -105,7 +105,7 @@ class Aura:
         if not rows:
             count = self.read("MATCH (e:Employee) RETURN count(e) AS n").get("rows", [{}])[0].get("n")
             raise SystemExit(f"No Employee with EmployeeID {employee_id!r} in database {self.database!r} "
-                             f"({count} Employees there). Is this the v2.3.2 database, and is NEO4J_DATABASE right?")
+                             f"({count} Employees there). Is this the v2.3.3 database, and is NEO4J_DATABASE right?")
         return rows[0]
 
     # ---------------- governed write ----------------

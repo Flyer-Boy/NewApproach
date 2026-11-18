@@ -129,7 +129,7 @@ Per scenario, median (and range) across runs:
 | POs approved at L1 / L2 / L3, count and value | approval relationships created in the copy |
 | POs rejected (would be resubmitted later) | rejection relationships created |
 | POs still stuck when nothing is eligible | `NewPoS` members left at the end |
-| Vetting cycles to clear the queue, and the minutes that means at the loop's rate | cycle count ÷ `--rate` (12 per minute in `run_loops.bat`) |
+| Vetting cycles to clear the queue, and the minutes that means at the loop's rate | cycle count ÷ `--rate` (12 per minute in `run_loops_full.bat`) |
 | Workload per approver role | actions per `RolE` |
 
 Plus the snapshot's age ("pulled 3 minutes ago; the live queue has moved since") and whether the data came from

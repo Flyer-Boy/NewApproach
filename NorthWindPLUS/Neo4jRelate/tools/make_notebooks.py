@@ -9,19 +9,27 @@ import nbformat as nbf
 ROOT = Path(__file__).resolve().parent.parent
 md, code = nbf.v4.new_markdown_cell, nbf.v4.new_code_cell
 
-LOAD_GRAPH = """1. Load the graph: in the Aura Query console, run `model/NorthWind_PLUS_Graph_Data_Model_Import_v2.3.2.cypher`
-   from line 95 (*"// Let's clear all Nodes..."*) to line 1171. This **wipes the database** and builds NorthWind PLUS v2.3.2.
-   Optionally also run the Recommendation Engine (lines 1271-1334).
-   *(Already on v2.3.1 with data you want to keep? Run `model/NorthWind_PLUS_v2.3.2_Upgrade_from_v2.3.1.cypher` instead.)*
+LOAD_GRAPH = """1. Load the graph: in the Aura Query console, run `model/NorthWind_PLUS_Graph_Data_Model_Import_v2.3.3.cypher`
+   from line 109 (*"// Let's clear all Nodes..."*) to line 1186. This **wipes the database** and builds NorthWind PLUS v2.3.3.
+   Optionally also run the Recommendation Engine (lines 1286-1349).
+   *(Already on v2.3.2 with data you want to keep? Stop the loops and run `model/NorthWind_PLUS_v2.3.3_Upgrade_from_v2.3.2.cypher`
+   instead; it lists its steps. From v2.3.1, run the v2.3.2 upgrade first.)*
    The import rebuilds the classic Northwind database as a graph-native application and extends it into a complete,
    360-degree business cycle: customer orders, low-stock detection, purchase orders with three levels of approval,
    supplier RFQs, warehouse receiving, finance closure and order fulfillment. All of it runs natively on the graph from
    here on: no data ingestion, no ETL or data pipelines.
-2. Run `model/NorthwindPlusGraphType_v2.3.2.cypher` in the same console, to apply the GRAPH TYPE schema. This adds a
+2. Run `model/NorthwindPlusGraphType_v2.3.3.cypher` in the same console, to apply the GRAPH TYPE schema. This adds a
    governance layer to the model: the database itself enforces the ontology.
-3. Start the six Python loops (`model/NorthwindPlus_Stress_Test.py`, one process per `--loop`), so the data is moving.
-   On Windows, run `run_loops.bat` from the `NorthWindPLUS/Neo4jRelate` folder on your own machine, with `.env` filled
-   in: it opens six consoles, one per business process, so you can watch what happens in the background.
+3. Start the Python loops (`model/NorthwindPlus_Stress_Test.py`, one process per `--loop`), so the data is moving.
+   **Pick a mode** and set `SIMULATION_MODE` to match in step "Sign in" below:
+   - **full**: all six loops run, and the agent works alongside them (questions, what-ifs, approval limits). On Windows:
+     `run_loops_full.bat`.
+   - **agents**: PO creation and resubmission are done by a Procurement Assistant with the agent (step "Procurement
+     Assistant" below), so five loops run: no `--loop po-creation`, and `--loop po-vetting` with `--no-resubmit`. On
+     Windows: `run_loops_agents.bat`.
+
+   Run the `.bat` file from the `NorthWindPLUS/Neo4jRelate` folder on your own machine, with `.env` filled in: it opens
+   one console per business process, so you can watch what happens in the background.
    Your graph-native system of record is now running on Neo4j Aura. Next, an AI agent answers questions about that live
    graph, using its own embedded Relate graph."""
 
@@ -46,24 +54,43 @@ SIGN_IN_MD = """## {n}. Sign in
 
 `EMPLOYEE_ID` stands in for a login — the session decides who you are, the model never does.
 
-| EmployeeID | Who | Can change approval bands? |
+| EmployeeID | Who | What the agent lets them do |
 |---|---|---|
-| `25` | Olivia Bennett, ProcurementPolicyAdmin | yes |
-| `12` | Gloria Gaynor, Level1Approver | no (can still ask questions) |
+| `25` | Olivia Bennett, ProcurementPolicyAdmin | ask questions, run what-ifs, change the approval bands |
+| `16`, `17`, `18` | Albert Camus, Bernard Shaw, Carlos Santana, Procurement Assistants | ask questions, create, resubmit and cancel POs |
+| `12` | Gloria Gaynor, Level1Approver | ask questions, run what-ifs |
 
-Rerunning this cell closes the previous session first (relate allows one writing connection per store)."""
+The agent offers each person only the tools their roles allow. `sign_in("16")` switches to someone else later; it
+closes the previous session first (relate allows one writing connection per store).
+
+`SIMULATION_MODE` must match the loops you started: `"full"` with `run_loops_full.bat` (six loops; no PO tools for
+Procurement Assistants), `"agents"` with `run_loops_agents.bat` (the Procurement Assistant creates and resubmits POs).
+In `agents` mode the agent refuses to create POs while the PO Creation loop still seems to be running."""
 
 SIGN_IN = """EMPLOYEE_ID = "25"
+SIMULATION_MODE = "full"                   # "full" (run_loops_full.bat) or "agents" (run_loops_agents.bat)
 MODEL = northwind_agent.DEFAULT_MODEL      # e.g. "claude-opus-5-5" for harder questions
+import os
+os.environ["SIMULATION_MODE"] = SIMULATION_MODE
 
-if "session" in globals():
-    try:
-        session.close()
-    except Exception:
-        pass
-session = northwind_agent.Session(EMPLOYEE_ID, MODEL)
-print(f"Signed in as {session.user['name']} ({', '.join(session.user['roles']) or 'no roles'}) -- model {session.model}")
-print(f"Knowledge store: ontology {session.kb.ontology_version}, embeddings {session.kb.embedding_model}")
+
+def sign_in(employee_id: str):
+    \"\"\"Sign in as another employee: closes the current session (one writer per relate store), opens a new one.\"\"\"
+    global session
+    if "session" in globals():
+        try:
+            session.close()
+        except Exception:
+            pass
+    session = northwind_agent.Session(employee_id, MODEL)
+    tools = sorted(t["name"] for t in session.tools)
+    print(f"Signed in as {session.user['name']} ({', '.join(session.user['roles']) or 'no roles'}) -- "
+          f"model {session.model}, SIMULATION_MODE={session.mode}")
+    print(f"Tools offered: {', '.join(tools)}")
+    print(f"Knowledge store: ontology {session.kb.ontology_version}, embeddings {session.kb.embedding_model}")
+
+
+sign_in(EMPLOYEE_ID)
 
 
 def ask(question: str):
@@ -126,10 +153,10 @@ through the Neo4j driver. The answer says which, and how old the snapshot is. Re
 rejection ends a PO's path in the rehearsal.
 
 > **If the what-if shows little or no difference between the two scenarios**, the queue is probably too short to
-> rehearse on. With the rates in `run_loops.bat`, the PO Vetting loop (12 per minute) clears new POs almost as fast as
+> rehearse on. With the rates in the `run_loops_*.bat` files, the PO Vetting loop (12 per minute) clears new POs almost as fast as
 > PO Creation (1 per minute) makes them. To build a backlog:
 > - **pause the PO Vetting loop** (Ctrl+C in its window) for 10-15 minutes, run the what-if, then restart it; or
-> - **slow it down**: change its `--rate 12` to 2 or 3 in `run_loops.bat`;
+> - **slow it down**: change its `--rate 12` to 2 or 3 in the `.bat` file;
 > - optionally **raise the Customer Order rate** (e.g. `--rate 6` to 12): POs include stock promised to open orders,
 >   so busier sales mean bigger POs, and more of them land in the L2 and L3 bands. Keep an eye on the fulfillment window.
 >
@@ -146,6 +173,29 @@ rejection ends a PO's path in the rehearsal.
 display(Markdown("**What-ifs run so far**\\n\\n| What-if | POs pulled | Current limits | Proposed | Pulled with | Applied as |\\n|---|---|---|---|---|---|\\n" +
     "\\n".join(f"| {r['id']} | {r['pos']} | {' / '.join(f'{v:,.0f}' for v in r['cur'])} | {' / '.join(f'{v:,.0f}' for v in r['prop'])} | "
                f"{r['method'].split(' ')[0]} | {r['applied'] or '-'} |" for r in rows) if rows else "_No what-if yet._"))"""),
+]
+
+PROCUREMENT = [
+    md("""## {n}. Procurement Assistant: create, resubmit and cancel POs
+
+Since model v2.3.3 a person does what the `po-creation` loop used to do. The agent recommends with the loop's own rules;
+you accept all, some, or change quantities, give **one justification per PO**, and confirm (a text box under the cell:
+`y` to write). Every PO records who created it, when, why, `Source: "agent"`, and the recommended quantity next to the one
+ordered. Rejected POs are yours too: resubmit them, or cancel them with a reason.
+
+The agent never suggests splitting a PO to fit under a lower approval limit, and refuses two POs for one Supplier in a batch.
+
+**This needs `SIMULATION_MODE = "agents"`** (set in step "Sign in", then rerun it) and the loops started with
+`run_loops_agents.bat`. In `"full"` mode the loops create and resubmit POs, so the agent offers no PO tools and only
+answers questions about them."""),
+    code('sign_in("16")      # Albert Camus, Procurement Assistant'),
+    code('ask("What needs restocking?")'),
+    md("Reply in your own words, for example the line below: which POs to create, any quantity changes, and why."),
+    code('# ask("Create PO 1 as recommended, and PO 2 with 20 units fewer of the first product. Justification: restock ahead of the weekend orders.")'),
+    code('ask("Which rejected POs should I resubmit or cancel?")'),
+    code('# ask("Resubmit the first one with the recommended quantities: L1 asked for a smaller order. Cancel any with nothing still needed.")'),
+    code('ask("Show the POs created, resubmitted or cancelled through the agent, and where the recommendation was changed.")'),
+    code('sign_in(EMPLOYEE_ID)      # back to the first sign-in'),
 ]
 
 LEARNED = [
@@ -213,7 +263,7 @@ logging.getLogger("neo4j.notifications").setLevel(logging.ERROR)
 
 from IPython.display import Markdown, display
 import agent as northwind_agent
-from build_kb import build
+from build_kb import build, ONTOLOGY_VERSION
 from kb_query import KnowledgeBase
 print("Project folder:", PROJECT)
 import shutil
@@ -225,8 +275,9 @@ print("relate CLI:", cli or "not found -- the what-if (step 5) will copy data th
         code(SIGN_IN),
         *renumber(QUESTIONS, 4),
         *renumber(WHATIF, 5),
-        *renumber(LEARNED, 6),
-        md("## 7. Done"),
+        *renumber(PROCUREMENT, 6),
+        *renumber(LEARNED, 7),
+        md("## 8. Done"),
         code("""session.close()
 print("Closed the Aura connection and the knowledge store. What the agent learned stays in kb/northwind_kb.rl.")"""),
     ]
@@ -237,10 +288,10 @@ STORE_CELL = """EMBEDDINGS = "none"        # or "voyage-4-nano"
 REBUILD = False            # rebuild after editing kb/semantics.json or the model files (learning is kept)
 
 store = PROJECT / "kb" / "northwind_kb.rl"
-current = "none"
+current, version = "none", None
 if store.exists():
-    k = KnowledgeBase(store); current = k.embedding_model; k.close()
-if REBUILD or not store.exists() or current != EMBEDDINGS:
+    k = KnowledgeBase(store); current, version = k.embedding_model, k.ontology_version; k.close()
+if REBUILD or not store.exists() or current != EMBEDDINGS or version != ONTOLOGY_VERSION:   # model files changed: rebuild
     print(json.dumps(build(store, embeddings=EMBEDDINGS), indent=2))
 else:
     print(f"Using {store.name} (embeddings: {current})")"""
@@ -249,7 +300,7 @@ else:
 def colab_notebook():
     cells = [
         md(INTRO.format(suffix=" (Google Colab)", where="""
-This notebook runs on Google's servers. Your six Python loops keep running wherever they are; both talk to the same
+This notebook runs on Google's servers. Your Python loops keep running wherever they are; both talk to the same
 Aura database. The knowledge store is kept on your **Google Drive** between Colab sessions, so the agent's learning
 isn't lost when the runtime resets.
 """, keys="""4. Add these **Colab Secrets** (key icon 🔑 in the left sidebar), and switch on *Notebook access* for each:
@@ -343,7 +394,7 @@ for sub in ("agent", "kb"):
     sys.path.insert(0, str(PROJECT / sub))
 logging.getLogger("neo4j.notifications").setLevel(logging.ERROR)
 from IPython.display import Markdown, display
-from build_kb import build
+from build_kb import build, ONTOLOGY_VERSION
 from kb_query import KnowledgeBase
 import agent as northwind_agent
 
@@ -358,10 +409,10 @@ if IN_COLAB and USE_DRIVE:
         shutil.copy(DRIVE_STORE, store)
         print("Copied the knowledge store from Drive.")
 
-current = "none"
+current, version = "none", None
 if store.exists():
-    k = KnowledgeBase(store); current = k.embedding_model; k.close()
-if REBUILD or not store.exists() or current != EMBEDDINGS:
+    k = KnowledgeBase(store); current, version = k.embedding_model, k.ontology_version; k.close()
+if REBUILD or not store.exists() or current != EMBEDDINGS or version != ONTOLOGY_VERSION:   # model files changed: rebuild
     print(json.dumps(build(store, embeddings=EMBEDDINGS), indent=2))
 else:
     print(f"Using {store.name} (embeddings: {current})")"""),
@@ -370,8 +421,9 @@ else:
         code(SIGN_IN),
         *renumber(QUESTIONS, 6),
         *renumber(WHATIF, 7),
-        *renumber(LEARNED, 8),
-        md("## 9. Done — save the knowledge store to Drive"),
+        *renumber(PROCUREMENT, 8),
+        *renumber(LEARNED, 9),
+        md("## 10. Done — save the knowledge store to Drive"),
         code("""session.close()
 if DRIVE_STORE:
     shutil.copy(store, DRIVE_STORE)

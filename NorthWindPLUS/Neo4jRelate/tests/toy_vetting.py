@@ -1,14 +1,14 @@
 """A small PO-vetting queue for the what-if tests: three approver levels, the state nodes and five POs.
 
 Costs (qty x UnitPrice 10 x discount 0.7): PO-1 700, PO-2 4,200, PO-3 7,000, PO-4 14,000, PO-5 5,000.00 exactly
-(on the L1 limit, so only a rejection can match it under the current limits).
+(on the L1 limit: since v2.3.3's contiguous bands, L1 can approve it).
 """
 
 TOY_VETTING = """
 CREATE (n:NewPoS {Name:"NewPoS"}), (:ApprovedPoS {Name:"ApprovedPoS"}), (:RejectedPoS {Name:"RejectedPoS"}),
   (l1:RolE {Title:"Level1Approver", ApprovalBase:0.00, ApprovalLimit:5000.00}),
-  (l2:RolE {Title:"Level2Approver", ApprovalBase:5000.01, ApprovalLimit:12500.00}),
-  (l3:RolE {Title:"Level3Approver", ApprovalBase:12500.01, ApprovalLimit:500000.00}),
+  (l2:RolE {Title:"Level2Approver", ApprovalBase:5000.00, ApprovalLimit:12500.00}),
+  (l3:RolE {Title:"Level3Approver", ApprovalBase:12500.00, ApprovalLimit:500000.00}),
   (l1)-[:IS_ACTIVE_ROLE {StartDate:datetime()}]->(:Employee {EmployeeID:"12"}),
   (l2)-[:IS_ACTIVE_ROLE {StartDate:datetime()}]->(:Employee {EmployeeID:"13"}),
   (l3)-[:IS_ACTIVE_ROLE {StartDate:datetime()}]->(:Employee {EmployeeID:"14"}),

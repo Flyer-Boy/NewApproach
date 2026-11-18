@@ -3,10 +3,10 @@
 Build the agent's knowledge store (a relate .rl file) for NorthWind PLUS.
 
 Sources, all from the model/ folder:
-  - NorthwindPlusGraphType_v2.3.2.cypher        exact Neo4j names, property types, keys, relationship endpoints
-  - NorthwindPlusGraph_RDF-turtle_v2.3.2.ttl    Entity vs Collection, rdfs:comment meanings
+  - NorthwindPlusGraphType_v2.3.3.cypher        exact Neo4j names, property types, keys, relationship endpoints
+  - NorthwindPlusGraph_RDF-turtle_v2.3.3.ttl    Entity vs Collection, rdfs:comment meanings
   - kb/semantics.json                           curated business meanings (from the import script's comments)
-  - NorthWind_PLUS_Graph_Data_Model_Import_v2.3.2.cypher
+  - NorthWind_PLUS_Graph_Data_Model_Import_v2.3.3.cypher
                                                 read templates (queries section) + the governed Approval Policy Change
   - NorthwindPlus_Stress_Test.py                simulation actions (the six loops' Cypher)
 
@@ -49,14 +49,14 @@ from embeddings import get_embedder  # noqa: E402
 from kb_write import (add_template, code_part, embed_templates, is_write, link_workflows,  # noqa: E402,F401
                       load_semantics, slug, unknown_names, concepts_in)
 
-ONTOLOGY_VERSION = "2.3.2"
+ONTOLOGY_VERSION = "2.3.3"
 ROOT = Path(__file__).resolve().parent.parent
 MODEL = ROOT / "model"
 KB = ROOT / "kb"
 
-GRAPH_TYPE_FILE = MODEL / "NorthwindPlusGraphType_v2.3.2.cypher"
-TTL_FILE = MODEL / "NorthwindPlusGraph_RDF-turtle_v2.3.2.ttl"
-IMPORT_FILE = MODEL / "NorthWind_PLUS_Graph_Data_Model_Import_v2.3.2.cypher"
+GRAPH_TYPE_FILE = MODEL / "NorthwindPlusGraphType_v2.3.3.cypher"
+TTL_FILE = MODEL / "NorthwindPlusGraph_RDF-turtle_v2.3.3.ttl"
+IMPORT_FILE = MODEL / "NorthWind_PLUS_Graph_Data_Model_Import_v2.3.3.cypher"
 HARNESS_FILE = MODEL / "NorthwindPlus_Stress_Test.py"
 SEMANTICS_FILE = KB / "semantics.json"
 
@@ -208,7 +208,7 @@ def seed_templates() -> list[dict]:
             continue
         title = t["comments"][0]
         write = is_write(t["cypher"])
-        if "PolicyChange" in t["cypher"] and write:
+        if write and ("PolicyChange" in t["cypher"] or "(governed)" in title):
             governance = "governed"          # exposed to the agent, with role check + confirmation
         elif write:
             governance = "admin"             # demo/maintenance writes (e.g. the restock cheat): not exposed

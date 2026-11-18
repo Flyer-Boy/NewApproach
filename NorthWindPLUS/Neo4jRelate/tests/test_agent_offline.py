@@ -85,9 +85,7 @@ def make_session(employee_id, steps, answers=None, store=None):
     s.employee_id = employee_id
     s.user = s.aura.whoami(employee_id)
     s.messages = []
-    s.whatifs = {}
-    s.policy_template = s.kb.template_by_title(agent_mod.POLICY_TEMPLATE_TITLE)
-    s.preview_template = s.kb.template_by_title(agent_mod.PREVIEW_TEMPLATE_TITLE)
+    s._setup_tools()
     s.log_path = STORE_DIR / f"log-{employee_id}.jsonl"
     s.system = []
     s._reset_question_state()
@@ -185,7 +183,7 @@ RETURN count(po) AS waitingPOs, round(sum(cost), 2) AS totalValue"""
     check("declining at the prompt writes nothing", "refused" in seen["declined_change"] and seen["changes_after_decline"] == 0)
     check("confirmed change applied with before/after", seen["applied"]["rows"][0]["LimitsAfter"] == [8000.0, 20000.0, 500000.0])
     bands = {r["t"]: (r["b"], r["l"]) for r in s.aura.read("MATCH (r:RolE) WHERE r.Title STARTS WITH 'Level' RETURN r.Title AS t, r.ApprovalBase AS b, r.ApprovalLimit AS l")["rows"]}
-    check("bands contiguous after change", bands == {"Level1Approver": (0.0, 8000.0), "Level2Approver": (8000.01, 20000.0), "Level3Approver": (20000.01, 500000.0)})
+    check("bands contiguous after change", bands == {"Level1Approver": (0.0, 8000.0), "Level2Approver": (8000.0, 20000.0), "Level3Approver": (20000.0, 500000.0)})
     check("PolicyChange linked to requester", s.aura.read("MATCH (:PolicyChange)-[:REQUESTED_BY]->(e:Employee) RETURN e.EmployeeID AS id")["rows"] == [{"id": "25"}])
     check("governed change recorded as a USED template", s.kb._rows("MATCH (i:Interaction {id:$id})-[:USED]->(q) RETURN q.governance AS g", {"id": s.interaction_id}) == [{"g": "governed"}])
     log = [json.loads(l) for l in s.log_path.read_text().splitlines()]
