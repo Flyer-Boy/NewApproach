@@ -317,7 +317,11 @@ Then run the cells from the top (*Runtime → Run all* works too).""")),
 
 By default this clones the [NewApproach](https://github.com/Flyer-Boy/NewApproach) repository from GitHub (about
 14 MB) and uses its `NorthWindPLUS/Neo4jRelate` folder. To run your own copy instead, set `REPO_URL` to your fork,
-or set it to `""` and upload `relate-agent.zip` when the file picker appears."""),
+or set it to `""` and upload `relate-agent.zip` when the file picker appears.
+
+**Getting a newer version** after you push changes: rerun this cell (it pulls the latest from GitHub), then
+*Runtime → Restart session* and *Run all*. The restart matters: Python keeps the old modules loaded until then. A
+restart keeps the downloaded files, so the next run updates them rather than cloning again."""),
         code("""import os, sys, subprocess, zipfile, json, logging, shutil
 from pathlib import Path
 
@@ -338,9 +342,17 @@ def find_project(base: Path):
     return None
 
 PROJECT = find_project(WORK)
+REPO_DIR = WORK / "repo"
 if PROJECT is None and REPO_URL:
-    subprocess.run(["git", "clone", "--depth", "1", REPO_URL, str(WORK / "repo")], check=True)
-    PROJECT = find_project(WORK / "repo")
+    if (REPO_DIR / ".git").exists():
+        # Already cloned earlier in this runtime (a session restart keeps the files): bring it up to date.
+        r = subprocess.run(["git", "-C", str(REPO_DIR), "pull", "--ff-only"], capture_output=True, text=True)
+        print((r.stdout or r.stderr).strip()[-500:])
+        if r.returncode:
+            raise RuntimeError(f"Couldn't update {REPO_DIR}. Delete it (!rm -rf {REPO_DIR}) and rerun this cell.")
+    else:
+        subprocess.run(["git", "clone", "--depth", "1", REPO_URL, str(REPO_DIR)], check=True)
+    PROJECT = find_project(REPO_DIR)
 if PROJECT is None and IN_COLAB:
     from google.colab import files
     print("Choose relate-agent.zip ...")
