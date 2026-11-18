@@ -67,7 +67,11 @@ closes the previous session first (relate allows one writing connection per stor
 Procurement Assistants), `"agents"` with `run_loops_agents.bat` (the Procurement Assistant creates and resubmits POs).
 In `agents` mode the agent refuses to create POs while the PO Creation loop still seems to be running."""
 
-SIGN_IN = """EMPLOYEE_ID = "25"
+SIGN_IN = """if "northwind_agent" not in globals():
+    raise RuntimeError("Run the cells above first (Runtime > Run all, or from step 1): this cell needs the agent and "
+                       "the knowledge store set up by the earlier steps. A runtime restart clears them.")
+
+EMPLOYEE_ID = "25"
 SIMULATION_MODE = "full"                   # "full" (run_loops_full.bat) or "agents" (run_loops_agents.bat)
 MODEL = northwind_agent.DEFAULT_MODEL      # e.g. "claude-opus-5-5" for harder questions
 import os
