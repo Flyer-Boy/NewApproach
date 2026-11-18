@@ -92,7 +92,9 @@ NAMES = {t["name"] for t in TOOLS}
 RULES = """
 Procurement Assistant work (this user holds the role):
 - "What needs restocking?" -> recommend_restock. Present the POs as a numbered list: Supplier, products with
-  recommended quantities, estimated cost, and the approval level each PO will need.
+  recommended quantities, estimated cost, and the approval level each PO will need. Take every count and total
+  (POs per approval level, total cost) from the result's "summary"; never count or add them up yourself. Name the
+  template the result gives as the source.
 - The user accepts all, some, or changes quantities ("accept 1 and 3; for 2 make Chai 50"). Ask for one
   justification per PO if they haven't given one; use their words. Then call create_purchase_orders with only the
   accepted POs. It shows the final list and asks the user to confirm; nothing is written before that.
@@ -105,6 +107,10 @@ Procurement Assistant work (this user holds the role):
 - Only say a PO was created, resubmitted or cancelled when the tool result lists it. If the user asks for a write,
   call the tool (it asks them to confirm); never describe a write that didn't happen. If a tool writes nothing,
   say so plainly and give its reason.
+- Overlaps: use the result's summary.overlaps, never your own reading of the rows. A product listed there is needed
+  once but appears on several rejected POs; suggest resubmitting one PO per product. Resubmitting both is not a
+  double order: each write re-checks what is still needed, so the later PO's overlapping lines are left out and
+  reported. POs not listed in an overlap have no overlap.
 - A rejected PO marked "nothing is still needed" can't be resubmitted: say why from its lines (units in stock, units
   already on active POs, quantities promised to open orders) and offer to cancel it instead.
 """
@@ -157,8 +163,24 @@ class Procurement:
 
     # ---------------- recommendations ----------------
 
+    @staticmethod
+    def _summary(rows: list[dict], cost_key: str = "EstimatedCost") -> dict:
+        """Counts and totals computed here, so the model never adds them up itself."""
+        by_level: dict[str, dict] = {}
+        for r in rows:
+            lvl = r.get("ApprovalLevelNeeded") or "?"
+            entry = by_level.setdefault(lvl, {"POs": 0, "estimatedCost": 0.0, "suppliers": []})
+            entry["POs"] += 1
+            entry["estimatedCost"] = round(entry["estimatedCost"] + (r.get(cost_key) or 0), 2)
+            entry["suppliers"].append(r.get("Supplier"))
+        return {"POs": len(rows), "estimatedCost": round(sum(r.get(cost_key) or 0 for r in rows), 2),
+                "lines": sum(len(r.get("Lines") or []) for r in rows), "byApprovalLevel": by_level}
+
     def recommend_restock(self, args: dict) -> dict:
         result = self.s.aura.read(self.t_restock["cypher"])
+        result["template"] = self.t_restock["title"]
+        if "rows" in result:
+            result["summary"] = self._summary(result["rows"])
         if (warning := self._loop_refusal("create")):
             result["warning"] = warning["refused"] + " Recommendations shown, but POs can't be created until then."
         if "rows" in result:
@@ -169,6 +191,20 @@ class Procurement:
 
     def recommend_resubmissions(self, args: dict) -> dict:
         result = self.s.aura.read(self.t_resub["cypher"])
+        result["template"] = self.t_resub["title"]
+        if "rows" in result:
+            result["summary"] = self._summary(result["rows"])
+            result["summary"]["resubmittable"] = [r["RejectedPO"] for r in result["rows"] if r.get("EstimatedCost")]
+            result["summary"]["nothingStillNeeded"] = [r["RejectedPO"] for r in result["rows"] if not r.get("EstimatedCost")]
+            # Each rejected PO is evaluated on its own, so a product on two of them shows the same need twice.
+            needed: dict[str, list[str]] = {}
+            names: dict[str, str] = {}
+            for r in result["rows"]:
+                for l in r["Lines"]:
+                    if l.get("RecommendedQt"):
+                        needed.setdefault(l["ProductID"], []).append(r["RejectedPO"])
+                        names[l["ProductID"]] = l["Product"]
+            result["summary"]["overlaps"] = [{"product": names[p], "rejectedPOs": pos} for p, pos in needed.items() if len(pos) > 1]
         if (warning := self._loop_refusal("resubmit")):
             result["warning"] = warning["refused"] + " Recommendations shown, but POs can't be resubmitted until then."
         if "rows" in result:
@@ -204,7 +240,8 @@ class Procurement:
         for it in items:
             rec = recommended.get(it["productId"])
             rq = rec.get("RecommendedQt") if rec else None
-            unit = (rec.get("UnitCost") or (rec.get("LineCost", 0) / rq if rq else None)) if rec else None
+            # LineCost / RecommendedQt is closer to Aura's exact price than UnitCost, which is rounded to cents.
+            unit = ((rec["LineCost"] / rq) if rq and rec.get("LineCost") else rec.get("UnitCost")) if rec else None
             line = {"productId": it["productId"], "product": rec.get("Product") if rec else f"product {it['productId']}",
                     "qty": it["qty"], "recommendedQt": rq if rq else None}
             if not rq:
@@ -225,7 +262,10 @@ class Procurement:
     def _show(self, header: str, entries: list[dict]) -> None:
         print(f"\n  >>> {header}")
         for i, e in enumerate(entries, 1):
-            print(f"      {i}. {e['title']}  |  est. {e['cost'] if e['cost'] is not None else '?'}  |  needs {e['level']}")
+            if e["level"] == "-":          # a cancellation: no cost, no approval level
+                print(f"      {i}. {e['title']}")
+            else:
+                print(f"      {i}. {e['title']}  |  est. {e['cost'] if e['cost'] is not None else '?'}  |  needs {e['level']}")
             for l in e.get("lines", []):
                 rec = f" (recommended {l['recommendedQt']})" if l["recommendedQt"] not in (None, l["qty"]) else ""
                 print(f"         - {l['product']}: {l['qty']}{rec}")
@@ -344,7 +384,14 @@ class Procurement:
         for c in cancels:
             if not (c.get("justification") or "").strip():
                 return {"refused": f"{c['rejectedPO']} has no justification. Ask the user for one."}
-        entries = [{"title": f"Cancel {c['rejectedPO']}", "cost": None, "level": "-", "justification": c["justification"].strip(),
+        def title(po: str) -> str:
+            rec = self.resub.get(po)
+            if not rec:
+                return f"Cancel {po}"
+            rej = rec.get("Rejection") or {}
+            by = f", rejected at {rej.get('Level')} by {rej.get('RejectedBy')}" if rej.get("RejectedBy") else ""
+            return f"Cancel {po} ({rec.get('Supplier')}{by})"
+        entries = [{"title": title(c["rejectedPO"]), "cost": None, "level": "-", "justification": c["justification"].strip(),
                     "lines": [], "flags": []} for c in cancels]
         self._show(f"Cancel {len(entries)} rejected PO(s) as {self.s.user['name']}:", entries)
         if not self.s.confirm("      Cancel them? [y/N] "):

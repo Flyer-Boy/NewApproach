@@ -106,6 +106,9 @@ def main():
     check("unavailable and well-stocked products aren't recommended",
           all(l["Product"] not in ("Chang", "Discontinued Spice") for r in rec["rows"] for l in r["Lines"]))
     check("each PO shows the approval level it will need", by_sup["1"]["ApprovalLevelNeeded"] == "L1")
+    check("the recommendation carries its counts and totals, and names its template",
+          rec["summary"]["POs"] == 2 and rec["summary"]["byApprovalLevel"]["L1"]["POs"] == 2
+          and rec["summary"]["estimatedCost"] == 700.0 and rec["template"].startswith("Restock recommendation"))
 
     # 3. Guard rails before anything is written
     fresh = session("17")
@@ -172,6 +175,9 @@ def main():
     check("resubmission recommendation: PO-R1 Chai 25, rejection by Gloria Gaynor at L1 with her comment",
           rs["PO-R1"]["Lines"][0]["RecommendedQt"] == 25 and rs["PO-R1"]["Rejection"]["RejectedBy"] == "Gloria Gaynor"
           and rs["PO-R1"]["Rejection"]["Level"] == "L1")
+    summ = bernard.procurement.recommend_resubmissions({})["summary"]
+    check("resubmission summary: resubmittable vs nothing still needed, computed by the tool",
+          summ["resubmittable"] == ["PO-R1"] and summ["nothingStillNeeded"] == ["PO-R2"] and summ["overlaps"] == [])
     check("PO-R2 (discontinued product) is flagged as a candidate for cancelling",
           rs["PO-R2"]["EstimatedCost"] == 0 and "cancelling" in rs["PO-R2"]["ApprovalLevelNeeded"])
     nothing = bernard.tool("resubmit_purchase_orders", {"resubmissions": [
