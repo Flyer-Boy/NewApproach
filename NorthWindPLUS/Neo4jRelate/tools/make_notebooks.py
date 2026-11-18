@@ -356,20 +356,35 @@ print("Project folder:", PROJECT)"""),
         md("""## 2. Install packages
 
 Takes a minute the first time in a new Colab session. Set `EMBEDDINGS = "voyage-4-nano"` to also install
-`sentence-transformers` for semantic search (Colab already has `torch`)."""),
-        code("""EMBEDDINGS = "none"        # or "voyage-4-nano"
+`sentence-transformers` for semantic search (Colab already has `torch`).
+
+**If Colab asks to restart the session after this step** (it does when a package it had already loaded gets upgraded),
+accept, then choose *Runtime → Run all* again. A restart clears everything the earlier cells set up; the second run
+skips the clone and finishes the install in seconds."""),
+        code("""if "PROJECT" not in globals():
+    raise RuntimeError("Run step 1 first. If Colab restarted the session, that cleared the earlier steps: choose "
+                       "Runtime > Run all again (step 1 won't clone twice, and step 2 finishes in seconds).")
+
+EMBEDDINGS = "none"        # or "voyage-4-nano"
 
 packages = ["-r", "requirements.txt"] + (["sentence-transformers>=5"] if EMBEDDINGS == "voyage-4-nano" else [])
 r = subprocess.run([sys.executable, "-m", "pip", "install", "-q", *packages], capture_output=True, text=True)
 print(r.stdout[-2000:] or "Installed.")
 if r.returncode:
     print(r.stderr[-3000:])
-    raise RuntimeError("pip install failed (see above)")"""),
+    raise RuntimeError("pip install failed (see above)")
+if "previously imported" in (r.stdout + r.stderr):
+    print("Colab needs to restart the session to use the upgraded packages: click 'Restart session' if it offers, "
+          "or Runtime > Restart session, then Runtime > Run all.")"""),
         md("""The **relate command-line tool** gives the what-if section (step 7) `relate pull`. It isn't part of
 `pip install relate-db`; this cell runs relate's official installer, which checks the download's signature and puts
 the binary in `~/.local/bin`. Set `INSTALL_RELATE_CLI = False` to skip it: the what-if then copies the data through the
 Neo4j driver instead."""),
-        code("""INSTALL_RELATE_CLI = True
+        code("""if "PROJECT" not in globals():
+    raise RuntimeError("Run step 1 first. If Colab restarted the session, that cleared the earlier steps: choose "
+                       "Runtime > Run all again (step 1 won't clone twice, and step 2 finishes in seconds).")
+
+INSTALL_RELATE_CLI = True
 
 cli = Path.home() / ".local" / "bin" / "relate"
 if INSTALL_RELATE_CLI and not cli.exists():
@@ -385,13 +400,21 @@ else:
 
 Required: `ANTHROPIC_API_KEY`, `NEO4J_URI`, `NEO4J_PASSWORD`. Optional: `NEO4J_USER` (or `NEO4J_USERNAME`, as in Aura's
 credentials file; default `neo4j`) and `NEO4J_DATABASE` (default `neo4j`). Each secret needs **Notebook access** switched on."""),
-        code(SECRETS_CELL),
+        code('''if "PROJECT" not in globals():
+    raise RuntimeError("Run step 1 first. If Colab restarted the session, that cleared the earlier steps: choose "
+                       "Runtime > Run all again (step 1 won't clone twice, and step 2 finishes in seconds).")
+
+''' + SECRETS_CELL),
         md("""## 4. Knowledge store (relate), kept on Google Drive
 
 The store lives at `MyDrive/northwind_relate_agent/northwind_kb.rl`. It's copied here at the start and back to Drive
 in the last cell (relate works on a local copy; Drive's file system isn't a good place for a live database file).
 Set `USE_DRIVE = False` to skip Drive (the learning then lasts only for this Colab session)."""),
-        code("""USE_DRIVE = True
+        code("""if "PROJECT" not in globals():
+    raise RuntimeError("Run step 1 first. If Colab restarted the session, that cleared the earlier steps: choose "
+                       "Runtime > Run all again (step 1 won't clone twice, and step 2 finishes in seconds).")
+
+USE_DRIVE = True
 REBUILD = False            # rebuild after editing kb/semantics.json or the model files (learning is kept)
 
 for sub in ("agent", "kb"):
