@@ -1,12 +1,14 @@
 # A New Approach to Application Development using Graphs
 
+🌐 **English** · [Português (Brasil)](Leiame%28pt-BR%29.md) · [Español](Leame%28es-ES%29.md)
+
 **Don't put Graphs around your applications. Build the applications around the Graph.**
 
 This repository contains the scripts, data and prototype code behind my articles on building **Line-of-Business applications natively on a Labeled Property Graph** — where the graph is not only the data layer, but also the place where business state, rules and workflow live.
 
 It holds four proofs of concept, from a Ride-Hailing app to a full 360-degree procurement and order-fulfillment system that runs six business processes concurrently against the same live graph — now on **Neo4j, Memgraph, FalkorDB, Quine and Ultipa**. On Quine, that business even runs itself: a single recipe streams in customers, suppliers and deliveries, and standing queries apply the company's rules inside the graph, with no application code.
 
-And on Neo4j, an **AI agent** now works alongside the live simulation: it answers business questions, changes a business rule under governance, **learns** new queries as people approve them, and has started to **take over part of the simulation's work**: a Procurement Assistant creates and resubmits purchase orders with the agent's recommendations, with a full audit trail. It keeps its own knowledge graph in **[Relate by Neo4j](https://relatedb.ai/)**, Neo4j's new embedded graph database for AI agents, while the business stays in Neo4j Aura.
+And on Neo4j, an **AI agent** now works alongside the live simulation: it answers business questions, changes a business rule under governance, **learns** new queries as people approve them, and has started to **take over part of the simulation's work**: a Procurement Assistant creates and resubmits purchase orders with the agent's recommendations, with a full audit trail. It keeps its own knowledge graph in **[Relate by Neo4j](https://relatedb.ai/)**, Neo4j's new embedded graph database for AI agents, while the business stays in Neo4j Aura. The same purchase-order jobs can also be done in a small **web UI** that runs the same governed Cypher: three front ends (the simulation's script, the agent and the UI), one graph.
 
 ---
 
@@ -167,7 +169,7 @@ And on Neo4j, an AI agent works alongside the simulation:
 
 | Folder | What it is |
 |---|---|
-| [`NorthWindPLUS/Neo4jRelate`](NorthWindPLUS/Neo4jRelate/README.md) | **An AI agent that learns its way around the live graph.** It answers business questions in plain language, changes the approval limits under governance (role check, preview, confirmation, audit trail), and saves new queries as reusable knowledge once a person approves them. In *agents* mode, a Procurement Assistant takes over PO creation and resubmission from the loops: the agent recommends, the person decides and justifies, governed Cypher writes. Its knowledge graph (ontology, query library, question history) lives in **Relate by Neo4j**; the business stays in Neo4j Aura. Runs in Google Colab or Jupyter, with model v2.3.3. On its first live run it found a bug in the simulation itself. |
+| [`NorthWindPLUS/Neo4jRelate`](NorthWindPLUS/Neo4jRelate/README.md) | **An AI agent that learns its way around the live graph.** It answers business questions in plain language, changes the approval limits under governance (role check, preview, confirmation, audit trail), and saves new queries as reusable knowledge once a person approves them. In *agents* mode, a Procurement Assistant takes over PO creation and resubmission from the loops: the agent recommends, the person decides and justifies, governed Cypher writes. Its knowledge graph (ontology, query library, question history) lives in **Relate by Neo4j**; the business stays in Neo4j Aura. Runs in Google Colab or Jupyter, with model v2.3.3. On its first live run it found a bug in the simulation itself. A React + TypeScript **web UI** does the same PO jobs over the same Python and governed Cypher, with recent-demand suggestions and AI-drafted justifications behind the scenes. |
 
 ---
 

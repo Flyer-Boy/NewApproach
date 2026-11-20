@@ -1,5 +1,7 @@
 # NorthWind PLUS
 
+🌐 **English** · [Português (Brasil)](Leiame%28pt-BR%29.md) · [Español](Leame%28es-ES%29.md)
+
 **A full Line-of-Business application running natively on a Labeled Property Graph — ported to Neo4j, Memgraph, FalkorDB, Quine and Ultipa, with an AI agent that runs alongside it on Relate by Neo4j.**
 
 NorthWind PLUS rebuilds the classic Northwind database as a *Graph-Native* application and extends it into a complete, 360-degree business cycle: customer orders, low-stock detection, purchase orders with three levels of approval, supplier RFQs, warehouse receiving, finance closure and order fulfillment — all expressed in Cypher (or, on Ultipa, ISO GQL), inside the graph.
@@ -122,6 +124,9 @@ NorthWindPLUS/
 │   ├── NorthWind_PLUS_Agent.ipynb                       Local Jupyter front end
 │   ├── run_loops_full.bat                               Windows: full mode, all six loops (credentials read from .env)
 │   ├── run_loops_agents.bat                             Windows: agents mode, five loops; PO creation and resubmission by the agent
+│   ├── run_ui.bat                                       Windows: the Procurement web UI at http://localhost:8000
+│   ├── api/                                             The web UI's API (FastAPI), over the same Python and governed Cypher as the agent
+│   ├── ui/                                              The web UI: Vite + React + TypeScript
 │   ├── model/                                           v2.3.3: import script, GRAPH TYPE, RDF ontology, upgrades from v2.3.1 and v2.3.2, harness
 │   ├── kb/                                              The agent's knowledge graph in Relate: build, hybrid search, learning loop, embeddings
 │   ├── agent/                                           The agent (Claude + tools, offered by role) and its read-only / governed access to Neo4j
@@ -418,6 +423,7 @@ The model is the same everywhere (v2.4 on Quine only removes edge properties). W
 - **Changes a business rule under governance.** The L1/L2/L3 approval limits live on role nodes and every vetting query reads them at execution time, so changing them changes how the next PO is vetted, with no code change and no restart. The agent can change them only for someone holding the new `ProcurementPolicyAdmin` role, after a preview and an explicit confirmation, and every change is recorded as a `PolicyChange` node.
 - **Rehearses before changing.** A what-if copies the POs waiting for approval into a scratch Relate store with `relate pull` and replays the simulation's own vetting Cypher with the current and proposed limits.
 - **Takes over a business process (agents mode).** A Procurement Assistant asks what needs restocking; the agent recommends POs with the loop's own rule; the person accepts, changes quantities and justifies each PO; governed Cypher writes them. Rejected POs are resubmitted or cancelled the same way. Every PO records who, when, why, `Source: "agent"` and the recommended quantity next to the one ordered.
+- **Has a web UI twin.** The same PO jobs can be done in a small React + TypeScript web UI, over the same Python and governed Cypher. It shows recent-demand suggestions, can ask Claude to draft a justification, and every PO it writes records `Source: "ui"`.
 - **Learns.** Every question is kept as an `Interaction`; new queries that worked become templates once a person approves them, and later questions find them.
 
 Its knowledge (the ontology built from the GRAPH TYPE and the RDF file, the query library from the import script, the question history) lives in **[Relate by Neo4j](https://relatedb.ai/)**, an embedded graph database that runs inside the agent's process. The business data never leaves Aura. This fits the model's principles: the semantics an AI needs are already in the graph, so the agent reads them directly instead of relying on an ETL pipeline.

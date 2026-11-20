@@ -2,6 +2,8 @@
 
 ![Project Logo](https://github.com/Flyer-Boy/NewApproach/blob/main/NorthWindPLUS/Neo4jRelate/Neo4j%20Relate%26Aura.jpeg)
 
+🌐 **English** · [Português (Brasil)](Leiame%28pt-BR%29.md) · [Español](Leame%28es-ES%29.md)
+
 **An AI agent that learns its way around a live graph database.**
 
 [![Open in Colab](https://colab.research.google.com/assets/colab-badge.svg)](https://colab.research.google.com/github/Flyer-Boy/NewApproach/blob/main/NorthWindPLUS/Neo4jRelate/NorthWind_PLUS_Agent_Colab.ipynb)
@@ -15,7 +17,9 @@ approves become reusable knowledge that later questions find.
 Its actions so far: a policy admin can rehearse and change the L1/L2/L3 purchase-order approval limits, and a
 **Procurement Assistant now does what one of the simulation loops used to do**: the agent recommends which POs to
 create or resubmit, and the person accepts, changes or cancels them, with a justification on each. It's the first step
-of handing the simulation's jobs from Python loops to people working with agents, with a full audit trail.
+of handing the simulation's jobs from Python loops to people working with agents, with a full audit trail. The same
+PO jobs can also be done in a **small web UI** (React + TypeScript) that runs the same governed Cypher, with help from
+the graph and from Claude behind the scenes (see *Web UI*).
 
 Neo4j Aura stays the system of record. The agent's knowledge (the ontology, a library of proven Cypher, the question
 history, everything it has learned) lives in **[Relate by Neo4j](https://relatedb.ai/)**, an embedded graph database
@@ -149,7 +153,7 @@ flowchart LR
 ```
 
 1. **Build:** `kb/build_kb.py` turns the model files into a knowledge graph in relate. It reads the GRAPH TYPE
-   (exact names and types), the RDF/Turtle ontology (Entity vs. Collection), curated business meanings, 59 queries
+   (exact names and types), the RDF/Turtle ontology (Entity vs. Collection), curated business meanings, 61 queries
    from the import script and 19 actions from the simulation harness.
 2. **Ask:** the agent rewrites the question into the model's vocabulary, searches relate, and then runs a matching
    template, adapts one, or writes new Cypher from the ontology. It runs the query on Aura and answers.
@@ -238,9 +242,40 @@ limit** (a classic procurement control failure); quantities far from the recomme
 are flagged in the confirmation.
 
 The model change was designed for the vetting agents that come next: every decision relationship (approvals,
-rejections, Buyer decisions, deliveries, payments) can carry `Source: "simulation"` or `"agent"` next to its existing
+rejections, Buyer decisions, deliveries, payments) can carry `Source: "simulation"`, `"agent"` or `"ui"` next to its existing
 `Date` and `Comment`, so loops and agents can work side by side and still be told apart. See
 [DESIGN_procurement_agent.md](DESIGN_procurement_agent.md).
+
+## Web UI: the third front end
+
+The same PO jobs, a third way: a small React + TypeScript app over a Python API (`api/main.py`) that calls
+`agent/procurement.py`, the code the agent uses. So the script (the loops), the agent and the UI all reach the graph
+through the same governed Cypher. Only the interface differs, and the audit trail tells them apart: every PO written in
+the UI records `Source: "ui"`.
+
+- **Restock:** one card per Supplier with the graph's recommendation, editable quantities, the estimated cost and the
+  approval level the PO will need (recomputed by the API as you type), and a required justification.
+- **Rejected POs:** who rejected each one, at which level and why, and what's still needed now; resubmit or cancel.
+- **Audit:** POs created, resubmitted and cancelled by the simulation, the agent and the UI, with each person's
+  justification and changes to the recommendation.
+- **Review, then confirm:** each write is two calls: *prepare* (the agent's checks and a preview; nothing is written)
+  and *commit*. A commit checks that the review is the one shown, that it's less than 15 minutes old, and that the PO
+  Creation loop is still off.
+
+There's no chat. Two kinds of help work behind the scenes, both advisory:
+
+- **Demand suggestions (Cypher, no AI).** A new read template, *Recent demand for products*, measures what customers
+  ordered over the last 7 days and how many days a planned quantity covers. When that's under 7, the UI suggests the
+  quantity that would cover them, and the approval level the PO would then need (`DEMAND_WINDOW_DAYS` and
+  `DEMAND_COVER_DAYS` in `.env`). The agent can use the same template.
+- **Justification drafts (Claude).** A *Suggest* button asks Claude for a draft built only from facts the server
+  gathers from the graph (stock, open orders, demand, the rejecter's comment). The person edits it, and **only the
+  submitted text is recorded**. Without `ANTHROPIC_API_KEY`, the button isn't shown.
+
+The browser never sees the Aura credentials or picks its own identity: the API holds both. Sign-in is a picker of
+Procurement Assistants, standing in for a login, like `--as-employee`. The API doesn't open the knowledge store (relate
+allows no other connection while the agent has it open), so it reads its templates straight from the import script,
+with the same parser `build_kb.py` uses. Details: [DESIGN_procurement_ui.md](DESIGN_procurement_ui.md).
 
 ## The knowledge graph
 
@@ -261,8 +296,8 @@ rejections, Buyer decisions, deliveries, payments) can carry `Source: "simulatio
 (:ModelPrinciple {text})   (:KnowledgeBase {ontologyVersion, embeddingModel, embeddingDims})
 ```
 
-Seeded from model v2.3.3: **48 node types, 89 relationship types, 175 properties, 13 workflow steps, 78 templates**.
-The templates are 54 read queries, 4 governed actions (the approval-limit change, and creating, resubmitting and
+Seeded from model v2.3.3: **48 node types, 89 relationship types, 175 properties, 13 workflow steps, 80 templates**.
+The templates are 56 read queries, 4 governed actions (the approval-limit change, and creating, resubmitting and
 cancelling POs), 1 admin-only write and 19 simulation actions.
 
 | Template governance | Meaning |
@@ -392,6 +427,7 @@ Same model (v2.3.3), same agent, same notebook. Pick how much of the business th
 | Who creates and resubmits POs | the loops | a Procurement Assistant with the agent, with a justification on each |
 | What the agent does | answers questions, runs what-ifs, changes the approval limits (policy admin) | all of that, plus recommends, creates, resubmits and cancels POs (Procurement Assistant) |
 | Good for | watching an agent work next to a busy, fully simulated business | the start of handing the simulation's jobs to people working with agents |
+| Web UI (`run_ui.bat`) | signs in and explains why it can't write | the same PO jobs as the agent, with forms |
 
 Set the mode in `.env` (`SIMULATION_MODE=full` or `agents`), with `--mode` on the terminal agent, or in the notebook's
 sign-in cell. The mode must match the loops you started. In `full` mode a Procurement Assistant gets no PO tools, so the
@@ -447,6 +483,21 @@ notebook's kernel is the Python environment where you ran `pip install -r requir
 The Anthropic API is billed through a Claude Console
 account; it isn't included in a Claude Pro chat subscription.
 
+### 1c. Web UI (Windows: `run_ui.bat`)
+
+Agents mode only (`SIMULATION_MODE=agents`, loops started with `run_loops_agents.bat`). Building the UI needs Node.js
+20.19+ or 22.12+, once:
+
+```
+pip install -r requirements.txt -r requirements-ui.txt
+cd ui && npm install && npm run build && cd ..
+uvicorn api.main:app --port 8000          # or run_ui.bat on Windows; then open http://localhost:8000
+```
+
+To try it without Aura or an API key, `python tests/serve_toy_ui.py` runs the API on a small toy graph, with canned
+drafts. **It hasn't been run against a live Aura database yet**; the offline tests and a click-through on the toy graph
+pass.
+
 ### Things to ask
 
 - *Which suppliers get their quotes rejected most often?* Tests the rewording step and template reuse.
@@ -491,6 +542,7 @@ kb/                          the knowledge store (Relate)
   build_kb.py                builds northwind_kb.rl; keeps learned knowledge on rebuild
   kb_query.py                hybrid search, schema context, learning-loop writes
   kb_write.py                shared template writing (seed and learned templates get the same shape)
+  model_templates.py         the templates read straight from the model files (for the web UI's API)
   embeddings.py              none | voyage-4-nano (local) | voyage-api | hash (tests)
   eval_search.py             retrieval check; --compare <provider> for with/without embeddings
 sandbox/                     what-if rehearsals on a pulled copy
@@ -499,14 +551,19 @@ sandbox/                     what-if rehearsals on a pulled copy
 agent/
   agent.py                   the agent (Anthropic SDK tool use)
   aura.py                    Neo4j side: read transactions with warnings, identity, governed write
-  procurement.py             Procurement Assistant tools: recommendations, create / resubmit / cancel POs
-tests/                       offline tests (no API, no Aura)
+  procurement.py             Procurement Assistant tools: recommendations, create / resubmit / cancel POs (prepare/commit)
+api/
+  main.py                    the web UI's API (FastAPI): sessions, prepare/commit, demand, AI drafts; serves ui/dist
+ui/                          the web UI: Vite + React + TypeScript + Chakra UI (npm run build -> ui/dist)
+tests/                       offline tests (no API, no Aura); serve_toy_ui.py runs the web UI on a toy graph
 NorthWind_PLUS_Agent.ipynb         local Jupyter front end
 NorthWind_PLUS_Agent_Colab.ipynb   Google Colab front end
 run_loops_full.bat                 Windows: full mode, all six simulation loops (credentials read from .env)
 run_loops_agents.bat               Windows: agents mode, five loops; PO creation and resubmission by the agent
+run_ui.bat                         Windows: the web UI at http://localhost:8000 (credentials read from .env)
 DESIGN_what_if_sandbox.md          the what-if sandbox (relate pull)
 DESIGN_procurement_agent.md        the Procurement Assistant agent and model v2.3.3
+DESIGN_procurement_ui.md           the web UI, its API and the help behind the scenes
 tools/make_notebooks.py            generates both notebooks
 ```
 
@@ -516,7 +573,8 @@ tools/make_notebooks.py            generates both notebooks
 python tests/test_agent_offline.py     # 27 checks
 python tests/test_aura_driver_path.py  # 8 checks
 python tests/test_whatif_offline.py    # 22 checks; 25 with RELATE_BIN set to a relate CLI
-python tests/test_procurement_offline.py  # 40 checks
+python tests/test_procurement_offline.py  # 60 checks
+python tests/test_procurement_api.py   # 38 checks: the web UI's API
 python kb/eval_search.py               # retrieval: 9/12 without embeddings
 ```
 
@@ -527,11 +585,15 @@ confirmations, the approval-limit change and its audit node, saving and re-findi
 survives a rebuild, `needs-review` flagging, vector search, and the Procurement Assistant: tools by role, the
 recommendations against the loop's formulas, every guard rail, the audit properties, a concurrent PO covering a line,
 resubmit and cancel, and the harness's `--no-resubmit`, contiguous bands and `Source`. The driver test runs the real `aura.py` against a
-stand-in that enforces the Neo4j driver's transaction rules.
+stand-in that enforces the Neo4j driver's transaction rules. The web-UI tests cover prepare/commit and `Source: "ui"`,
+the demand template and its suggestions, the rebuild when model files change, and the API itself: sign-in, role and
+mode checks, stale or reused reviews, the loop guard at commit, and drafts built only from the graph's facts.
 
 ## Relate notes and limits we hit
 
-- One writing process per store (and one writing connection per process, as we found).
+- One writing process per store, and one writing connection per process, as we found. While a process has a store
+  open for writing, no other process can open it at all, not even read-only (`storage locked`). So the web UI's API
+  reads its templates from the model files instead.
 - No APOC, so the simulation's `apoc.lock.nodes` calls run only on Aura; templates are stored in relate but executed
   only on Aura.
 - Full-text search matched whole words only ("rejected" didn't match "Rejection"). We didn't find a stemming
@@ -555,6 +617,7 @@ stand-in that enforces the Neo4j driver's transaction rules.
 | 4 | Learning loop, provenance, warnings to the model, search-first enforcement, embeddings | Tested offline; in live testing |
 | 5 | What-if sandbox with `relate pull` (suggested by a Neo4j staff engineer) | Run live (Colab) |
 | 6 | Model v2.3.3 + Procurement Assistant agent: PO creation and resubmission handed from the loops to a person with the agent; two run modes (full, agents) | Run live (Colab, agents mode): 27 POs created with changes, vetted by the loop; 16 rejected POs resubmitted or cancelled |
+| 7 | Web UI: the same PO jobs with forms, demand suggestions and AI justification drafts; `Source: "ui"` | Tested offline and on a toy graph; not yet run against Aura |
 
 **Parking lot**
 - Copy saved templates (and possibly the question history) into the Aura graph, so they can be queried next to the
@@ -563,6 +626,12 @@ stand-in that enforces the Neo4j driver's transaction rules.
 - Measure voyage-4-nano against the 9/12 baseline.
 
 ## Changelog
+
+- **Stage 7 / web UI:** `agent/procurement.py` split into prepare/commit, with the role and mode check in every entry
+  point; `$source` on the governed PO commands (`"agent"` or `"ui"`; any other value writes nothing); new read
+  templates *Recent demand for products* and *PO activity by front end*; the knowledge store records a hash of the
+  model files and rebuilds when they change, with the model version unchanged; `kb/model_templates.py`; the FastAPI
+  layer (`api/`), the React app (`ui/`), `run_ui.bat` and `tests/serve_toy_ui.py`.
 
 - **Stage 6 / model v2.3.3:** Procurement Assistant agent (`agent/procurement.py`): restock and resubmission
   recommendations, governed create / resubmit / cancel commands, tools offered by role. Model: `Date`,
