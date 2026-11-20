@@ -58,7 +58,31 @@ class Aura:
         self.driver = GraphDatabase.driver(
             uri, auth=(user, password),
             notifications_disabled_classifications=[NotificationDisabledClassification.PERFORMANCE])
-        self.driver.verify_connectivity()
+        self._check_connection(uri)
+
+    def _check_connection(self, uri: str, attempts: int = 4, wait_s: float = 3.0) -> None:
+        """Run a trivial read in the configured database, retrying briefly: Aura's routing can be unavailable for a
+        few seconds (after a resume, during maintenance), and one failed attempt shouldn't stop the agent or the API."""
+        from neo4j import RoutingControl
+        from neo4j.exceptions import AuthError, ServiceUnavailable, SessionExpired
+        import time
+        for attempt in range(1, attempts + 1):
+            try:
+                self.driver.execute_query("RETURN 1", database_=self.database, routing_=RoutingControl.READ)
+                return
+            except AuthError as e:
+                self.driver.close()
+                raise SystemExit(f"Neo4j refused the user name or password in .env ({e.message}).")
+            except (ServiceUnavailable, SessionExpired) as e:
+                if attempt == attempts:
+                    self.driver.close()
+                    raise SystemExit(
+                        f"Couldn't reach database '{self.database}' at {uri} after {attempts} tries ({e}).\n"
+                        "Check that the Aura instance is running (not paused) and that NEO4J_DATABASE and NEO4J_USER "
+                        "match it: newer Aura instances use the instance ID for both, not 'neo4j'.")
+                print(f"  Neo4j not ready yet ({type(e).__name__}); retrying in {wait_s:.0f} s "
+                      f"({attempt}/{attempts - 1})...", flush=True)
+                time.sleep(wait_s)
 
     def close(self):
         self.driver.close()

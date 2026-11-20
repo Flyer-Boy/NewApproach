@@ -183,15 +183,15 @@ A mudança no modelo foi pensada para os agentes de aprovação que virão em se
 
 Os mesmos trabalhos de PO, de uma terceira forma: uma pequena aplicação React + TypeScript sobre uma API em Python (`api/main.py`) que chama o `agent/procurement.py`, o mesmo código que o agente usa. Assim, o script (os loops), o agente e a interface chegam ao grafo pelo mesmo Cypher governado. Só a interface muda, e a trilha de auditoria os diferencia: todo PO gravado pela interface registra `Source: "ui"`.
 
-- **Reposição (Restock):** um cartão por fornecedor com a recomendação do grafo, quantidades editáveis, o custo estimado e o nível de aprovação de que o PO vai precisar (recalculado pela API enquanto você digita), e uma justificativa obrigatória.
-- **POs rejeitados:** quem rejeitou cada um, em qual nível e por quê, e o que ainda é necessário agora; reenviar ou cancelar.
+- **Reposição (Restock):** um cartão por fornecedor com a recomendação do grafo, quantidades editáveis, o custo estimado e o nível de aprovação de que o PO vai precisar (recalculado pela API enquanto você digita), e uma justificativa obrigatória. Os cartões começam fora do lote: use *Include* nos POs a criar agora; o botão *Review* fica fixo na parte de baixo da janela.
+- **POs rejeitados:** quem criou cada um, quem o rejeitou, em qual nível e por quê, e o que ainda é necessário agora; reenviar ou cancelar. É a fila compartilhada da equipe de compras: qualquer Assistente de Compras pode reenviar ou cancelar um PO rejeitado, inclusive um criado por outra pessoa, e a trilha de auditoria registra quem o criou e quem decidiu.
 - **Auditoria:** POs criados, reenviados e cancelados pela simulação, pelo agente e pela interface, com a justificativa de cada pessoa e as alterações em relação à recomendação.
-- **Revisar e depois confirmar:** cada gravação são duas chamadas: *prepare* (as verificações do agente e uma prévia; nada é gravado) e *commit*. O commit verifica se a revisão é a que foi mostrada, se tem menos de 15 minutos e se o loop de PO Creation continua desligado.
+- **Revisar e depois confirmar:** cada gravação são duas chamadas: *prepare* (as verificações do agente e uma prévia; nada é gravado) e *commit*. O commit verifica se a revisão é a que foi mostrada, se tem menos de 15 minutos e se o loop de PO Creation continua desligado. Depois de cada gravação, todas as telas são recarregadas a partir do grafo.
 
 Não há chat. Dois tipos de ajuda trabalham nos bastidores, ambos apenas como sugestão:
 
 - **Sugestões de demanda (Cypher, sem IA).** Um novo modelo de leitura, *Recent demand for products*, mede o que os clientes pediram nos últimos 7 dias e quantos dias uma quantidade planejada cobre. Quando isso fica abaixo de 7, a interface sugere a quantidade que os cobriria, e o nível de aprovação de que o PO passaria a precisar (`DEMAND_WINDOW_DAYS` e `DEMAND_COVER_DAYS` no `.env`). O agente pode usar o mesmo modelo.
-- **Rascunhos de justificativa (Claude).** Um botão *Suggest* pede ao Claude um rascunho feito apenas com fatos que o servidor obtém do grafo (estoque, pedidos em aberto, demanda, o comentário de quem rejeitou). A pessoa o edita, e **só o texto enviado é registrado**. Sem `ANTHROPIC_API_KEY`, o botão não aparece.
+- **Rascunhos de justificativa (Claude).** Um botão *Suggest* pede ao Claude um rascunho feito apenas com fatos que o servidor obtém do grafo (estoque, pedidos em aberto, demanda, o comentário de quem rejeitou). A pessoa o edita, e **só o texto enviado é registrado**. Os rascunhos usam o modelo do agente (`DRAFT_MODEL` no `.env` para mudar); sem `ANTHROPIC_API_KEY`, o botão não aparece.
 
 O navegador nunca vê as credenciais do Aura nem escolhe a própria identidade: a API guarda as duas. O login é uma lista de Assistentes de Compras que faz as vezes de um login, como o `--as-employee`. A API não abre o armazenamento de conhecimento (o relate não permite nenhuma outra conexão enquanto o agente o mantém aberto), então lê seus modelos diretamente do script de importação, com o mesmo analisador que o `build_kb.py` usa. Detalhes: [DESIGN_procurement_ui.md](DESIGN_procurement_ui.md) (em inglês).
 
@@ -299,6 +299,7 @@ Uma prova de conceito vale pelas suas surpresas. Estas vieram das execuções co
 - **Contagens pertencem ao banco de dados.** Certa vez, o modelo resumiu 28 linhas como 29 ao somar os grupos por conta própria. Agora os totais precisam vir do Cypher.
 - **O Relate permite uma conexão de escrita por armazenamento, mesmo dentro de um único processo.** Executar de novo a célula de login de um notebook dava `storage locked`, até que a célula passou a fechar a sessão anterior primeiro. Não rode o agente no terminal e um notebook no mesmo armazenamento ao mesmo tempo.
 - **Detalhes de ambiente importam.** O driver Python do Neo4j rejeita objetos `Query(..., timeout=...)` dentro de transações gerenciadas, então os tempos limite passam por `@unit_of_work`. A versão antiga do `brotli` no Anaconda quebrava o cliente HTTP do Anthropic SDK, então `brotli>=1.2.0` está fixado. Instâncias mais novas do Aura podem usar o ID da instância como usuário e como nome do banco de dados.
+- **O Aura pode ficar brevemente sem servidor para leituras.** Na primeira execução ao vivo da interface web, a API e quatro dos loops não conseguiram se conectar (`ReadServiceUnavailable`), enquanto um loop já conectado continuou funcionando; um reinício limpo resolveu. O agente e a API agora tentam a conexão algumas vezes, no banco de dados indicado no `.env`, antes de desistir com uma mensagem que diz o que verificar.
 
 ## Duas formas de executar
 
@@ -357,7 +358,15 @@ cd ui && npm install && npm run build && cd ..
 uvicorn api.main:app --port 8000          # or run_ui.bat on Windows; then open http://localhost:8000
 ```
 
-Para experimentar sem o Aura nem uma chave de API, `python tests/serve_toy_ui.py` roda a API sobre um pequeno grafo de teste, com rascunhos prontos. **Ela ainda não foi executada contra um banco de dados Aura ao vivo**; os testes offline e uma navegação completa sobre o grafo de teste passam.
+Para experimentar sem o Aura nem uma chave de API, `python tests/serve_toy_ui.py` roda a API sobre um pequeno grafo de teste, com rascunhos prontos. Executada ao vivo contra o Aura no Chrome e no Edge.
+
+Se ela não iniciar, estes foram os problemas da primeira execução ao vivo:
+
+- **`pip` não é reconhecido:** rode o pip pelo Python que o `run_ui.bat` usa: `"%PYTHON%" -m pip install ...` (o caminho de `PYTHON` no `.env`), ou use um Anaconda Prompt.
+- **`.env not found`:** o `.env` é ignorado pelo git, então cada clone precisa da própria cópia. Se o Explorer o mostra mas `dir /a .env*` não, renomeie ou copie pela linha de comando (o OneDrive pode escondê-lo).
+- **A construção falha com `styleText` ou `EBADENGINE`:** o Node.js é anterior ao 20.19. Instale a versão LTS atual, abra uma nova janela, apague `ui\node_modules` e rode `npm install` e `npm run build` de novo.
+- **A página parece uma versão antiga:** reconstrua, reinicie o `run_ui.bat` e pressione Ctrl+F5.
+- **Evite pastas do OneDrive** neste projeto: o OneDrive sincronizando `ui\node_modules` e o armazenamento do relate trava arquivos.
 
 ### O que perguntar
 
@@ -461,7 +470,7 @@ Os testes offline usam o relate duas vezes: como armazenamento de conhecimento d
 | 4 | Ciclo de aprendizado, proveniência, avisos para o modelo, imposição da busca primeiro, embeddings | Testado offline; em testes ao vivo |
 | 5 | Sandbox what-if com `relate pull` (sugerido por um engenheiro da equipe da Neo4j) | Executado ao vivo (Colab) |
 | 6 | Modelo v2.3.3 + agente Assistente de Compras: criação e reenvio de POs passados dos loops para uma pessoa com o agente; dois modos de execução (full, agents) | Executado ao vivo (Colab, modo agents): 27 POs criados com alterações, aprovados pelo loop; 16 POs rejeitados reenviados ou cancelados |
-| 7 | Interface web: os mesmos trabalhos de PO com formulários, sugestões de demanda e rascunhos de justificativa por IA; `Source: "ui"` | Testada offline e sobre um grafo de teste; ainda não executada contra o Aura |
+| 7 | Interface web: os mesmos trabalhos de PO com formulários, sugestões de demanda e rascunhos de justificativa por IA; `Source: "ui"` | Executada ao vivo contra o Aura (Chrome e Edge): POs criados com justificativas rascunhadas por IA, POs rejeitados revisados |
 
 **Pendências**
 - Copiar os modelos salvos (e talvez o histórico de perguntas) para o grafo no Aura, para que possam ser consultados ao lado dos dados de negócio: gravação na aprovação pelo agente, ou `relate push`. Decisões em aberto: versão do modelo e escopo.
@@ -470,7 +479,7 @@ Os testes offline usam o relate duas vezes: como armazenamento de conhecimento d
 
 ## Histórico de alterações
 
-- **Etapa 7 / interface web:** `agent/procurement.py` dividido em prepare/commit, com a verificação de papel e de modo em toda entrada; `$source` nos comandos governados de PO (`"agent"` ou `"ui"`; qualquer outro valor não grava nada); novos modelos de leitura *Recent demand for products* e *PO activity by front end*; o armazenamento de conhecimento registra um hash dos arquivos do modelo e é reconstruído quando eles mudam, sem mudar a versão do modelo; `kb/model_templates.py`; a camada FastAPI (`api/`), a aplicação React (`ui/`), `run_ui.bat` e `tests/serve_toy_ui.py`.
+- **Etapa 7 / interface web:** `agent/procurement.py` dividido em prepare/commit, com a verificação de papel e de modo em toda entrada; `$source` nos comandos governados de PO (`"agent"` ou `"ui"`; qualquer outro valor não grava nada); novos modelos de leitura *Recent demand for products* e *PO activity by front end*; o armazenamento de conhecimento registra um hash dos arquivos do modelo e é reconstruído quando eles mudam, sem mudar a versão do modelo; `kb/model_templates.py`; a camada FastAPI (`api/`), a aplicação React (`ui/`), `run_ui.bat` e `tests/serve_toy_ui.py`. Depois da primeira execução ao vivo: quem criou cada PO rejeitado (`RaisedBy` na recomendação de reenvio, então o agente também vê) e uma nota sobre a fila compartilhada; cartões começam fora do lote, com o botão Review fixo embaixo; todas as telas recarregam depois de uma gravação; erros do rascunho por IA mostrados na tela, rascunhos com o modelo do agente; a página nunca é servida de um cache antigo; a conexão com o Aura é tentada de novo; o logotipo da Northwind.
 
 - **Etapa 6 / modelo v2.3.3:** agente Assistente de Compras (`agent/procurement.py`): recomendações de reposição e de reenvio, comandos governados de criar / reenviar / cancelar, ferramentas oferecidas por papel. Modelo: `Date`, `Justification`, `Source` em `PO_CREATED_BY`; `RecommendedQt` em `HAS_PO_ITEM`; `Date`, `Source` em `HAS_PREVIOUS_PO`; `Source` em todo relacionamento de decisão; novo estado `CancelledPoS` e `PO_CANCELLED_BY`; faixas de aprovação contíguas. Harness: `Source:"simulation"`, faixas contíguas, `--no-resubmit`. Duas formas de executar: `run_loops_full.bat` (seis loops, `SIMULATION_MODE=full`, o padrão) ou `run_loops_agents.bat` (cinco loops, `SIMULATION_MODE=agents`); no modo agents, as ferramentas de PO se recusam a gravar enquanto o loop de PO Creation estiver ligado. Notebooks: uma seção de Compras, `sign_in()` e uma reconstrução quando a versão do modelo muda.
 

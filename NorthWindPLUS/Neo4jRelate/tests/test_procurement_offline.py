@@ -1,5 +1,5 @@
 """
-Offline tests of the Procurement Assistant agent (model v2.3.3): no Anthropic API, no Neo4j Aura.
+Offline tests of the Procurement Assistant agent and its web-UI path (model v2.3.3): no Anthropic API, no Neo4j Aura.
 Aura is replaced by relate holding a small procurement graph (tests/toy_procurement.py); a scripted client stands in
 for Claude. The governed Cypher runs as written, minus the APOC lock lines (relate has no APOC).
 
@@ -24,6 +24,7 @@ import procurement  # noqa: E402
 import whatif  # noqa: E402
 from build_kb import build  # noqa: E402
 from kb_query import KnowledgeBase  # noqa: E402
+from model_templates import ModelTemplates  # noqa: E402
 from toy_procurement import TOY_PROCUREMENT  # noqa: E402
 from toy_vetting import TOY_VETTING  # noqa: E402
 import test_agent_offline as base  # noqa: E402
@@ -284,6 +285,94 @@ def main():
         bad_mode = True
     os.environ["SIMULATION_MODE"] = "agents"
     check("an unknown SIMULATION_MODE stops the session with a clear message", bad_mode)
+
+    # 10. The web UI path: prepare/commit, Source "ui", no chat session, a read-only knowledge store
+    class UISession:            # what the web API holds per signed-in person: no input(), no Interaction
+        def __init__(self, employee_id, aura):
+            self.aura, self.employee_id, self.mode = aura, employee_id, "agents"
+            self.user = aura.whoami(employee_id)
+            self.kb = ModelTemplates()             # straight from the model files: the API can't share the agent's store
+    ui_aura = ProcurementAura()
+    ui = procurement.Procurement(UISession("16", ui_aura), source="ui")
+    try:
+        procurement.Procurement(UISession("16", ui_aura), source="bogus")
+        bad_source = False
+    except ValueError:
+        bad_source = True
+    check("only 'agent' and 'ui' are accepted as a source", bad_source)
+    ui.recommend_restock({})
+    prep = ui.prepare_create({"purchaseOrders": [
+        {"supplierId": "1", "items": [{"productId": "1", "qty": 50}], "justification": "Weekend demand (UI)."}]})
+    check("prepare_create returns the review entries (cost, level, recommended vs ordered) and writes nothing",
+          prep["entries"][0]["level"] == "L1" and prep["entries"][0]["lines"][0]["recommendedQt"] == 55
+          and q(ui_aura, "MATCH (:NewPoS)-->(po) RETURN count(po) AS n")[0]["n"] == 0)
+    made = ui.commit_create(prep["entries"])
+    src = q(ui_aura, """MATCH (po:PurchaseOrder {PONumber:$n})-[c:PO_CREATED_BY]->(e:Employee) RETURN c.Source AS s, e.EmployeeID AS by""",
+            {"n": made["created"][0]["PONumber"]})
+    check("commit_create writes the PO with Source 'ui' and the signed-in assistant", src == [{"s": "ui", "by": "16"}])
+    hist = q(ui_aura, ui.s.kb.template_by_title("Procurement Assistant decisions")["cypher"])
+    check("the decisions history includes UI writes and says which front end", [(h["Action"], h["Source"]) for h in hist] == [("created", "ui")])
+    bad = q(ui_aura, ui.t_create["cypher"].replace("CALL apoc.lock.nodes([p])", ""), {
+        "requesterId": "16", "supplierId": "2", "items": [{"productId": "3", "qty": 45, "recommendedQt": 45}],
+        "justification": "x", "source": "spreadsheet"})
+    check("the governed Cypher itself writes nothing for an unknown source",
+          bad == [] and q(ui_aura, "MATCH (:NewPoS)-->(po) RETURN count(po) AS n")[0]["n"] == 1)
+    ui.recommend_restock({})
+    prep2 = ui.prepare_create({"purchaseOrders": [
+        {"supplierId": "2", "items": [{"productId": "3", "qty": 45}], "justification": "Open order waiting (UI)."}]})
+    q(ui_aura, """MATCH (s:Supplier {SupplierID:"1"}), (e:Employee {EmployeeID:"17"})
+                  CREATE (po:PurchaseOrder {PONumber:"PO-LOOP2", PODate:datetime()})-[:PO_FOR_SUPPLIER]->(s),
+                         (po)-[:PO_CREATED_BY {Date:datetime(), Source:"simulation"}]->(e)""")
+    late = ui.commit_create(prep2["entries"])
+    check("commit re-checks the loop guard: a loop that started after the preview blocks the write",
+          "refused" in late and q(ui_aura, "MATCH (:NewPoS)-->(po) RETURN count(po) AS n")[0]["n"] == 1)
+    act = ui.audit(24)
+    check("the activity-by-front-end summary separates the simulation's PO from the UI's",
+          {(r["Source"], r["Action"]): r["POs"] for r in act["activity"]} == {("simulation", "created"): 1, ("ui", "created"): 1}
+          and act["decisions"][0]["Source"] == "ui")
+    dem = ui.demand([{"productId": "1", "qty": 55}], 7, 7)
+    chai_d = dem["rows"][0]
+    check("recent demand: Chai 900 units over 2 days = 450/day (the order 10 days ago is outside the window)",
+          (chai_d["Orders"], chai_d["UnitsOrdered"], chai_d["UnitsPerDay"]) == (3, 900, 450.0))
+    check("demand suggestion: the quantity that covers 7 days at that rate, from effective stock (the UI's Chai PO now counts as on order)",
+          chai_d["DaysOfCoverAfterPO"] is not None and chai_d["SuggestedQt"] == int(-(-(450.0 * 7 - chai_d["EffectiveStock"]) // 1)))
+    check("the suggestion says what it does to the PO: cost and the approval level it would need (L1 -> L3)",
+          dem["po"]["approvalLevel"] == "L1" and dem["po"]["approvalLevelWithSuggestions"] == "L3" and dem["po"]["anySuggestion"])
+    quiet_d = ui.demand([{"productId": "2", "qty": 5}], 7, 7)["rows"][0]
+    check("no recent orders: no rate, no cover figure, no suggestion",
+          (quiet_d["Orders"], quiet_d["UnitsPerDay"], quiet_d["DaysOfCoverAfterPO"], quiet_d["SuggestedQt"]) == (0, 0.0, None, None))
+    ui_aura2 = ProcurementAura()
+    ui2 = procurement.Procurement(UISession("17", ui_aura2), source="ui")
+    ui2.recommend_resubmissions({})
+    r_prep = ui2.prepare_resubmit({"resubmissions": [
+        {"rejectedPO": "PO-R1", "items": [{"productId": "1", "qty": 25}], "justification": "As L1 asked (UI)."}]})
+    ui2.commit_resubmit(r_prep["entries"])
+    c_prep = ui2.prepare_cancel({"cancellations": [{"rejectedPO": "PO-R2", "justification": "Discontinued (UI)."}]})
+    ui2.commit_cancel(c_prep["entries"])
+    srcs = q(ui_aura2, """MATCH (po:PurchaseOrder)-[h:HAS_PREVIOUS_PO]->(:PurchaseOrder {PONumber:"PO-R1"}),
+                                (:PurchaseOrder {PONumber:"PO-R2"})-[b:PO_CANCELLED_BY]->()
+                          RETURN h.Source AS resub, b.Source AS cancel""")
+    check("resubmit and cancel from the UI record Source 'ui'", srcs == [{"resub": "ui", "cancel": "ui"}])
+    gl = procurement.Procurement(UISession("12", ProcurementAura()), source="ui")
+    check("prepare and commit check the role themselves (an L1 approver is refused)",
+          "refused" in gl.prepare_cancel({"cancellations": [{"rejectedPO": "PO-R1", "justification": "x"}]})
+          and "refused" in gl.commit_cancel([{"p": {"rejectedPO": "PO-R1"}, "justification": "x"}]))
+    kb = KnowledgeBase(STORE)
+    same = all(ModelTemplates().template_by_title(t)["cypher"] == kb.template_by_title(t)["cypher"] for t in (
+        procurement.RESTOCK_TITLE, procurement.RESUBMISSION_TITLE, procurement.CREATE_TITLE, procurement.RESUBMIT_TITLE,
+        procurement.CANCEL_TITLE, "Procurement Assistant decisions"))
+    kb.close()
+    check("templates read from the model files are the same Cypher the knowledge store holds", same)
+
+    # 11. The knowledge store is rebuilt when the model files change, even with the same model version
+    from build_kb import needs_rebuild
+    check("a freshly built store is current", needs_rebuild(STORE) is None)
+    stale = TMP / "stale.rl"
+    shutil.copy2(STORE, stale)
+    c = relate.connect(str(stale)); c.execute("MATCH (k:KnowledgeBase) SET k.modelHash = 'built-from-older-files'"); c.close()
+    check("a store built from older model files (same version) is flagged for a rebuild",
+          (needs_rebuild(stale) or "").startswith("the model files changed"))
+    check("a store with other embeddings is flagged for a rebuild", "embeddings" in (needs_rebuild(STORE, "voyage-4-nano") or ""))
 
     print(f"\n{sum(checks)}/{len(checks)} checks passed")
     return all(checks)

@@ -11,8 +11,8 @@
 # v2.3.3: audit trail for agents and people acting next to the simulation:
 # :CancelledPoS (a rejected PO the Procurement Assistant decided not to
 # resubmit) with :hasCancelledPoState / :isCancelledPoState / :poCancelledBy;
-# edge properties :recommendedQt (HAS_PO_ITEM) and :source ("simulation" or
-# "agent", on PO creation, resubmission, cancellation and every decision).
+# edge properties :recommendedQt (HAS_PO_ITEM) and :source ("simulation", "agent"
+# or "ui", on PO creation, resubmission, cancellation and every decision).
 #
 # v2.3.2: adds :PolicyChange (audit record of every L1/L2/L3 approval-band
 # change) with :requestedBy / :changedRole. The ProcurementPolicyAdmin role
@@ -259,7 +259,7 @@
 :recommendedQt a owl:DatatypeProperty ; rdfs:range xsd:integer ;
     rdfs:comment "v2.3.3: edge property on HAS_PO_ITEM -- the quantity an agent recommended, next to POqt (what was ordered)." .
 :source a owl:DatatypeProperty ; rdfs:range xsd:string ;
-    rdfs:comment "v2.3.3: edge property on decisions and PO creation/resubmission/cancellation: \"simulation\" (a Python loop) or \"agent\" (recommended by an agent, confirmed by the signed-in person). Missing on data written before v2.3.3." .
+    rdfs:comment "v2.3.3: edge property on decisions and PO creation/resubmission/cancellation: \"simulation\" (a Python loop), \"agent\" (recommended by an agent, confirmed by the signed-in person) or \"ui\" (a person working in the web UI). Missing on data written before v2.3.3." .
 :rfqqt a owl:DatatypeProperty ; rdfs:range xsd:integer .
 :rfqcost a owl:DatatypeProperty ; rdfs:range xsd:float .
 :resubmissionJustification a owl:DatatypeProperty ; rdfs:range xsd:string .

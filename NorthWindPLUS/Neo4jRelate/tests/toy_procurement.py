@@ -7,6 +7,9 @@ Expected recommendations (harness formulas):
   - Supplier 2, Discontinued Spice (not available): never recommended
   - PO-R1 (Supplier 1, Chai 30, rejected by L1) can be resubmitted or cancelled; PO-R2 (Supplier 2, discontinued spice) has nothing still needed.
 Unit prices 10.00 (cost 7.00 after the 0.7 discount).
+Recent demand (7-day window): Chai 900 units in fulfilled orders over the last 2 days = 450/day (a 1000-unit order 10 days ago is
+outside the window); 55 covers 60/450 = 0.1 days, 7 days needs 3150 - 5 = 3145 (cost 22,015: L3). Aniseed Syrup: 15 units over
+12 hours = 30/day; effective stock -15; 45 covers 1.0 day, 7 days needs 210 + 15 = 225.
 """
 
 TOY_PROCUREMENT = """
@@ -31,11 +34,16 @@ CREATE (pos:PoS {Name:"PoS"}),
   (chang)-[:HAS_INVENTORY_LEVEL]->(:InventoryLevel {UnitsInStock:100}), (chang)-[:HAS_REORDER_LEVEL]->(:ReorderLevel {StockThreshold:10}),
   (syrup)-[:HAS_INVENTORY_LEVEL]->(:InventoryLevel {UnitsInStock:0}), (syrup)-[:HAS_REORDER_LEVEL]->(:ReorderLevel {StockThreshold:10}),
   (spice)-[:HAS_INVENTORY_LEVEL]->(:InventoryLevel {UnitsInStock:0}), (spice)-[:HAS_REORDER_LEVEL]->(:ReorderLevel {StockThreshold:10}),
-  (:OrderStatusOpeN {Status:"Open"})-[:IS_OPEN_ORDER_STATE]->(o:Order {OrderID:"90001"})-[:HAS_ORDER_PRODUCT {Quantity:15, UnitPrice:10.0, Discount:0.0}]->(syrup),
+  (:OrderStatusOpeN {Status:"Open"})-[:IS_OPEN_ORDER_STATE]->(o:Order {OrderID:"90001", OrderDate:datetime() - duration({hours: 12})})-[:HAS_ORDER_PRODUCT {Quantity:15, UnitPrice:10.0, Discount:0.0}]->(syrup),
   (rj)-[:IS_REJECTED_PO_STATE {Date:datetime()}]->(r1:PurchaseOrder {PONumber:"PO-R1", PODate:datetime()}),
   (r1)-[:PO_FOR_SUPPLIER]->(s1), (r1)-[:PO_CREATED_BY]->(bernard), (r1)-[:HAS_PO_ITEM {POqt:30, POPriceDiscount:0.7}]->(chai),
   (r1)-[:HAS_L1_PO_REJECTION {Date:datetime(), Source:"simulation", Comment:"Quantity too high for current demand."}]->(gloria),
   (rj)-[:IS_REJECTED_PO_STATE {Date:datetime()}]->(r2:PurchaseOrder {PONumber:"PO-R2", PODate:datetime()}),
   (r2)-[:PO_FOR_SUPPLIER]->(s2), (r2)-[:PO_CREATED_BY]->(bernard), (r2)-[:HAS_PO_ITEM {POqt:40, POPriceDiscount:0.7}]->(spice),
-  (r2)-[:HAS_L1_PO_REJECTION {Date:datetime(), Source:"simulation", Comment:"Product discontinued."}]->(gloria)
+  (r2)-[:HAS_L1_PO_REJECTION {Date:datetime(), Source:"simulation", Comment:"Product discontinued."}]->(gloria),
+  (ful:OrderStatusFulfilleD {Status:"Fulfilled"}),
+  (ful)-[:IS_FULFILLED_ORDER_STATE {FulfillDate:datetime()}]->(:Order {OrderID:"80001", OrderDate:datetime() - duration({days: 2})})-[:HAS_ORDER_PRODUCT {Quantity:300, UnitPrice:10.0, Discount:0.0}]->(chai),
+  (ful)-[:IS_FULFILLED_ORDER_STATE {FulfillDate:datetime()}]->(:Order {OrderID:"80002", OrderDate:datetime() - duration({days: 1})})-[:HAS_ORDER_PRODUCT {Quantity:300, UnitPrice:10.0, Discount:0.0}]->(chai),
+  (ful)-[:IS_FULFILLED_ORDER_STATE {FulfillDate:datetime()}]->(:Order {OrderID:"80003", OrderDate:datetime() - duration({hours: 1})})-[:HAS_ORDER_PRODUCT {Quantity:300, UnitPrice:10.0, Discount:0.0}]->(chai),
+  (ful)-[:IS_FULFILLED_ORDER_STATE {FulfillDate:datetime()}]->(:Order {OrderID:"70001", OrderDate:datetime() - duration({days: 10})})-[:HAS_ORDER_PRODUCT {Quantity:1000, UnitPrice:10.0, Discount:0.0}]->(chai)
 """

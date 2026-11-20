@@ -422,6 +422,10 @@ def main():
           f"SIMULATION_MODE={s.mode}.")
     print(f"Model {s.model}. Knowledge store: ontology {s.kb.ontology_version}, embeddings {s.kb.embedding_model}. "
           f"Log: {s.log_path.relative_to(ROOT)}. Type 'quit' to exit.\n")
+    from build_kb import ONTOLOGY_VERSION, model_fingerprint
+    if s.kb.ontology_version != ONTOLOGY_VERSION or s.kb.model_hash != model_fingerprint():
+        print("  Note: the model files changed since the knowledge store was built. Quit and run "
+              "python kb/build_kb.py (what the agent learned is kept).\n")
     try:
         while True:
             q = input("You> ").strip()

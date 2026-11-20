@@ -1,0 +1,4 @@
+fastapi
+uvicorn
+# for tests/test_procurement_api.py
+httpx

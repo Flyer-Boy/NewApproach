@@ -2,7 +2,7 @@
 // v2.3.3: audit trail for agents and people acting side by side with the simulation loops:
 //   - PO_CREATED_BY gets Date, Justification and Source; HAS_PO_ITEM gets RecommendedQt (what an agent proposed,
 //     next to POqt, what was ordered); HAS_PREVIOUS_PO gets Date and Source.
-//   - Source ("simulation" | "agent") on every decision relationship (L1/L2/L3 approvals and rejections, Buyer PO
+//   - Source ("simulation" | "agent" | "ui") on every decision relationship (L1/L2/L3 approvals and rejections, Buyer PO
 //     and RFQ decisions, warehouse delivery and fulfillment, finance payment, PO cancellation).
 //   - New state: CancelledPoS (HAS_CANCELLED_PO_STATE, IS_CANCELLED_PO_STATE) and PO_CANCELLED_BY, for a rejected PO
 //     the Procurement Assistant decides not to resubmit.

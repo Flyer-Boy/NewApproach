@@ -4,7 +4,7 @@
 //   1. PO_CREATED_BY now records Date, Justification and Source; HAS_PO_ITEM records RecommendedQt (what an agent proposed) next to POqt (what was
 //      ordered); HAS_PREVIOUS_PO records Date and Source.
 //   2. Source ("simulation" | "agent") on every decision relationship: L1/L2/L3 approvals and rejections, Buyer PO and RFQ decisions, warehouse delivery
-//      and fulfillment, finance payment. Everything this script and the Python loops write says "simulation"; agents write "agent".
+//      and fulfillment, finance payment. This script and the Python loops write "simulation"; a person writes "agent" (AI agent) or "ui" (web UI).
 //   3. New state CancelledPoS (HAS_CANCELLED_PO_STATE, IS_CANCELLED_PO_STATE) and PO_CANCELLED_BY: a rejected PO the Procurement Assistant decides not to
 //      resubmit moves there with a reason, instead of waiting in RejectedPoS forever.
 //   4. The approval bands are contiguous: each level approves ApprovalBase < cost <= ApprovalLimit, and each level's ApprovalBase equals the previous
@@ -1440,17 +1440,19 @@ ORDER BY pc.Date DESC;
 // all, some, or changes quantities, gives one justification per PO, and confirms. Rejected POs that shouldn't be resubmitted can be cancelled.
 //
 // Rules the three commands below enforce, in the same transaction:
-//   - Only an Employee with an active "Procurement Assistant" role can run them. A justification is required.
+//   - Only an Employee with an active "Procurement Assistant" role can run them. A justification is required. $source says which front end the
+//     person used: "agent" (the AI agent) or "ui" (the web UI); any other value writes nothing.
 //   - Each product is locked, and what's already pending is recomputed: a line whose product no longer needs restocking (for example, another PO was
 //     created since the recommendation) is left out rather than ordered twice. The caller compares the lines written with the lines asked for.
 //   - The Supplier must supply each product, the product must be available, and each quantity must be a whole number above 0.
-//   - PO_CREATED_BY records Date, Justification and Source:"agent"; HAS_PO_ITEM records RecommendedQt (what the agent proposed) next to POqt.
+//   - PO_CREATED_BY records Date, Justification and Source; HAS_PO_ITEM records RecommendedQt (what was recommended) next to POqt.
 //
 // :param requesterId => "16";
 // :param supplierId => "1";
 // :param items => [{productId: "1", qty: 60, recommendedQt: 60}];
 // :param justification => "Restock ahead of open customer orders.";
 // :param rejectedPO => "PO-xxxxxxxxxx";
+// :param source => "agent";
 
 // Restock recommendation -- available products that need a new PO, grouped by Supplier, with the recommended quantity, estimated cost and the approval level it will need.
 // What needs restocking: same rule and quantity formula as the po-creation loop -- effective stock (in stock + on active POs - promised to open customer orders) near the restock threshold.
@@ -1472,30 +1474,34 @@ RETURN s.SupplierID AS SupplierID, s.CompanyName AS Supplier, Lines, round(cost,
             ELSE "above the L3 limit: no level can approve it" END AS ApprovalLevelNeeded
 ORDER BY SupplierID;
 
-// Resubmission recommendation -- rejected POs not yet resubmitted or cancelled: who rejected them and why, and what is still needed now.
+// Resubmission recommendation -- rejected POs not yet resubmitted or cancelled: who raised them, who rejected them and why, and what is still needed now.
 // Same rule and quantity formula as the loops' po_resubmit action. A PO with nothing still needed is a candidate for cancelling.
+// One shared queue: any Procurement Assistant may resubmit or cancel any rejected PO, whoever raised it (RaisedBy says who did).
 MATCH (:RejectedPoS)-[rs:IS_REJECTED_PO_STATE]->(rpo:PurchaseOrder)-[:PO_FOR_SUPPLIER]->(s:Supplier)
 WHERE NOT ()-[:HAS_PREVIOUS_PO]->(rpo)
 OPTIONAL MATCH (rpo)-[rej:HAS_L1_PO_REJECTION|HAS_L2_PO_REJECTION|HAS_L3_PO_REJECTION]->(:Employee)-[:HAS_PERSON]->(rp:Person)
 WITH rpo, s, rs, collect({Level: substring(type(rej), 4, 2), RejectedBy: rp.FirstName + " " + rp.LastName, Comment: rej.Comment})[0] AS Rejection
+OPTIONAL MATCH (rpo)-[cb:PO_CREATED_BY]->(ce:Employee)-[:HAS_PERSON]->(cp:Person)
+WITH rpo, s, rs, Rejection,
+     collect(CASE WHEN ce IS NULL THEN null ELSE {EmployeeID: ce.EmployeeID, Name: cp.FirstName + " " + cp.LastName, Source: cb.Source} END)[0] AS RaisedBy
 MATCH (rpo)-[oi:HAS_PO_ITEM]->(p:Product)
 OPTIONAL MATCH (r:ReorderLevel)<-[:HAS_REORDER_LEVEL]-(p)-[:HAS_INVENTORY_LEVEL]->(i:InventoryLevel)
 OPTIONAL MATCH ()-[:IS_NEW_PO_STATE|IS_APPROVED_PO_STATE|IS_SUBMITTED_PO_STATE]->(:PurchaseOrder)-[poi:HAS_PO_ITEM]->(p)
-WITH rpo, s, rs, Rejection, oi, p, r, i, sum(coalesce(poi.POqt, 0)) AS pending
+WITH rpo, s, rs, Rejection, RaisedBy, oi, p, r, i, sum(coalesce(poi.POqt, 0)) AS pending
 OPTIONAL MATCH (p)<-[op:HAS_ORDER_PRODUCT]-(:Order)<-[:IS_OPEN_ORDER_STATE]-()
-WITH rpo, s, rs, Rejection, oi, p, r, i, pending, sum(coalesce(op.Quantity, 0)) AS openQty,
+WITH rpo, s, rs, Rejection, RaisedBy, oi, p, r, i, pending, sum(coalesce(op.Quantity, 0)) AS openQty,
      EXISTS { (p)<-[:IS_AVAILABLE_PRODUCT]-(:ProductStatusAvailablE) } AND EXISTS { (s)-[:SUPPLIES]->(p) } AS orderable
-WITH rpo, s, rs, Rejection, oi, p, r, i, pending, openQty, orderable,
+WITH rpo, s, rs, Rejection, RaisedBy, oi, p, r, i, pending, openQty, orderable,
      CASE WHEN orderable AND i.UnitsInStock + pending - openQty - (r.StockThreshold * 0.5) <= r.StockThreshold
           THEN toInteger(r.StockThreshold - (i.UnitsInStock + pending - openQty) + r.StockThreshold / 2) ELSE 0 END AS rec
-WITH rpo, s, rs, Rejection, p, oi, i, r, pending, openQty, orderable, CASE WHEN rec > 0 THEN rec ELSE 0 END AS qty
-WITH rpo, s, rs, Rejection,
+WITH rpo, s, rs, Rejection, RaisedBy, p, oi, i, r, pending, openQty, orderable, CASE WHEN rec > 0 THEN rec ELSE 0 END AS qty
+WITH rpo, s, rs, Rejection, RaisedBy,
      collect({ProductID: p.ProductID, Product: p.ProductName, RejectedQt: oi.POqt, UnitsInStock: i.UnitsInStock, OnActivePOs: pending,
               OpenOrderQty: openQty, StockThreshold: r.StockThreshold, Orderable: orderable, RecommendedQt: qty,
               LineCost: round(qty * p.UnitPrice * 0.7, 2)}) AS Lines
-WITH rpo, s, rs, Rejection, Lines, reduce(c = 0.0, l IN Lines | c + l.LineCost) AS cost
+WITH rpo, s, rs, Rejection, RaisedBy, Lines, reduce(c = 0.0, l IN Lines | c + l.LineCost) AS cost
 MATCH (l1:RolE {Title:"Level1Approver"}), (l2:RolE {Title:"Level2Approver"}), (l3:RolE {Title:"Level3Approver"})
-RETURN rpo.PONumber AS RejectedPO, toString(rs.Date) AS RejectedOn, s.SupplierID AS SupplierID, s.CompanyName AS Supplier, Rejection, Lines,
+RETURN rpo.PONumber AS RejectedPO, toString(rs.Date) AS RejectedOn, s.SupplierID AS SupplierID, s.CompanyName AS Supplier, RaisedBy, Rejection, Lines,
        round(cost, 2) AS EstimatedCost,
        CASE WHEN cost = 0 THEN "nothing is still needed: a candidate for cancelling" WHEN cost <= l1.ApprovalLimit THEN "L1"
             WHEN cost <= l2.ApprovalLimit THEN "L2" WHEN cost <= l3.ApprovalLimit THEN "L3" ELSE "above the L3 limit: no level can approve it" END AS ApprovalLevelNeeded
@@ -1504,7 +1510,7 @@ ORDER BY RejectedOn;
 // Create a Purchase Order (governed). One PO for one Supplier. Returns the new PO and the products written; no rows if the requester lacks the role,
 // the justification is empty, or no line is still needed.
 MATCH (:RolE {Title:"Procurement Assistant"})-[ar:IS_ACTIVE_ROLE]->(e:Employee {EmployeeID:$requesterId})
-WHERE ar.EndDate IS NULL AND trim(coalesce($justification, "")) <> ""
+WHERE ar.EndDate IS NULL AND trim(coalesce($justification, "")) <> "" AND $source IN ["agent", "ui"]
 MATCH (s:Supplier {SupplierID:$supplierId}), (n:NewPoS {Name:"NewPoS"})
 UNWIND $items AS item
 MATCH (s)-[:SUPPLIES]->(p:Product {ProductID:item.productId})<-[:IS_AVAILABLE_PRODUCT]-(:ProductStatusAvailablE),
@@ -1520,7 +1526,7 @@ WITH e, s, n, collect({p: p, qty: toInteger(item.qty), rec: item.recommendedQt})
 WHERE size(lines) > 0
 CREATE (n)-[:IS_NEW_PO_STATE]->(po:PurchaseOrder {PONumber: "PO-" + left(randomUUID(), 5) + right(randomUUID(), 5), PODate: datetime()})
 CREATE (po)-[:PO_FOR_SUPPLIER]->(s)
-CREATE (po)-[:PO_CREATED_BY {Date: datetime(), Justification: $justification, Source: "agent"}]->(e)
+CREATE (po)-[:PO_CREATED_BY {Date: datetime(), Justification: $justification, Source: $source}]->(e)
 WITH po, lines
 UNWIND lines AS l
 WITH po, l, l.p AS p
@@ -1530,7 +1536,7 @@ RETURN po.PONumber AS PONumber, collect(p.ProductID) AS ProductIDs, round(sum(l.
 // Resubmit a rejected Purchase Order (governed). A new PO for the same Supplier, pointing back to the rejected one with HAS_PREVIOUS_PO.
 // Only products on the rejected PO that are still needed; no rows if the PO isn't rejected, was already resubmitted, or nothing is still needed.
 MATCH (:RolE {Title:"Procurement Assistant"})-[ar:IS_ACTIVE_ROLE]->(e:Employee {EmployeeID:$requesterId})
-WHERE ar.EndDate IS NULL AND trim(coalesce($justification, "")) <> ""
+WHERE ar.EndDate IS NULL AND trim(coalesce($justification, "")) <> "" AND $source IN ["agent", "ui"]
 MATCH (:RejectedPoS)-[:IS_REJECTED_PO_STATE]->(rpo:PurchaseOrder {PONumber:$rejectedPO})-[:PO_FOR_SUPPLIER]->(s:Supplier), (n:NewPoS {Name:"NewPoS"})
 CALL apoc.lock.nodes([rpo])        // one resubmission per rejected PO
 WITH e, rpo, s, n
@@ -1550,8 +1556,8 @@ WITH e, rpo, s, n, collect({p: p, qty: toInteger(item.qty), rec: item.recommende
 WHERE size(lines) > 0
 CREATE (n)-[:IS_NEW_PO_STATE]->(po:PurchaseOrder {PONumber: "PO-" + left(randomUUID(), 5) + right(randomUUID(), 5), PODate: datetime()})
 CREATE (po)-[:PO_FOR_SUPPLIER]->(s)
-CREATE (po)-[:PO_CREATED_BY {Date: datetime(), Justification: $justification, Source: "agent"}]->(e)
-CREATE (po)-[:HAS_PREVIOUS_PO {Resubmission_Justification: $justification, Date: datetime(), Source: "agent"}]->(rpo)
+CREATE (po)-[:PO_CREATED_BY {Date: datetime(), Justification: $justification, Source: $source}]->(e)
+CREATE (po)-[:HAS_PREVIOUS_PO {Resubmission_Justification: $justification, Date: datetime(), Source: $source}]->(rpo)
 WITH po, rpo, lines
 UNWIND lines AS l
 WITH po, rpo, l, l.p AS p
@@ -1561,25 +1567,63 @@ RETURN po.PONumber AS PONumber, rpo.PONumber AS ResubmittedFrom, collect(p.Produ
 // Cancel a rejected Purchase Order (governed). Moves it from RejectedPoS to CancelledPoS, with the reason; the rejection stays as history.
 // No rows if the requester lacks the role, the justification is empty, or the PO isn't rejected or was already resubmitted.
 MATCH (:RolE {Title:"Procurement Assistant"})-[ar:IS_ACTIVE_ROLE]->(e:Employee {EmployeeID:$requesterId})
-WHERE ar.EndDate IS NULL AND trim(coalesce($justification, "")) <> ""
+WHERE ar.EndDate IS NULL AND trim(coalesce($justification, "")) <> "" AND $source IN ["agent", "ui"]
 MATCH (:RejectedPoS)-[rs:IS_REJECTED_PO_STATE]->(rpo:PurchaseOrder {PONumber:$rejectedPO}), (c:CancelledPoS {Name:"CancelledPoS"})
 WHERE NOT ()-[:HAS_PREVIOUS_PO]->(rpo)
 CALL apoc.lock.nodes([rpo])
 CREATE (c)-[:IS_CANCELLED_PO_STATE {Date: datetime(), Comment: $justification}]->(rpo)
-CREATE (rpo)-[:PO_CANCELLED_BY {Date: datetime(), Justification: $justification, Source: "agent"}]->(e)
+CREATE (rpo)-[:PO_CANCELLED_BY {Date: datetime(), Justification: $justification, Source: $source}]->(e)
 DELETE rs
 RETURN rpo.PONumber AS CancelledPO;
 
-// Procurement Assistant decisions -- POs created, resubmitted or cancelled through the agent: who, when, why, and where the person changed the recommendation.
+// Procurement Assistant decisions -- POs created, resubmitted or cancelled by a person through the agent or the web UI: who, when, why, which front end, and where the person changed the recommendation.
 MATCH (po:PurchaseOrder)-[d:PO_CREATED_BY|PO_CANCELLED_BY]->(e:Employee)-[:HAS_PERSON]->(pe:Person)
-WHERE d.Source = "agent"
+WHERE d.Source IN ["agent", "ui"]
 OPTIONAL MATCH (po)-[it:HAS_PO_ITEM]->(p:Product)
 WITH po, d, pe, collect(CASE WHEN type(d) = "PO_CREATED_BY" THEN {Product: p.ProductName, Ordered: it.POqt, Recommended: it.RecommendedQt} END) AS Lines
 OPTIONAL MATCH (po)-[:HAS_PREVIOUS_PO]->(prev:PurchaseOrder)
-RETURN po.PONumber AS PONumber, CASE WHEN type(d) = "PO_CANCELLED_BY" THEN "cancelled" WHEN prev IS NOT NULL THEN "resubmitted" ELSE "created" END AS Action,
+RETURN po.PONumber AS PONumber, d.Source AS Source, CASE WHEN type(d) = "PO_CANCELLED_BY" THEN "cancelled" WHEN prev IS NOT NULL THEN "resubmitted" ELSE "created" END AS Action,
        prev.PONumber AS ResubmittedFrom, pe.FirstName + " " + pe.LastName AS By, toString(d.Date) AS Date, d.Justification AS Justification,
        [l IN Lines WHERE l.Recommended IS NULL OR l.Ordered <> l.Recommended] AS ChangedLines
 ORDER BY Date DESC;
+
+// :param hours => 24;
+// PO activity by front end -- how many POs the simulation, the AI agent and the web UI created, resubmitted and cancelled in the last $hours hours.
+MATCH (po:PurchaseOrder)-[d:PO_CREATED_BY|PO_CANCELLED_BY]->(:Employee)
+WHERE d.Date >= datetime() - duration({hours: $hours})
+OPTIONAL MATCH (po)-[:HAS_PREVIOUS_PO]->(prev:PurchaseOrder)
+WITH coalesce(d.Source, "unknown") AS Source,
+     CASE WHEN type(d) = "PO_CANCELLED_BY" THEN "cancelled" WHEN prev IS NOT NULL THEN "resubmitted" ELSE "created" END AS Action
+RETURN Source, Action, count(*) AS POs
+ORDER BY Source, Action;
+
+// :param lines => [{productId: "1", qty: 55}];
+// :param windowDays => 7;
+// :param coverDays => 7;
+// Recent demand for products -- units customers ordered in the last $windowDays days, the daily rate, and the days of stock a planned PO quantity covers; suggests the quantity that would cover $coverDays days.
+// Demand counts every Customer Order (open or fulfilled) by OrderDate. The daily rate divides by the time the orders actually span (from the first
+// order in the window to now, at least one hour), so a simulation that has run for a few hours isn't averaged over a week of nothing.
+// Effective stock is the restock rule's: in stock + on active POs - promised to open customer orders. Advisory only: the person sets the quantity.
+UNWIND $lines AS line
+MATCH (p:Product {ProductID: line.productId})-[:HAS_INVENTORY_LEVEL]->(i:InventoryLevel)
+OPTIONAL MATCH ()-[:IS_NEW_PO_STATE|IS_APPROVED_PO_STATE|IS_SUBMITTED_PO_STATE]->(:PurchaseOrder)-[poi:HAS_PO_ITEM]->(p)
+WITH line, p, i, sum(coalesce(poi.POqt, 0)) AS pending
+OPTIONAL MATCH (p)<-[op:HAS_ORDER_PRODUCT]-(:Order)<-[:IS_OPEN_ORDER_STATE]-()
+WITH line, p, i, pending, sum(coalesce(op.Quantity, 0)) AS openQty
+OPTIONAL MATCH (o:Order)-[d:HAS_ORDER_PRODUCT]->(p)
+WHERE o.OrderDate >= datetime() - duration({days: $windowDays})
+WITH line, p, i, pending, openQty, count(o) AS orders, sum(coalesce(d.Quantity, 0)) AS units, min(o.OrderDate) AS firstOrder
+WITH line, p, i.UnitsInStock + pending - openQty AS effective, orders, units,
+     CASE WHEN firstOrder IS NULL THEN 0.0 ELSE toFloat(duration.inSeconds(firstOrder, datetime()).seconds) END AS spanSecs
+WITH line, p, effective, orders, units, CASE WHEN spanSecs < 3600.0 THEN 3600.0 ELSE spanSecs END / 86400.0 AS spanDays
+WITH line, p, effective, orders, units, spanDays, CASE WHEN units > 0 THEN units / spanDays ELSE 0.0 END AS perDay
+RETURN p.ProductID AS ProductID, p.ProductName AS Product, orders AS Orders, units AS UnitsOrdered,
+       CASE WHEN orders = 0 THEN 0.0 ELSE round(spanDays, 2) END AS DaysObserved, round(perDay, 1) AS UnitsPerDay, effective AS EffectiveStock, line.qty AS PlannedQt,
+       round(p.UnitPrice * 0.7, 2) AS UnitCost,
+       CASE WHEN perDay > 0 THEN round((effective + line.qty) / perDay, 1) END AS DaysOfCoverAfterPO,
+       CASE WHEN perDay > 0 AND effective + line.qty < perDay * $coverDays
+            THEN toInteger(ceil(perDay * $coverDays - effective)) END AS SuggestedQt
+ORDER BY ProductID;
 
 
 //--------------------------------------------------------------------------------------------------------------------------------------------------------------//

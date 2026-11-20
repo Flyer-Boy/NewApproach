@@ -63,7 +63,8 @@ optional `Source :: STRING` to:
 `HAS_BUYER_PO_APPROVAL`, `HAS_BUYER_RFQ_APPROVAL`, `HAS_BUYER_RFQ_REJECTION`, `HAS_WAREHOUSE_DELIVERY`,
 `HAS_FINANCE_PAYMENT`, `HAS_WAREHOUSE_FULFILLMENT` (customer orders), and the new `PO_CANCELLED_BY`.
 
-Values: `"simulation"` (a Python loop) or `"agent"` (recommended by an agent and confirmed by the signed-in person).
+Values: `"simulation"` (a Python loop), `"agent"` (recommended by an agent and confirmed by the signed-in person) or
+`"ui"` (a person in the web UI; see [DESIGN_procurement_ui.md](DESIGN_procurement_ui.md)).
 Missing means before v2.3.3. The harness is updated to write `"simulation"`, so a query can compare, say, rejection
 rates of agent-assisted and simulated vetting.
 

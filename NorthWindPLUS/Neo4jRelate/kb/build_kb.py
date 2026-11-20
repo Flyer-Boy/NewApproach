@@ -19,7 +19,7 @@ Knowledge graph written to relate:
                                                          -[:PART_OF {via}]->(:WorkflowStep)
   (:Interaction {question, answer, employeeId, model, usage...})-[:USED]->(:QueryTemplate), -[:CREATED]->(:QueryTemplate)
   (:Interaction)-[:RAN]->(:WhatIf {id, limits, summary...})   what-if rehearsals (sandbox/whatif.py)
-  (:ModelPrinciple {text}), (:KnowledgeBase {ontologyVersion, builtAt, embeddingModel, embeddingDims})
+  (:ModelPrinciple {text}), (:KnowledgeBase {ontologyVersion, builtAt, modelHash, embeddingModel, embeddingDims})
 
 Rebuilding keeps what the agent learned: templates it saved (source 'agent') and the Interaction history are
 exported from the old store and put back, re-linked to the current ontology. A learned template whose Cypher names
@@ -316,9 +316,9 @@ def build(store: Path, embeddings: str | None = None, fresh: bool = False) -> di
     def run(q, p=None):
         conn.execute(q, p or {})
 
-    run("""CREATE (:KnowledgeBase {ontologyVersion:$v, builtAt:datetime(), sources:$s,
+    run("""CREATE (:KnowledgeBase {ontologyVersion:$v, builtAt:datetime(), sources:$s, modelHash:$h,
                                    embeddingModel:$em, embeddingDims:$ed})""",
-        {"v": ONTOLOGY_VERSION, "s": [p.name for p in (GRAPH_TYPE_FILE, TTL_FILE, IMPORT_FILE, HARNESS_FILE, SEMANTICS_FILE)],
+        {"v": ONTOLOGY_VERSION, "h": model_fingerprint(), "s": [p.name for p in (GRAPH_TYPE_FILE, TTL_FILE, IMPORT_FILE, HARNESS_FILE, SEMANTICS_FILE)],
          "em": embedder.name if embedder else "none", "ed": embedder.dims if embedder else 0})
     for i, text in enumerate(sem["model_principles"]):
         run("CREATE (:ModelPrinciple {rank:$i, text:$t})", {"i": i, "t": text})
@@ -383,6 +383,35 @@ def build(store: Path, embeddings: str | None = None, fresh: bool = False) -> di
     stats["embeddings"] = f"{embedder.name} ({embedder.dims} dims, {embedded} templates)" if embedder else "none"
     conn.close()
     return stats
+
+
+def model_fingerprint() -> str:
+    """A hash of the files the store is built from. A store whose hash differs was built from older files (an edited
+    template in the import script, say, with the same model version) and should be rebuilt. Line endings are
+    normalized, so a Windows checkout and a Linux one give the same hash."""
+    import hashlib
+    h = hashlib.sha256()
+    for f in (GRAPH_TYPE_FILE, TTL_FILE, IMPORT_FILE, HARNESS_FILE, SEMANTICS_FILE):
+        h.update(f.name.encode() + b"\0" + f.read_bytes().replace(b"\r\n", b"\n") + b"\0")
+    return h.hexdigest()[:16]
+
+
+def needs_rebuild(store: Path | str, embeddings: str = "none") -> str | None:
+    """Why the store should be rebuilt, or None if it's current."""
+    from kb_query import KnowledgeBase
+    if not Path(store).exists():
+        return "no knowledge store yet"
+    k = KnowledgeBase(store, embedder=None)
+    try:
+        if k.ontology_version != ONTOLOGY_VERSION:
+            return f"model version changed ({k.ontology_version} -> {ONTOLOGY_VERSION})"
+        if k.embedding_model != embeddings:
+            return f"embeddings changed ({k.embedding_model} -> {embeddings})"
+        if k.model_hash != model_fingerprint():
+            return "the model files changed since the store was built"
+    finally:
+        k.close()
+    return None
 
 
 def main():

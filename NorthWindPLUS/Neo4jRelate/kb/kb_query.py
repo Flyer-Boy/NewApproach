@@ -62,6 +62,7 @@ class KnowledgeBase:
         self.conn = relate.connect(str(store), read_only=read_only)
         meta = self.conn.execute("MATCH (k:KnowledgeBase) RETURN properties(k) AS k").single()["k"]
         self.ontology_version = meta.get("ontologyVersion")
+        self.model_hash = meta.get("modelHash")
         self.embedding_model = meta.get("embeddingModel") or "none"
         # The query embedder must match the one the store was built with.
         if embedder == "auto":

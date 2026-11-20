@@ -271,7 +271,7 @@ logging.getLogger("neo4j.notifications").setLevel(logging.ERROR)
 
 from IPython.display import Markdown, display
 import agent as northwind_agent
-from build_kb import build, ONTOLOGY_VERSION
+from build_kb import build, needs_rebuild
 from kb_query import KnowledgeBase
 print("Project folder:", PROJECT)
 import shutil
@@ -296,13 +296,12 @@ STORE_CELL = """EMBEDDINGS = "none"        # or "voyage-4-nano"
 REBUILD = False            # rebuild after editing kb/semantics.json or the model files (learning is kept)
 
 store = PROJECT / "kb" / "northwind_kb.rl"
-current, version = "none", None
-if store.exists():
-    k = KnowledgeBase(store); current, version = k.embedding_model, k.ontology_version; k.close()
-if REBUILD or not store.exists() or current != EMBEDDINGS or version != ONTOLOGY_VERSION:   # model files changed: rebuild
+why = "REBUILD = True" if REBUILD else needs_rebuild(store, EMBEDDINGS)   # new model version, edited model files, ...
+if why:
+    print(f"Building the knowledge store: {why}.")
     print(json.dumps(build(store, embeddings=EMBEDDINGS), indent=2))
 else:
-    print(f"Using {store.name} (embeddings: {current})")"""
+    print(f"Using {store.name} (embeddings: {EMBEDDINGS})")"""
 
 
 def colab_notebook():
@@ -437,7 +436,7 @@ for sub in ("agent", "kb"):
     sys.path.insert(0, str(PROJECT / sub))
 logging.getLogger("neo4j.notifications").setLevel(logging.ERROR)
 from IPython.display import Markdown, display
-from build_kb import build, ONTOLOGY_VERSION
+from build_kb import build, needs_rebuild
 from kb_query import KnowledgeBase
 import agent as northwind_agent
 
@@ -452,13 +451,12 @@ if IN_COLAB and USE_DRIVE:
         shutil.copy(DRIVE_STORE, store)
         print("Copied the knowledge store from Drive.")
 
-current, version = "none", None
-if store.exists():
-    k = KnowledgeBase(store); current, version = k.embedding_model, k.ontology_version; k.close()
-if REBUILD or not store.exists() or current != EMBEDDINGS or version != ONTOLOGY_VERSION:   # model files changed: rebuild
+why = "REBUILD = True" if REBUILD else needs_rebuild(store, EMBEDDINGS)   # new model version, edited model files, ...
+if why:
+    print(f"Building the knowledge store: {why}.")
     print(json.dumps(build(store, embeddings=EMBEDDINGS), indent=2))
 else:
-    print(f"Using {store.name} (embeddings: {current})")"""),
+    print(f"Using {store.name} (embeddings: {EMBEDDINGS})")"""),
         md(EMBED_NOTE_COLAB),
         md(SIGN_IN_MD.format(n=5)),
         code(SIGN_IN),

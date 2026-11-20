@@ -236,7 +236,7 @@ def iterate_customer_order(driver: Driver, stats: RunStats, database: str) -> No
 # v2.3.3: the bands are contiguous. Each level approves ApprovalBase < POCost <= ApprovalLimit, and each
 # level's ApprovalBase equals the previous level's ApprovalLimit, so every cost from 0 to the L3 limit has a
 # path (before, a cost exactly on a limit, or inside the 0.01 gap between levels, could get stuck).
-# Every decision written here carries Source:"simulation" (agents write Source:"agent").
+# Every decision written here carries Source:"simulation" (a person writes "agent" through the AI agent, "ui" through the web UI).
 #
 # KNOWN GAP (mirrors the original script -- no L3 passthrough exists): a PO
 # costing more than Level3Approver's ApprovalLimit has no approval path at

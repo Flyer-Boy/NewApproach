@@ -4,7 +4,8 @@ Procurement Assistant tools (model v2.3.3): recommend restocking and resubmissio
 Offered only to an employee holding the "Procurement Assistant" role. The recommendations are read templates with the
 same rules and formulas as the simulation loops they replace. The writes are the governed templates from the import
 script's **Procurement Assistant** section: fixed Cypher that re-checks the role, locks the products, recomputes what
-is still needed, and records Date, Justification, Source:"agent" and RecommendedQt. A person confirms every write.
+is still needed, and records Date, Justification, Source ("agent" here, "ui" from the web UI) and RecommendedQt.
+A person confirms every write.
 
 Guard rails here, in code (the Cypher repeats the ones that matter):
   - recommend before writing: create/resubmit need a recommendation from this session (the write re-checks anyway);
@@ -14,12 +15,17 @@ Guard rails here, in code (the Cypher repeats the ones that matter):
 """
 from __future__ import annotations
 
+import os
+
 ROLE = "Procurement Assistant"
 RESTOCK_TITLE = "Restock recommendation"
 RESUBMISSION_TITLE = "Resubmission recommendation"
 CREATE_TITLE = "Create a Purchase Order (governed)"
 RESUBMIT_TITLE = "Resubmit a rejected Purchase Order (governed)"
 CANCEL_TITLE = "Cancel a rejected Purchase Order (governed)"
+DEMAND_TITLE = "Recent demand for products"
+ACTIVITY_TITLE = "PO activity by front end"
+DECISIONS_TITLE = "Procurement Assistant decisions"
 LARGE_CHANGE = 3.0
 LOOP_WINDOW_MINUTES = 3     # the PO Creation loop runs once a minute: any simulated PO this recent means it's still on
 
@@ -117,16 +123,26 @@ Procurement Assistant work (this user holds the role):
 
 
 class Procurement:
-    """Bound to a Session: uses its Aura connection, knowledge store, confirmation prompt and interaction id."""
+    """Bound to a session: needs .aura, .kb, .user, .employee_id and .mode; .confirm() and .interaction_id only for the
+    agent's one-call tools (the web UI calls prepare_* and commit_* and confirms in the browser)."""
 
-    def __init__(self, session):
+    SOURCES = ("agent", "ui")
+
+    def __init__(self, session, source: str = "agent"):
+        """source is the front end the person is using, recorded as Source on every PO written: "agent" or "ui"."""
+        if source not in self.SOURCES:
+            raise ValueError(f"source must be one of {self.SOURCES} (got {source!r})")
         self.s = session
+        self.source = source
         kb = session.kb
         self.t_restock = kb.template_by_title(RESTOCK_TITLE)
         self.t_resub = kb.template_by_title(RESUBMISSION_TITLE)
         self.t_create = kb.template_by_title(CREATE_TITLE)
         self.t_resubmit = kb.template_by_title(RESUBMIT_TITLE)
         self.t_cancel = kb.template_by_title(CANCEL_TITLE)
+        self.t_demand = kb.template_by_title(DEMAND_TITLE)
+        self.t_activity = kb.template_by_title(ACTIVITY_TITLE)
+        self.t_decisions = kb.template_by_title(DECISIONS_TITLE)
         self.restock: dict[str, dict] = {}        # supplierId -> {"supplier", "lines": {productId: line}}
         self.resub: dict[str, dict] = {}          # rejected PONumber -> recommendation row
 
@@ -152,14 +168,18 @@ class Procurement:
                            f"{LOOP_WINDOW_MINUTES} minutes. Two writers would order the same need twice, so {fix}, "
                            f"then try again in a few minutes."}
 
-    def handle(self, name: str, args: dict) -> dict:
+    def check_access(self) -> dict | None:
+        """The role and mode check every entry point runs first, whichever front end calls it."""
         if ROLE not in self.s.user["roles"]:
             return {"refused": f"{self.s.user['name']} does not hold the {ROLE} role, so procurement tools can't be "
                                f"used in this session."}
         if self.s.mode != "agents":
             return {"refused": "SIMULATION_MODE is 'full': the simulation's loops create and resubmit POs. Set "
                                "SIMULATION_MODE=agents and run run_loops_agents.bat to hand those jobs to the agent."}
-        return getattr(self, name)(args)
+        return None
+
+    def handle(self, name: str, args: dict) -> dict:
+        return self.check_access() or getattr(self, name)(args)
 
     # ---------------- recommendations ----------------
 
@@ -177,6 +197,8 @@ class Procurement:
                 "lines": sum(len(r.get("Lines") or []) for r in rows), "byApprovalLevel": by_level}
 
     def recommend_restock(self, args: dict) -> dict:
+        if (refusal := self.check_access()):
+            return refusal
         result = self.s.aura.read(self.t_restock["cypher"])
         result["template"] = self.t_restock["title"]
         if "rows" in result:
@@ -186,10 +208,12 @@ class Procurement:
         if "rows" in result:
             self.restock = {r["SupplierID"]: {"supplier": r["Supplier"], "lines": {l["ProductID"]: l for l in r["Lines"]}}
                             for r in result["rows"]}
-            self.s.kb.record_use(self.s.interaction_id, self.t_restock["name"])
+            self._use(self.t_restock)
         return result
 
     def recommend_resubmissions(self, args: dict) -> dict:
+        if (refusal := self.check_access()):
+            return refusal
         result = self.s.aura.read(self.t_resub["cypher"])
         result["template"] = self.t_resub["title"]
         if "rows" in result:
@@ -209,7 +233,7 @@ class Procurement:
             result["warning"] = warning["refused"] + " Recommendations shown, but POs can't be resubmitted until then."
         if "rows" in result:
             self.resub = {r["RejectedPO"]: r for r in result["rows"]}
-            self.s.kb.record_use(self.s.interaction_id, self.t_resub["name"])
+            self._use(self.t_resub)
         return result
 
     # ---------------- shared checks and display ----------------
@@ -273,9 +297,56 @@ class Procurement:
                 print(f"         ! {f}")
             print(f"         Justification: {e['justification']}")
 
-    # ---------------- writes ----------------
+    # ---------------- demand and audit (reads; used by the web UI, the agent reaches them through search) ----------------
 
-    def create_purchase_orders(self, args: dict) -> dict:
+    def demand(self, lines: list[dict], window_days: float | None = None, cover_days: float | None = None) -> dict:
+        """Recent demand for the products of one planned PO, and what the cover-based suggestion would do to it.
+        lines: [{"productId": "1", "qty": 55}, ...]. All figures come from the Cypher; the cost and approval level of the
+        PO with the suggested quantities are the same arithmetic the review step uses. Advisory: nothing is written."""
+        if (refusal := self.check_access()):
+            return refusal
+        window = float(window_days or os.environ.get("DEMAND_WINDOW_DAYS") or 7)
+        cover = float(cover_days or os.environ.get("DEMAND_COVER_DAYS") or 7)
+        clean = [{"productId": str(l["productId"]), "qty": int(l.get("qty") or 0)} for l in lines]
+        r = self.s.aura.read(self.t_demand["cypher"], {"lines": clean, "windowDays": window, "coverDays": cover})
+        if "error" in r:
+            return r
+        rows = r.get("rows") or []
+        limits = self._limits()
+        cost_now = round(sum(x["PlannedQt"] * x["UnitCost"] for x in rows), 2)
+        cost_sugg = round(sum((x["SuggestedQt"] or x["PlannedQt"]) * x["UnitCost"] for x in rows), 2)
+        return {"rows": rows, "windowDays": window, "coverDays": cover,
+                "po": {"estimatedCost": cost_now, "approvalLevel": self._level(cost_now, limits),
+                       "anySuggestion": any(x["SuggestedQt"] for x in rows),
+                       "estimatedCostWithSuggestions": cost_sugg, "approvalLevelWithSuggestions": self._level(cost_sugg, limits)}}
+
+    def audit(self, hours: float = 24) -> dict:
+        """POs created, resubmitted and cancelled by front end, and the people's decisions (agent and UI)."""
+        if (refusal := self.check_access()):
+            return refusal
+        act = self.s.aura.read(self.t_activity["cypher"], {"hours": hours})
+        dec = self.s.aura.read(self.t_decisions["cypher"], {})
+        if "error" in act or "error" in dec:
+            return {"error": act.get("error") or dec.get("error")}
+        return {"activity": act.get("rows") or [], "decisions": dec.get("rows") or [], "hours": hours}
+
+    # ---------------- writes ----------------
+    #
+    # Each write is two steps, so any front end can put its own confirmation in between:
+    #   prepare_*  validates against the guard rails and computes cost, approval level and flags. Writes nothing.
+    #   commit_*   runs the governed Cypher on the prepared entries (re-checking the loop guard first: time passes
+    #              between a preview and its confirmation).
+    # The agent's tools below are prepare -> _show -> confirm in the terminal/notebook -> commit. The web UI's API
+    # calls prepare for its review screen and commit when the person clicks to confirm.
+
+    def _use(self, template: dict) -> None:
+        """Provenance in the knowledge store, when this is a chat with an Interaction (the web UI has none)."""
+        if getattr(self.s, "interaction_id", None):
+            self.s.kb.record_use(self.s.interaction_id, template["name"])
+
+    def prepare_create(self, args: dict) -> dict:
+        if (refusal := self.check_access()):
+            return refusal
         pos = args.get("purchaseOrders") or []
         if not pos:
             return {"refused": "No POs given."}
@@ -298,16 +369,21 @@ class Procurement:
             entries.append({"title": f"New PO for {rec.get('supplier', 'Supplier ' + p['supplierId'])}", "lines": lines,
                             "cost": cost, "level": self._level(cost, limits), "flags": flags,
                             "justification": p["justification"].strip(), "p": p})
-        self._show(f"Create {len(entries)} purchase order(s) as {self.s.user['name']}:", entries)
-        if not self.s.confirm("      Create them? [y/N] "):
-            return {"refused": "The user did not confirm. Nothing was written."}
+        return {"header": f"Create {len(entries)} purchase order(s) as {self.s.user['name']}:", "entries": entries}
+
+    def commit_create(self, entries: list[dict]) -> dict:
+        if (refusal := self.check_access()):
+            return refusal
+        if (refusal := self._loop_refusal("create")):
+            return refusal
+        limits = self._limits()
         created, left_out = [], []
         for e in entries:
             p = e["p"]
             items = [{"productId": l["productId"], "qty": l["qty"], "recommendedQt": l["recommendedQt"]} for l in e["lines"]]
             r = self.s.aura.run_governed(self.t_create["cypher"], {
                 "requesterId": self.s.employee_id, "supplierId": p["supplierId"], "items": items,
-                "justification": e["justification"]})
+                "justification": e["justification"], "source": self.source})
             if "error" in r:
                 return {"error": r["error"], "created": created, "left_out": left_out}
             row = (r.get("rows") or [None])[0]
@@ -320,11 +396,22 @@ class Procurement:
             if row:
                 created.append({**row, "supplierId": p["supplierId"], "approvalLevel": self._level(row["EstimatedCost"], limits)})
         if created:
-            self.s.kb.record_use(self.s.interaction_id, self.t_create["name"])
+            self._use(self.t_create)
             self.restock = {}            # stale now: ask for a fresh recommendation before the next batch
         return {"created": created, "left_out": left_out}
 
-    def resubmit_purchase_orders(self, args: dict) -> dict:
+    def create_purchase_orders(self, args: dict) -> dict:
+        prep = self.prepare_create(args)
+        if "entries" not in prep:
+            return prep
+        self._show(prep["header"], prep["entries"])
+        if not self.s.confirm("      Create them? [y/N] "):
+            return {"refused": "The user did not confirm. Nothing was written."}
+        return self.commit_create(prep["entries"])
+
+    def prepare_resubmit(self, args: dict) -> dict:
+        if (refusal := self.check_access()):
+            return refusal
         subs = args.get("resubmissions") or []
         if not subs:
             return {"refused": "No resubmissions given."}
@@ -352,15 +439,20 @@ class Procurement:
             entries.append({"title": f"Resubmit {sbm['rejectedPO']} ({rec['Supplier']})", "lines": lines, "cost": cost,
                             "level": self._level(cost, limits), "flags": flags,
                             "justification": sbm["justification"].strip(), "p": sbm})
-        self._show(f"Resubmit {len(entries)} rejected PO(s) as {self.s.user['name']}:", entries)
-        if not self.s.confirm("      Resubmit them? [y/N] "):
-            return {"refused": "The user did not confirm. Nothing was written."}
+        return {"header": f"Resubmit {len(entries)} rejected PO(s) as {self.s.user['name']}:", "entries": entries}
+
+    def commit_resubmit(self, entries: list[dict]) -> dict:
+        if (refusal := self.check_access()):
+            return refusal
+        if (refusal := self._loop_refusal("resubmit")):
+            return refusal
+        limits = self._limits()
         done, left_out, refused = [], [], []
         for e in entries:
             items = [{"productId": l["productId"], "qty": l["qty"], "recommendedQt": l["recommendedQt"]} for l in e["lines"]]
             r = self.s.aura.run_governed(self.t_resubmit["cypher"], {
                 "requesterId": self.s.employee_id, "rejectedPO": e["p"]["rejectedPO"], "items": items,
-                "justification": e["justification"]})
+                "justification": e["justification"], "source": self.source})
             if "error" in r:
                 return {"error": r["error"], "resubmitted": done, "left_out": left_out}
             row = (r.get("rows") or [None])[0]
@@ -373,11 +465,22 @@ class Procurement:
                          for l in e["lines"] if l["productId"] not in written]
             done.append({**row, "approvalLevel": self._level(row["EstimatedCost"], limits)})
         if done:
-            self.s.kb.record_use(self.s.interaction_id, self.t_resubmit["name"])
+            self._use(self.t_resubmit)
         self.resub = {}
         return {"resubmitted": done, "left_out": left_out, "not_resubmitted": refused}
 
-    def cancel_rejected_purchase_orders(self, args: dict) -> dict:
+    def resubmit_purchase_orders(self, args: dict) -> dict:
+        prep = self.prepare_resubmit(args)
+        if "entries" not in prep:
+            return prep
+        self._show(prep["header"], prep["entries"])
+        if not self.s.confirm("      Resubmit them? [y/N] "):
+            return {"refused": "The user did not confirm. Nothing was written."}
+        return self.commit_resubmit(prep["entries"])
+
+    def prepare_cancel(self, args: dict) -> dict:
+        if (refusal := self.check_access()):
+            return refusal
         cancels = args.get("cancellations") or []
         if not cancels:
             return {"refused": "No cancellations given."}
@@ -392,20 +495,33 @@ class Procurement:
             by = f", rejected at {rej.get('Level')} by {rej.get('RejectedBy')}" if rej.get("RejectedBy") else ""
             return f"Cancel {po} ({rec.get('Supplier')}{by})"
         entries = [{"title": title(c["rejectedPO"]), "cost": None, "level": "-", "justification": c["justification"].strip(),
-                    "lines": [], "flags": []} for c in cancels]
-        self._show(f"Cancel {len(entries)} rejected PO(s) as {self.s.user['name']}:", entries)
-        if not self.s.confirm("      Cancel them? [y/N] "):
-            return {"refused": "The user did not confirm. Nothing was written."}
+                    "lines": [], "flags": [], "p": c} for c in cancels]
+        return {"header": f"Cancel {len(entries)} rejected PO(s) as {self.s.user['name']}:", "entries": entries}
+
+    def commit_cancel(self, entries: list[dict]) -> dict:
+        if (refusal := self.check_access()):
+            return refusal
         done, refused = [], []
-        for c in cancels:
+        for e in entries:
+            po = e["p"]["rejectedPO"]
             r = self.s.aura.run_governed(self.t_cancel["cypher"], {
-                "requesterId": self.s.employee_id, "rejectedPO": c["rejectedPO"], "justification": c["justification"].strip()})
+                "requesterId": self.s.employee_id, "rejectedPO": po, "justification": e["justification"],
+                "source": self.source})
             if "error" in r:
                 return {"error": r["error"], "cancelled": done}
             if r.get("rows"):
-                done.append(c["rejectedPO"])
+                done.append(po)
             else:
-                refused.append({"rejectedPO": c["rejectedPO"], "reason": "not in RejectedPoS, or already resubmitted"})
+                refused.append({"rejectedPO": po, "reason": "not in RejectedPoS, or already resubmitted"})
         if done:
-            self.s.kb.record_use(self.s.interaction_id, self.t_cancel["name"])
+            self._use(self.t_cancel)
         return {"cancelled": done, "not_cancelled": refused}
+
+    def cancel_rejected_purchase_orders(self, args: dict) -> dict:
+        prep = self.prepare_cancel(args)
+        if "entries" not in prep:
+            return prep
+        self._show(prep["header"], prep["entries"])
+        if not self.s.confirm("      Cancel them? [y/N] "):
+            return {"refused": "The user did not confirm. Nothing was written."}
+        return self.commit_cancel(prep["entries"])

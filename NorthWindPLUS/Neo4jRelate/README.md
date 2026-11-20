@@ -254,13 +254,16 @@ through the same governed Cypher. Only the interface differs, and the audit trai
 the UI records `Source: "ui"`.
 
 - **Restock:** one card per Supplier with the graph's recommendation, editable quantities, the estimated cost and the
-  approval level the PO will need (recomputed by the API as you type), and a required justification.
-- **Rejected POs:** who rejected each one, at which level and why, and what's still needed now; resubmit or cancel.
+  approval level the PO will need (recomputed by the API as you type), and a required justification. Cards start left
+  out: *Include* the POs to create now, and the *Review* button stays pinned to the bottom of the window.
+- **Rejected POs:** who raised each one, who rejected it, at which level and why, and what's still needed now;
+  resubmit or cancel. It's the procurement team's shared queue: any Procurement Assistant can resubmit or cancel a
+  rejected PO, including one raised by someone else, and the audit trail records who raised it and who decided.
 - **Audit:** POs created, resubmitted and cancelled by the simulation, the agent and the UI, with each person's
   justification and changes to the recommendation.
 - **Review, then confirm:** each write is two calls: *prepare* (the agent's checks and a preview; nothing is written)
   and *commit*. A commit checks that the review is the one shown, that it's less than 15 minutes old, and that the PO
-  Creation loop is still off.
+  Creation loop is still off. After each write, every screen reloads from the graph.
 
 There's no chat. Two kinds of help work behind the scenes, both advisory:
 
@@ -270,7 +273,8 @@ There's no chat. Two kinds of help work behind the scenes, both advisory:
   `DEMAND_COVER_DAYS` in `.env`). The agent can use the same template.
 - **Justification drafts (Claude).** A *Suggest* button asks Claude for a draft built only from facts the server
   gathers from the graph (stock, open orders, demand, the rejecter's comment). The person edits it, and **only the
-  submitted text is recorded**. Without `ANTHROPIC_API_KEY`, the button isn't shown.
+  submitted text is recorded**. Drafts use the agent's model (`DRAFT_MODEL` in `.env` to change it); without
+  `ANTHROPIC_API_KEY`, the button isn't shown.
 
 The browser never sees the Aura credentials or picks its own identity: the API holds both. Sign-in is a picker of
 Procurement Assistants, standing in for a login, like `--as-employee`. The API doesn't open the knowledge store (relate
@@ -415,6 +419,10 @@ A proof of concept is worth its surprises. These came from running against the l
 - **Environment details matter.** The Neo4j Python driver rejects `Query(..., timeout=...)` objects inside managed
   transactions, so timeouts go through `@unit_of_work`. Anaconda's older `brotli` broke the Anthropic SDK's HTTP
   client, so `brotli>=1.2.0` is pinned. Newer Aura instances may use the instance ID as both user and database name.
+- **Aura can briefly have no server for reads.** On the first live run of the web UI, its API and four of the loops
+  failed to connect with `ReadServiceUnavailable` while one loop already connected kept working; a clean restart
+  fixed it. The agent and the API now retry the connection a few times, in the database `.env` names, before giving
+  up with a message that says what to check.
 
 ## Two ways to run
 
@@ -495,8 +503,19 @@ uvicorn api.main:app --port 8000          # or run_ui.bat on Windows; then open 
 ```
 
 To try it without Aura or an API key, `python tests/serve_toy_ui.py` runs the API on a small toy graph, with canned
-drafts. **It hasn't been run against a live Aura database yet**; the offline tests and a click-through on the toy graph
-pass.
+drafts. Run live against Aura in Chrome and Edge.
+
+If it doesn't start, these came up on the first live run:
+
+- **`pip` isn't recognized:** run pip through the Python that `run_ui.bat` uses: `"%PYTHON%" -m pip install ...`
+  (the `PYTHON` path from `.env`), or use an Anaconda Prompt.
+- **`.env not found`:** `.env` is git-ignored, so every clone needs its own copy. If Explorer shows it but
+  `dir /a .env*` doesn't, rename or copy it from the command line (OneDrive can hide it).
+- **The build fails with `styleText` or `EBADENGINE`:** Node.js is older than 20.19. Install the current LTS, open a new
+  window, delete `ui\node_modules`, and run `npm install` and `npm run build` again.
+- **The page looks like an older version:** rebuild, restart `run_ui.bat` and press Ctrl+F5.
+- **Avoid OneDrive folders** for this project: OneDrive syncing `ui\node_modules` and the relate store causes locked
+  files.
 
 ### Things to ask
 
@@ -617,7 +636,7 @@ mode checks, stale or reused reviews, the loop guard at commit, and drafts built
 | 4 | Learning loop, provenance, warnings to the model, search-first enforcement, embeddings | Tested offline; in live testing |
 | 5 | What-if sandbox with `relate pull` (suggested by a Neo4j staff engineer) | Run live (Colab) |
 | 6 | Model v2.3.3 + Procurement Assistant agent: PO creation and resubmission handed from the loops to a person with the agent; two run modes (full, agents) | Run live (Colab, agents mode): 27 POs created with changes, vetted by the loop; 16 rejected POs resubmitted or cancelled |
-| 7 | Web UI: the same PO jobs with forms, demand suggestions and AI justification drafts; `Source: "ui"` | Tested offline and on a toy graph; not yet run against Aura |
+| 7 | Web UI: the same PO jobs with forms, demand suggestions and AI justification drafts; `Source: "ui"` | Run live against Aura (Chrome and Edge): POs created with AI-drafted justifications, rejected POs reviewed |
 
 **Parking lot**
 - Copy saved templates (and possibly the question history) into the Aura graph, so they can be queried next to the
@@ -631,7 +650,11 @@ mode checks, stale or reused reviews, the loop guard at commit, and drafts built
   point; `$source` on the governed PO commands (`"agent"` or `"ui"`; any other value writes nothing); new read
   templates *Recent demand for products* and *PO activity by front end*; the knowledge store records a hash of the
   model files and rebuilds when they change, with the model version unchanged; `kb/model_templates.py`; the FastAPI
-  layer (`api/`), the React app (`ui/`), `run_ui.bat` and `tests/serve_toy_ui.py`.
+  layer (`api/`), the React app (`ui/`), `run_ui.bat` and `tests/serve_toy_ui.py`. After the first live run: who
+  raised each rejected PO (`RaisedBy` in the resubmission recommendation, so the agent sees it too) and a note on the
+  shared queue; cards start left out, with the Review button pinned to the bottom; every screen reloads after a write;
+  AI-draft errors shown on screen, drafts on the agent's model; the page is never served from a stale cache; the Aura
+  connection is retried; the Northwind logo.
 
 - **Stage 6 / model v2.3.3:** Procurement Assistant agent (`agent/procurement.py`): restock and resubmission
   recommendations, governed create / resubmit / cancel commands, tools offered by role. Model: `Date`,
