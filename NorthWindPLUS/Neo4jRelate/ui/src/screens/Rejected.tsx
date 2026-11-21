@@ -17,15 +17,18 @@ export default function Rejected({ drafts, me }: { drafts: boolean; me: string }
   const [error, setError] = useState<string | null>(null);
   const [message, setMessage] = useState<string[] | null>(null);
   const [drafting, setDrafting] = useState<string | null>(null);
+  const [submitted, setSubmitted] = useState<Set<string>>(new Set());   // hidden at once, until the reload arrives
 
   useEffect(() => {
     if (rec.data) setRows(Object.fromEntries(rec.data.rows.map((r) => [r.RejectedPO, {
       choice: "none" as Choice, card: initialState(r.Lines, true), reason: "",
     }])));
-  }, [rec.data]);
+    setSubmitted(new Set());
+    // dataUpdatedAt too: a reload that returns identical data keeps the same object, and the choices must still reset
+  }, [rec.data, rec.dataUpdatedAt]);
 
   const set = (po: string, patch: Partial<Row>) => setRows({ ...rows, [po]: { ...rows[po], ...patch } });
-  const list = rec.data?.rows ?? [];
+  const list = (rec.data?.rows ?? []).filter((r) => !submitted.has(r.RejectedPO));
   const resubs = list.filter((r) => rows[r.RejectedPO]?.choice === "resubmit");
   const cancels = list.filter((r) => rows[r.RejectedPO]?.choice === "cancel");
 
@@ -54,8 +57,10 @@ export default function Rejected({ drafts, me }: { drafts: boolean; me: string }
   };
 
   const confirm = async (previewId: string) => {
+    const ids = new Set((review?.kind === "resubmit" ? resubs : cancels).map((r) => r.RejectedPO));
     if (review?.kind === "resubmit") {
       const out = await api.commitResubmit(previewId);
+      setSubmitted(ids);           // only once the write succeeded
       after([
         ...out.resubmitted.map((x) => `${x.ResubmittedFrom} resubmitted as ${x.PONumber}: est. ${money(x.EstimatedCost)}, goes to ${x.approvalLevel}`),
         ...out.left_out.map((x) => `Left out ${x.product}: ${x.reason}`),
@@ -63,6 +68,7 @@ export default function Rejected({ drafts, me }: { drafts: boolean; me: string }
       ]);
     } else {
       const out = await api.commitCancel(previewId);
+      setSubmitted(ids);
       after([...out.cancelled.map((po) => `${po} cancelled`), ...out.not_cancelled.map((x) => `${x.rejectedPO} not cancelled: ${x.reason}`)]);
     }
   };
@@ -109,9 +115,13 @@ export default function Rejected({ drafts, me }: { drafts: boolean; me: string }
           This is the procurement team's shared queue: any Procurement Assistant can resubmit or cancel a rejected PO,
           including one raised by someone else. The audit trail records who raised it and who decided.
         </Text>
-        <Button size="sm" variant="outline" onClick={() => { setMessage(null); qc.invalidateQueries({ queryKey: ["resubmissions"] }); }}>
-          Reload from the graph
-        </Button>
+        <HStack>
+          {rec.isFetching && <><Spinner size="xs" /><Text fontSize="xs" color="fg.muted">Reloading from the graph…</Text></>}
+          <Button size="sm" variant="outline" disabled={rec.isFetching}
+                  onClick={() => { setMessage(null); qc.invalidateQueries({ queryKey: ["resubmissions"] }); }}>
+            Reload from the graph
+          </Button>
+        </HStack>
       </Flex>
       {rec.data?.warning && <Alert.Root status="warning" mb={3}><Alert.Indicator /><Alert.Description>{rec.data.warning}</Alert.Description></Alert.Root>}
       {message && (
@@ -163,8 +173,8 @@ export default function Rejected({ drafts, me }: { drafts: boolean; me: string }
         <ActionBar>
           <Text fontSize="sm" color="fg.muted">Choose Resubmit or Cancel PO on the ones to decide now.</Text>
           <Flex gap={3}>
-            <Button colorPalette="red" variant="outline" disabled={!cancels.length} onClick={reviewCancel}>Review {cancels.length} cancellation(s)</Button>
-            <Button colorPalette="blue" disabled={!resubs.length} onClick={reviewResubmit}>Review {resubs.length} resubmission(s)</Button>
+            <Button colorPalette="red" variant="outline" disabled={!cancels.length || rec.isFetching} onClick={reviewCancel}>Review {cancels.length} cancellation(s)</Button>
+            <Button colorPalette="blue" disabled={!resubs.length || rec.isFetching} onClick={reviewResubmit}>Review {resubs.length} resubmission(s)</Button>
           </Flex>
         </ActionBar>
       )}

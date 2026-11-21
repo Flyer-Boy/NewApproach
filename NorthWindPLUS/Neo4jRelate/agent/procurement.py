@@ -15,6 +15,7 @@ Guard rails here, in code (the Cypher repeats the ones that matter):
 """
 from __future__ import annotations
 
+import math
 import os
 
 ROLE = "Procurement Assistant"
@@ -26,6 +27,10 @@ CANCEL_TITLE = "Cancel a rejected Purchase Order (governed)"
 DEMAND_TITLE = "Recent demand for products"
 ACTIVITY_TITLE = "PO activity by front end"
 DECISIONS_TITLE = "Procurement Assistant decisions"
+STUCK_TITLE = "Stuck customer orders"
+PACE_TITLE = "Fulfillment pace"
+CREATE_STUCK_TITLE = "Create a Purchase Order for stuck customer orders"
+PRIORITY = "PRIORITY:"
 LARGE_CHANGE = 3.0
 LOOP_WINDOW_MINUTES = 3     # the PO Creation loop runs once a minute: any simulated PO this recent means it's still on
 
@@ -143,6 +148,11 @@ class Procurement:
         self.t_demand = kb.template_by_title(DEMAND_TITLE)
         self.t_activity = kb.template_by_title(ACTIVITY_TITLE)
         self.t_decisions = kb.template_by_title(DECISIONS_TITLE)
+        self.t_stuck = kb.template_by_title(STUCK_TITLE)
+        self.t_pace = kb.template_by_title(PACE_TITLE)
+        self.t_create_stuck = kb.template_by_title(CREATE_STUCK_TITLE)
+        self.unblock: dict[str, dict] = {}       # supplierId -> proposal from the last simulation
+        self.unblock_orders: list[str] = []
         self.restock: dict[str, dict] = {}        # supplierId -> {"supplier", "lines": {productId: line}}
         self.resub: dict[str, dict] = {}          # rejected PONumber -> recommendation row
 
@@ -320,6 +330,47 @@ class Procurement:
                        "anySuggestion": any(x["SuggestedQt"] for x in rows),
                        "estimatedCostWithSuggestions": cost_sugg, "approvalLevelWithSuggestions": self._level(cost_sugg, limits)}}
 
+    def demand_batch(self, groups: dict[str, list[dict]], window_days: float | None = None,
+                     cover_days: float | None = None) -> dict[str, dict]:
+        """demand() for several planned POs in ONE read: {key: [{productId, qty}]} -> {key: demand result}.
+        The screens use it so a reload costs one round trip to Aura, not one per card."""
+        if (refusal := self.check_access()):
+            return {k: refusal for k in groups}
+        window = float(window_days or os.environ.get("DEMAND_WINDOW_DAYS") or 7)
+        cover = float(cover_days or os.environ.get("DEMAND_COVER_DAYS") or 7)
+        merged: dict[str, int] = {}
+        for items in groups.values():
+            for it in items:
+                merged[str(it["productId"])] = max(merged.get(str(it["productId"]), 0), int(it.get("qty") or 0))
+        if not merged:
+            return {k: None for k in groups}
+        r = self.s.aura.read(self.t_demand["cypher"], {"lines": [{"productId": p, "qty": 0} for p in merged],
+                                                       "windowDays": window, "coverDays": cover})
+        if "error" in r:
+            return {k: r for k in groups}
+        base = {row["ProductID"]: row for row in (r.get("rows") or [])}
+        limits, out = self._limits(), {}
+        for key, items in groups.items():
+            rows = []
+            for it in items:
+                b0 = base.get(str(it["productId"]))
+                if not b0:
+                    continue
+                qty = int(it.get("qty") or 0)
+                per_day, eff = b0["UnitsPerDay"], b0["EffectiveStock"]
+                # Same arithmetic as the template, for this planned quantity (the template ran with quantity 0).
+                cover_after = round((eff + qty) / per_day, 1) if per_day > 0 else None
+                sugg = (math.ceil(per_day * cover - eff) if per_day > 0 and eff + qty < per_day * cover else None)
+                rows.append({**b0, "PlannedQt": qty, "DaysOfCoverAfterPO": cover_after, "SuggestedQt": sugg})
+            cost_now = round(sum(x["PlannedQt"] * x["UnitCost"] for x in rows), 2)
+            cost_sugg = round(sum((x["SuggestedQt"] or x["PlannedQt"]) * x["UnitCost"] for x in rows), 2)
+            out[key] = {"rows": rows, "windowDays": window, "coverDays": cover,
+                        "po": {"estimatedCost": cost_now, "approvalLevel": self._level(cost_now, limits),
+                               "anySuggestion": any(x["SuggestedQt"] for x in rows),
+                               "estimatedCostWithSuggestions": cost_sugg,
+                               "approvalLevelWithSuggestions": self._level(cost_sugg, limits)}}
+        return out
+
     def audit(self, hours: float = 24) -> dict:
         """POs created, resubmitted and cancelled by front end, and the people's decisions (agent and UI)."""
         if (refusal := self.check_access()):
@@ -329,6 +380,140 @@ class Procurement:
         if "error" in act or "error" in dec:
             return {"error": act.get("error") or dec.get("error")}
         return {"activity": act.get("rows") or [], "decisions": dec.get("rows") or [], "hours": hours}
+
+    # ---------------- stuck customer orders (see DESIGN_stuck_orders.md) ----------------
+
+    @staticmethod
+    def stuck_params() -> dict:
+        return {"windowDays": float(os.environ.get("STUCK_WINDOW_DAYS") or 3),
+                "stuckFactor": float(os.environ.get("STUCK_FACTOR") or 3),
+                "maxOrders": int(os.environ.get("MAX_STUCK_ORDERS") or 5),
+                # Only the simulation's own orders count ("CO-..."); the imported historical orders are decades old.
+                "orderIdPrefix": os.environ.get("ORDER_ID_PREFIX", "CO-")}
+
+    def stuck_orders(self, args: dict | None = None) -> dict:
+        """Open orders waiting past 3x the median time to ship, with at least one line short, oldest first, and the
+        business's pace. Reads only."""
+        if (refusal := self.check_access()):
+            return refusal
+        prm = self.stuck_params()
+        stuck = self.s.aura.read(self.t_stuck["cypher"], {k: prm[k] for k in ("windowDays", "stuckFactor", "maxOrders", "orderIdPrefix")})
+        if "error" in stuck:
+            return stuck
+        rows = stuck.get("rows") or []
+        pids = sorted({l["ProductID"] for r in rows for l in r["Lines"]})
+        pace = self.s.aura.read(self.t_pace["cypher"], {"windowDays": prm["windowDays"], "productIds": pids,
+                                                         "orderIdPrefix": prm["orderIdPrefix"]})
+        if "error" in pace:
+            return pace
+        p = (pace.get("rows") or [{}])[0]
+        return {"rows": rows, "pace": {k: v for k, v in p.items() if k != "RecentOrders"}, "_pace_row": p, **prm}
+
+    def recommend_unblock(self, args: dict | None = None) -> dict:
+        """Plays the business forward on a copy in relate to find the extra stock that frees the stuck orders, and
+        proposes one PO per Supplier. Writes nothing to Aura."""
+        found = self.stuck_orders(args)
+        if "rows" not in found:
+            return found
+        if not found["rows"]:
+            self.unblock, self.unblock_orders = {}, []
+            return {"orders": [], "proposals": [], "lines": [], "message": "No customer order is stuck right now.",
+                    "pace": found["pace"]}
+        import sys
+        from pathlib import Path
+        sandbox = str(Path(__file__).resolve().parent.parent / "sandbox")
+        if sandbox not in sys.path:
+            sys.path.insert(0, sandbox)
+        import unblock
+        result = unblock.simulate(found["rows"], found["_pace_row"], aura=self.s.aura,
+                                  method=os.environ.get("UNBLOCK_PULL") or "auto")
+        limits = self._limits()
+        waiting = {o["OrderID"]: o for o in result["orders"]}
+        for pr in result["proposals"]:
+            pr["approvalLevel"] = self._level(pr["estimatedCost"], limits)
+            parts = []
+            for oid in pr["unblocks"]:
+                o = waiting.get(oid, {})
+                extra = ", past its required date" if o.get("PastRequiredDate") else ""
+                parts.append(f"{oid} ({o.get('Customer') or 'customer'}, waiting {o.get('WaitingHours')} h{extra})")
+            pr["priorityLine"] = f"{PRIORITY} unblocks customer order{'s' if len(parts) > 1 else ''} {' and '.join(parts)}."
+        self.unblock = {pr["supplierId"]: pr for pr in result["proposals"]}
+        self.unblock_orders = [o["OrderID"] for o in result["orders"]]
+        result["pace"] = found["pace"]
+        result["stuckRule"] = {k: found[k] for k in ("windowDays", "stuckFactor", "maxOrders", "orderIdPrefix")}
+        return result
+
+    def prepare_unblock(self, args: dict) -> dict:
+        if (refusal := self.check_access()):
+            return refusal
+        pos = args.get("purchaseOrders") or []
+        if not pos:
+            return {"refused": "No POs given."}
+        if not self.unblock:
+            return {"refused": "Run the stuck-orders simulation first, so the POs are checked against its proposal."}
+        if (refusal := self._loop_refusal("create")):
+            return refusal
+        suppliers = [p["supplierId"] for p in pos]
+        if len(set(suppliers)) != len(suppliers):
+            return {"refused": "One PO per Supplier per batch. Splitting a Supplier's order into several POs isn't allowed."}
+        limits, entries = self._limits(), []
+        for p in pos:
+            prop = self.unblock.get(p["supplierId"])
+            if not prop:
+                return {"refused": f"Supplier {p['supplierId']} isn't in the current stuck-orders proposal."}
+            just = (p.get("justification") or "").strip()
+            if not just.startswith(PRIORITY):
+                return {"refused": f"The justification for {prop['supplier']} must start with '{PRIORITY}' so the approvers see it."}
+            if (bad := self._bad_items(p["items"])):
+                return {"refused": f"PO for {prop['supplier']}: {bad}."}
+            known = {l["productId"]: l for l in prop["lines"]}
+            if (stray := [it["productId"] for it in p["items"] if it["productId"] not in known]):
+                return {"refused": f"PO for {prop['supplier']}: product(s) {', '.join(stray)} aren't needed by the stuck orders."}
+            rec = {pid: {"Product": l["product"], "RecommendedQt": l["extra"], "UnitCost": l["unitCost"]} for pid, l in known.items()}
+            lines, cost, flags = self._lines(p["items"], rec)
+            for it in p["items"]:
+                l = known[it["productId"]]
+                if it["qty"] > l["tolerance3Days"]:
+                    flags.append(f"{l['product']}: {it['qty']} is more than customers ordered in the last 3 days "
+                                 f"({l['tolerance3Days']}): deliberate overstock")
+                if it["qty"] < l["extra"]:
+                    flags.append(f"{l['product']}: {it['qty']} is below the {l['extra']} the simulation needed; "
+                                 f"the stuck orders may stay stuck")
+            entries.append({"title": f"Priority PO for {prop['supplier']} (unblocks {', '.join(prop['unblocks'])})",
+                            "lines": lines, "cost": cost, "level": self._level(cost, limits), "flags": flags,
+                            "justification": just, "p": p, "orders": prop["unblocks"]})
+        return {"header": f"Create {len(entries)} priority purchase order(s) for stuck customer orders as {self.s.user['name']}:",
+                "entries": entries}
+
+    def commit_unblock(self, entries: list[dict]) -> dict:
+        if (refusal := self.check_access()):
+            return refusal
+        if (refusal := self._loop_refusal("create")):
+            return refusal
+        prm, limits = self.stuck_params(), self._limits()
+        created, left_out = [], []
+        for e in entries:
+            p = e["p"]
+            items = [{"productId": l["productId"], "qty": l["qty"], "recommendedQt": l["recommendedQt"]} for l in e["lines"]]
+            r = self.s.aura.run_governed(self.t_create_stuck["cypher"], {
+                "requesterId": self.s.employee_id, "supplierId": p["supplierId"], "items": items,
+                "stuckOrderIds": e["orders"], "windowDays": prm["windowDays"], "stuckFactor": prm["stuckFactor"],
+                "orderIdPrefix": prm["orderIdPrefix"],
+                "justification": e["justification"], "source": self.source})
+            if "error" in r:
+                return {"error": r["error"], "created": created, "left_out": left_out}
+            row = (r.get("rows") or [None])[0]
+            written = set(row["ProductIDs"]) if row else set()
+            left_out += [{"supplierId": p["supplierId"], "product": l["product"],
+                          "reason": "its stuck order has shipped meanwhile, or the product can't be ordered from this Supplier"}
+                         for l in e["lines"] if l["productId"] not in written]
+            if row:
+                created.append({**row, "supplierId": p["supplierId"], "unblocks": e["orders"],
+                                "approvalLevel": self._level(row["EstimatedCost"], limits)})
+        if created:
+            self._use(self.t_create_stuck)
+            self.unblock = {}                 # stale now: simulate again before another batch
+        return {"created": created, "left_out": left_out}
 
     # ---------------- writes ----------------
     #

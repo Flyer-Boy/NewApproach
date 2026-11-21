@@ -338,6 +338,11 @@ def main():
           chai_d["DaysOfCoverAfterPO"] is not None and chai_d["SuggestedQt"] == int(-(-(450.0 * 7 - chai_d["EffectiveStock"]) // 1)))
     check("the suggestion says what it does to the PO: cost and the approval level it would need (L1 -> L3)",
           dem["po"]["approvalLevel"] == "L1" and dem["po"]["approvalLevelWithSuggestions"] == "L3" and dem["po"]["anySuggestion"])
+    batch = ui.demand_batch({"A": [{"productId": "1", "qty": 55}], "B": [{"productId": "3", "qty": 45}, {"productId": "1", "qty": 3145}]}, 7, 7)
+    single = {"A": ui.demand([{"productId": "1", "qty": 55}], 7, 7), "B": ui.demand([{"productId": "3", "qty": 45}, {"productId": "1", "qty": 3145}], 7, 7)}
+    strip = lambda d: ({**d, "rows": sorted(d["rows"], key=lambda r: r["ProductID"])})
+    check("demand for several cards in one read gives exactly the per-card numbers (rows, cost, levels, suggestions)",
+          all(strip(batch[k]) == strip(single[k]) for k in ("A", "B")))
     quiet_d = ui.demand([{"productId": "2", "qty": 5}], 7, 7)["rows"][0]
     check("no recent orders: no rate, no cover figure, no suggestion",
           (quiet_d["Orders"], quiet_d["UnitsPerDay"], quiet_d["DaysOfCoverAfterPO"], quiet_d["SuggestedQt"]) == (0, 0.0, None, None))

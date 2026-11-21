@@ -4,3 +4,4 @@ __pycache__/
 .env
 agent/logs/
 whatif/
+sandbox/scratch/

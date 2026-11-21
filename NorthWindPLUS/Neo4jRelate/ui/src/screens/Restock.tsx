@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import { Alert, Box, Button, Flex, List, Spinner, Text } from "@chakra-ui/react";
+import { Alert, Box, Button, Flex, HStack, List, Spinner, Text } from "@chakra-ui/react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { api, money, refreshAfterWrite, Review } from "../api";
 import POCard, { CardState, initialState, itemsOf } from "../components/POCard";
@@ -15,14 +15,18 @@ export default function Restock({ drafts }: { drafts: boolean }) {
   const [review, setReview] = useState<Review | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [outcome, setOutcome] = useState<Outcome | null>(null);
+  const [submitted, setSubmitted] = useState<Set<string>>(new Set());   // hidden at once, until the reload arrives
 
   useEffect(() => {
     // Every card starts left out: pick the POs to create now (each one you include needs a justification).
     if (rec.data) setCards(Object.fromEntries(rec.data.rows.map((r) => [r.SupplierID, initialState(r.Lines, false)])));
-  }, [rec.data]);
+    setSubmitted(new Set());
+    // dataUpdatedAt too: a reload that returns identical data keeps the same object, and the cards must still reset
+  }, [rec.data, rec.dataUpdatedAt]);
 
   const reload = () => { setOutcome(null); setError(null); qc.invalidateQueries({ queryKey: ["restock"] }); };
-  const included = (rec.data?.rows ?? []).filter((r) => cards[r.SupplierID]?.include);
+  const visible = (rec.data?.rows ?? []).filter((r) => !submitted.has(r.SupplierID));
+  const included = visible.filter((r) => cards[r.SupplierID]?.include);
 
   const toReview = async () => {
     setError(null);
@@ -39,12 +43,13 @@ export default function Restock({ drafts }: { drafts: boolean }) {
     const out = await api.commitCreate(previewId);
     setReview(null);
     setOutcome(out);
+    setSubmitted(new Set(included.map((r) => r.SupplierID)));
     refreshAfterWrite(qc);     // reload every screen from the graph (the API also needs a fresh recommendation)
   };
 
   if (rec.isLoading) return <Spinner mt={6} />;
   if (rec.error) return <Text color="red.500" mt={4}>{(rec.error as Error).message}</Text>;
-  const rows = rec.data?.rows ?? [];
+  const rows = visible;
 
   return (
     <Box pt={4}>
@@ -53,7 +58,10 @@ export default function Restock({ drafts }: { drafts: boolean }) {
           What needs restocking now: the simulation's own rule (effective stock near the restock threshold), one PO per Supplier.
           Include the ones to create, then Review at the bottom of the window.
         </Text>
-        <Button size="sm" variant="outline" onClick={reload}>Reload from the graph</Button>
+        <HStack>
+          {rec.isFetching && <><Spinner size="xs" /><Text fontSize="xs" color="fg.muted">Reloading from the graph…</Text></>}
+          <Button size="sm" variant="outline" onClick={reload} disabled={rec.isFetching}>Reload from the graph</Button>
+        </HStack>
       </Flex>
       {rec.data?.warning && (
         <Alert.Root status="warning" mb={3}><Alert.Indicator /><Alert.Description>{rec.data.warning}</Alert.Description></Alert.Root>
@@ -93,8 +101,8 @@ export default function Restock({ drafts }: { drafts: boolean }) {
               ? `${rows.length} recommended PO(s). Click Include on the ones to create now.`
               : `${included.length} of ${rows.length} included · each needs a justification`}
           </Text>
-          <Button colorPalette="blue" disabled={included.length === 0} onClick={toReview}>
-            Review {included.length} PO(s)
+          <Button colorPalette="blue" disabled={included.length === 0 || rec.isFetching} onClick={toReview}>
+            {rec.isFetching ? "Reloading…" : `Review ${included.length} PO(s)`}
           </Button>
         </ActionBar>
       )}

@@ -6,6 +6,7 @@ import SignIn from "./screens/SignIn";
 import Restock from "./screens/Restock";
 import Rejected from "./screens/Rejected";
 import AuditScreen from "./screens/Audit";
+import Stuck from "./screens/Stuck";
 import Logo from "./components/Logo";
 
 export default function App() {
@@ -77,10 +78,12 @@ export default function App() {
           <Tabs.List>
             <Tabs.Trigger value="restock">Restock</Tabs.Trigger>
             <Tabs.Trigger value="rejected">Rejected POs</Tabs.Trigger>
+            <Tabs.Trigger value="stuck">Stuck orders</Tabs.Trigger>
             <Tabs.Trigger value="audit">Audit</Tabs.Trigger>
           </Tabs.List>
           <Tabs.Content value="restock"><Restock drafts={!!config.data?.drafts} /></Tabs.Content>
           <Tabs.Content value="rejected"><Rejected drafts={!!config.data?.drafts} me={session.user.employeeId} /></Tabs.Content>
+          <Tabs.Content value="stuck"><Stuck drafts={!!config.data?.drafts} /></Tabs.Content>
           <Tabs.Content value="audit"><AuditScreen /></Tabs.Content>
         </Tabs.Root>
       )}

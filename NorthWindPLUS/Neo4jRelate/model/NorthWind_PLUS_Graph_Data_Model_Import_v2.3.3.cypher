@@ -1625,6 +1625,128 @@ RETURN p.ProductID AS ProductID, p.ProductName AS Product, orders AS Orders, uni
             THEN toInteger(ceil(perDay * $coverDays - effective)) END AS SuggestedQt
 ORDER BY ProductID;
 
+// :param windowDays => 3;
+// :param stuckFactor => 3;
+// :param maxOrders => 5;
+// :param orderIdPrefix => "CO-";
+// Stuck customer orders -- open Customer Orders waiting more than $stuckFactor times the median time to ship (orders fulfilled in the last $windowDays days), with at least one line short of stock; oldest first.
+// The fulfillment loop ships the oldest open order whose every line is in stock, so a large order can wait behind a stream of small ones that ship
+// first and use the stock up (starvation). As in the loop, a line is covered only when stock is strictly above the ordered quantity.
+// Only orders whose OrderID starts with $orderIdPrefix count (the simulation's own orders, "CO-"): the imported historical orders are decades old,
+// so they would make the median time to ship meaningless.
+CALL () {
+  MATCH (:OrderStatusFulfilleD)-[f:IS_FULFILLED_ORDER_STATE]->(o:Order)
+  WHERE f.FulfillDate >= datetime() - duration({days: $windowDays}) AND o.OrderID STARTS WITH $orderIdPrefix
+  RETURN percentileCont(duration.inSeconds(o.OrderDate, f.FulfillDate).seconds, 0.5) AS medianSecs
+}
+WITH medianSecs WHERE medianSecs IS NOT NULL
+MATCH (:OrderStatusOpeN)-[:IS_OPEN_ORDER_STATE]->(o:Order)-[d:HAS_ORDER_PRODUCT]->(p:Product)-[:HAS_INVENTORY_LEVEL]->(i:InventoryLevel)
+WHERE o.OrderID STARTS WITH $orderIdPrefix
+WITH medianSecs, o, duration.inSeconds(o.OrderDate, datetime()).seconds AS ageSecs,
+     collect({ProductID: p.ProductID, Product: p.ProductName, Ordered: d.Quantity, InStock: i.UnitsInStock,
+              Short: i.UnitsInStock <= d.Quantity}) AS Lines,
+     sum(d.Quantity * d.UnitPrice * (1 - d.Discount)) AS value
+WHERE ageSecs > $stuckFactor * medianSecs AND any(l IN Lines WHERE l.Short)
+OPTIONAL MATCH (o)-[:HAS_ORDER_CUSTOMER]->(c:Customer)
+RETURN o.OrderID AS OrderID, c.CompanyName AS Customer, toString(o.OrderDate) AS OrderDate,
+       o.RequiredDate < datetime() AS PastRequiredDate,
+       round(ageSecs / 3600.0, 2) AS WaitingHours, round(medianSecs / 3600.0, 2) AS MedianShipHours,
+       round($stuckFactor * medianSecs / 3600.0, 2) AS StuckAfterHours, round(value, 2) AS Value,
+       size(Lines) AS LineCount, size([l IN Lines WHERE l.Short]) AS ShortLines, Lines
+ORDER BY WaitingHours DESC, Value DESC
+LIMIT $maxOrders;
+
+// :param windowDays => 3;
+// :param productIds => ["1"];
+// :param orderIdPrefix => "CO-";
+// Fulfillment pace -- over the last $windowDays days: Customer Orders shipped and received per hour, the median time to ship, the median PO lead time (created to warehouse delivery), units ordered per product, the lines of recent orders, and how much history that rests on.
+// Rates divide by the time the events actually span (at least one hour), so a simulation that has run for a few hours isn't averaged over days.
+// Orders shipped per hour counts every order (shipping an imported historical order uses the warehouse's capacity too); the median time to ship,
+// orders received and the recent order lines count only orders whose OrderID starts with $orderIdPrefix.
+CALL () {
+  MATCH (:OrderStatusFulfilleD)-[f:IS_FULFILLED_ORDER_STATE]->(o:Order)
+  WHERE f.FulfillDate >= datetime() - duration({days: $windowDays})
+  RETURN count(o) AS shipped, count(CASE WHEN o.OrderID STARTS WITH $orderIdPrefix THEN 1 END) AS shippedOwn, min(f.FulfillDate) AS firstShip,
+         percentileCont(CASE WHEN o.OrderID STARTS WITH $orderIdPrefix THEN duration.inSeconds(o.OrderDate, f.FulfillDate).seconds END, 0.5) AS medianShipSecs
+}
+CALL () {
+  MATCH (o:Order) WHERE o.OrderDate >= datetime() - duration({days: $windowDays}) AND o.OrderID STARTS WITH $orderIdPrefix
+  RETURN count(o) AS received, min(o.OrderDate) AS firstOrder
+}
+CALL () {
+  MATCH (po:PurchaseOrder)-[w:HAS_WAREHOUSE_DELIVERY]->(:Employee)
+  WHERE w.Date >= datetime() - duration({days: $windowDays}) AND po.PODate IS NOT NULL
+  RETURN count(po) AS delivered, percentileCont(duration.inSeconds(po.PODate, w.Date).seconds, 0.5) AS leadSecs
+}
+CALL () {
+  UNWIND $productIds AS pid
+  MATCH (p:Product {ProductID: pid})
+  OPTIONAL MATCH (o:Order)-[d:HAS_ORDER_PRODUCT]->(p)
+  WHERE o.OrderDate >= datetime() - duration({days: $windowDays}) AND o.OrderID STARTS WITH $orderIdPrefix
+  WITH p, sum(coalesce(d.Quantity, 0)) AS units
+  RETURN collect({ProductID: p.ProductID, Product: p.ProductName, Units: units}) AS ProductUnits
+}
+CALL () {
+  MATCH (o:Order) WHERE o.OrderDate >= datetime() - duration({days: $windowDays}) AND o.OrderID STARTS WITH $orderIdPrefix
+  WITH o ORDER BY o.OrderDate DESC LIMIT 300
+  MATCH (o)-[d:HAS_ORDER_PRODUCT]->(p:Product)
+  WITH o, collect({ProductID: p.ProductID, Quantity: d.Quantity, UnitPrice: d.UnitPrice}) AS lines
+  RETURN collect(lines) AS RecentOrders
+}
+WITH shipped, shippedOwn, received, delivered, medianShipSecs, leadSecs, ProductUnits, RecentOrders,
+     CASE WHEN firstShip IS NULL THEN 3600.0 ELSE toFloat(duration.inSeconds(firstShip, datetime()).seconds) END AS shipSpan,
+     CASE WHEN firstOrder IS NULL THEN 3600.0 ELSE toFloat(duration.inSeconds(firstOrder, datetime()).seconds) END AS orderSpan
+RETURN shipped AS Shipped, shippedOwn AS ShippedOwn, received AS Received, delivered AS PODelivered,
+       round(orderSpan / 3600.0, 1) AS ObservedHours,
+       round(shipped / (CASE WHEN shipSpan < 3600.0 THEN 3600.0 ELSE shipSpan END / 3600.0), 2) AS ShippedPerHour,
+       round(received / (CASE WHEN orderSpan < 3600.0 THEN 3600.0 ELSE orderSpan END / 3600.0), 2) AS ReceivedPerHour,
+       CASE WHEN medianShipSecs IS NULL THEN null ELSE round(medianShipSecs / 60.0, 1) END AS MedianShipMinutes,
+       CASE WHEN leadSecs IS NULL THEN null ELSE round(leadSecs / 60.0, 1) END AS POLeadMinutes,
+       ProductUnits, RecentOrders;
+
+// :param requesterId => "16";
+// :param supplierId => "1";
+// :param items => [{productId: "1", qty: 60, recommendedQt: 60}];
+// :param stuckOrderIds => ["10248"];
+// :param windowDays => 3;
+// :param stuckFactor => 3;
+// :param orderIdPrefix => "CO-";
+// :param justification => "PRIORITY: unblocks customer order 10248 (waiting 3.2 days).";
+// :param source => "ui";
+// Create a Purchase Order for stuck customer orders (governed). One PO for one Supplier, to free Customer Orders waiting past the stuck threshold. Returns the new PO and the products written; no rows if the checks fail or no line qualifies.
+// Same role, justification and source checks as "Create a Purchase Order (governed)", but instead of the restock rule each line's product must be on one of
+// $stuckOrderIds, and that order must still be open and still past $stuckFactor times the median time to ship. The justification must start with
+// "PRIORITY:" so the approvers see it. A line whose stuck order has shipped meanwhile is left out (the caller reports it).
+MATCH (:RolE {Title:"Procurement Assistant"})-[ar:IS_ACTIVE_ROLE]->(e:Employee {EmployeeID:$requesterId})
+WHERE ar.EndDate IS NULL AND trim(coalesce($justification, "")) STARTS WITH "PRIORITY:" AND $source IN ["agent", "ui"]
+CALL () {
+  MATCH (:OrderStatusFulfilleD)-[f:IS_FULFILLED_ORDER_STATE]->(o:Order)
+  WHERE f.FulfillDate >= datetime() - duration({days: $windowDays}) AND o.OrderID STARTS WITH $orderIdPrefix
+  RETURN percentileCont(duration.inSeconds(o.OrderDate, f.FulfillDate).seconds, 0.5) AS medianSecs
+}
+WITH e, medianSecs WHERE medianSecs IS NOT NULL
+MATCH (s:Supplier {SupplierID:$supplierId}), (n:NewPoS {Name:"NewPoS"})
+UNWIND $items AS item
+MATCH (s)-[:SUPPLIES]->(p:Product {ProductID:item.productId})<-[:IS_AVAILABLE_PRODUCT]-(:ProductStatusAvailablE)
+WHERE item.qty = toInteger(item.qty) AND item.qty > 0
+CALL apoc.lock.nodes([p])
+WITH e, s, n, item, p, medianSecs
+WHERE EXISTS {
+  MATCH (:OrderStatusOpeN)-[:IS_OPEN_ORDER_STATE]->(o:Order)-[:HAS_ORDER_PRODUCT]->(p)
+  WHERE o.OrderID IN $stuckOrderIds AND o.OrderID STARTS WITH $orderIdPrefix
+    AND duration.inSeconds(o.OrderDate, datetime()).seconds > $stuckFactor * medianSecs
+}
+WITH e, s, n, collect({p: p, qty: toInteger(item.qty), rec: item.recommendedQt}) AS lines
+WHERE size(lines) > 0
+CREATE (n)-[:IS_NEW_PO_STATE]->(po:PurchaseOrder {PONumber: "PO-" + left(randomUUID(), 5) + right(randomUUID(), 5), PODate: datetime()})
+CREATE (po)-[:PO_FOR_SUPPLIER]->(s)
+CREATE (po)-[:PO_CREATED_BY {Date: datetime(), Justification: $justification, Source: $source}]->(e)
+WITH po, lines
+UNWIND lines AS l
+WITH po, l, l.p AS p
+CREATE (po)-[:HAS_PO_ITEM {POqt: l.qty, RecommendedQt: l.rec, POPriceDiscount: 0.7}]->(p)
+RETURN po.PONumber AS PONumber, collect(p.ProductID) AS ProductIDs, round(sum(l.qty * p.UnitPrice * 0.7), 2) AS EstimatedCost;
+
 
 //--------------------------------------------------------------------------------------------------------------------------------------------------------------//
 // Query Examples to Run Against the NorthWind Graph Data Model 

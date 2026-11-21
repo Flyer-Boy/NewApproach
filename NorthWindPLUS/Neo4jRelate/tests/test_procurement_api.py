@@ -18,6 +18,7 @@ from fastapi.testclient import TestClient  # noqa: E402
 
 from api.main import create_app, DRAFT_SYSTEM  # noqa: E402
 from test_procurement_offline import ProcurementAura, q  # noqa: E402
+from toy_stuck import TOY_STUCK  # noqa: E402
 
 os.environ.pop("DEMAND_WINDOW_DAYS", None)
 os.environ.pop("DEMAND_COVER_DAYS", None)
@@ -30,9 +31,9 @@ class ThreadedAura:
     """The relate stand-in for Aura, with every call on one thread: relate connections are thread-affine, and FastAPI
     runs endpoints on a thread pool. (The real Neo4j driver is thread-safe; this is a test-only concern.)"""
 
-    def __init__(self):
+    def __init__(self, graph=None):
         self._pool = ThreadPoolExecutor(max_workers=1)
-        self._inner = self._pool.submit(ProcurementAura).result()
+        self._inner = self._pool.submit(lambda: ProcurementAura(graph) if graph else ProcurementAura()).result()
         self.database = self._inner.database
         outer = self
 
@@ -90,7 +91,13 @@ def main():
           and st["loops"]["created"] == 0 and st["access"] is None)
 
     # Restock with demand
+    calls = []
+    real_read = aura.read
+    aura.read = lambda *a_, **k_: (calls.append(1), real_read(*a_, **k_))[1]
     rs = c.get("/api/restock").json()
+    aura.read = real_read
+    check("a restock reload is a fixed number of reads, not one per card (demand for all cards in one query)",
+          len(calls) <= 4 and len(rs["rows"]) == 2)
     by = {r["SupplierID"]: r for r in rs["rows"]}
     d1 = by["1"]["demand"]
     check("restock: the agent's recommendation (Chai 55, Aniseed Syrup 45)",
@@ -207,8 +214,50 @@ def main():
           nokey.get("/api/config").json()["drafts"] is False
           and nokey.post("/api/justification-draft", json={"kind": "create", "supplierId": "1", "items": []}).status_code == 503)
 
-    for a in OPENED:
-        a.close()
+    # Stuck customer orders (tests/toy_stuck.py: BIG-1 starved by small orders)
+    sa = ThreadedAura(TOY_STUCK)
+    st = TestClient(create_app(aura=sa, llm=llm, mode="agents"))
+    st.post("/api/session", json={"employeeId": "16"})
+    so = st.get("/api/stuck-orders").json()
+    check("stuck orders: BIG-1, with the stuck rule and the pace (no raw order lines sent to the browser)",
+          [r["OrderID"] for r in so["rows"]] == ["CO-BIG-1"] and so["stuckFactor"] == 3 and so["pace"]["POLeadMinutes"] == 60.0
+          and "RecentOrders" not in so["pace"] and "_pace_row" not in so)
+    check("previewing before simulating is refused", st.post("/api/stuck-orders/preview", json=[
+        {"supplierId": "1", "items": [{"productId": "1", "qty": 21}], "justification": "PRIORITY: x"}]).status_code == 409)
+    sim = st.post("/api/stuck-orders/simulate").json()
+    prop = sim["proposals"][0]
+    chai = next(l for l in prop["lines"] if l["product"] == "Chai")
+    check("the simulation proposes a priority PO for Exotic Liquids with the approval level and a ready PRIORITY line",
+          prop["supplier"] == "Exotic Liquids" and prop["approvalLevel"] == "L1"
+          and prop["priorityLine"].startswith("PRIORITY: unblocks customer order CO-BIG-1 (Ernst Handel, waiting 10.0 h, past its required date)"))
+    check("...with the evidence: simulated vs naive extra, and the naive extra failing in the replay",
+          chai["extra"] > chai["naiveExtra"] and sim["orders"][0]["withNaiveExtra"]["shippedInRuns"] < 4
+          and sim["orders"][0]["withExtra"]["shippedInRuns"] >= 4 and "reservation" in sim)
+    st.post("/api/justification-draft", json={"kind": "unblock", "supplierId": "1", "items": [{"productId": "1", "qty": chai["extra"]}]})
+    dr = st.post("/api/justification-draft", json={"kind": "unblock", "supplierId": "1", "items": []}).json()
+    check("a priority draft gets the simulation's evidence and always starts with the PRIORITY line",
+          "would not free the orders" in llm.calls[-1][1] and dr["draft"].startswith(prop["priorityLine"]))
+    items = [{"productId": l["productId"], "qty": l["extra"]} for l in prop["lines"]]
+    nopri = st.post("/api/stuck-orders/preview", json=[{"supplierId": "1", "items": items, "justification": "Unblocks CO-BIG-1."}])
+    check("a justification without 'PRIORITY:' is refused", nopri.status_code == 409 and "PRIORITY:" in nopri.json()["detail"])
+    stray = st.post("/api/stuck-orders/preview", json=[{"supplierId": "1", "items": items + [{"productId": "3", "qty": 5}],
+                                                        "justification": prop["priorityLine"]}])
+    check("a product the stuck orders don't need is refused", stray.status_code == 409)
+    low = [{"productId": l["productId"], "qty": max(1, l["extra"] - 5)} for l in prop["lines"]]
+    pvl = st.post("/api/stuck-orders/preview", json=[{"supplierId": "1", "items": low, "justification": prop["priorityLine"]}]).json()
+    check("ordering less than the simulation needed is flagged in the review", any("may stay stuck" in f for f in pvl["entries"][0]["flags"]))
+    pv = st.post("/api/stuck-orders/preview", json=[{"supplierId": "1", "items": items, "justification": prop["priorityLine"]}]).json()
+    done = st.post("/api/stuck-orders/commit", json={"previewId": pv["previewId"]}).json()
+    row = q(sa, """MATCH (:NewPoS)-->(po:PurchaseOrder {PONumber:$n})-[c:PO_CREATED_BY]->(), (po)-[it:HAS_PO_ITEM]->()
+                   RETURN c.Source AS s, left(c.Justification, 9) AS j, sum(it.POqt) AS units""", {"n": done["created"][0]["PONumber"]})
+    check("commit writes the priority PO through the governed template: Source 'ui', PRIORITY justification, the simulated quantities",
+          done["created"][0]["unblocks"] == ["CO-BIG-1"] and row == [{"s": "ui", "j": "PRIORITY:", "units": sum(i["qty"] for i in items)}])
+    check("after a commit, a new batch needs a new simulation", st.post("/api/stuck-orders/preview", json=[
+        {"supplierId": "1", "items": items, "justification": prop["priorityLine"]}]).status_code == 409)
+    au = st.get("/api/audit").json()
+    check("the audit shows the priority PO as the UI's, with its PRIORITY justification",
+          any(d["Source"] == "ui" and (d["Justification"] or "").startswith("PRIORITY:") for d in au["decisions"]))
+
     def broken(system, prompt):
         raise RuntimeError("Your credit balance is too low to access the Anthropic API.")
     bad = TestClient(create_app(aura=ThreadedAura(), llm=broken, mode="agents"))
@@ -218,6 +267,8 @@ def main():
     check("a failing AI call answers 502 with the API's own reason, so the UI can show it",
           r.status_code == 502 and "credit balance is too low" in r.json()["detail"])
 
+    for a in OPENED:
+        a.close()
     print(f"\n{sum(checks)}/{len(checks)} checks passed")
     return all(checks)
 

@@ -59,6 +59,44 @@ export type Audit = {
                ChangedLines: { Product: string; Ordered: number; Recommended: number | null }[] }[];
 };
 
+export type StuckOrder = {
+  OrderID: string; Customer: string | null; OrderDate: string; PastRequiredDate: boolean; WaitingHours: number;
+  MedianShipHours: number; StuckAfterHours: number; Value: number; LineCount: number; ShortLines: number;
+  Lines: { ProductID: string; Product: string; Ordered: number; InStock: number; Short: boolean }[];
+};
+
+export type Pace = {
+  Shipped: number; Received: number; PODelivered: number; ShippedPerHour: number; ReceivedPerHour: number;
+  MedianShipMinutes: number | null; POLeadMinutes: number | null;
+};
+
+export type ShipStats = { shippedInRuns: number; runs: number; medianMinutes: number | null };
+
+export type UnblockLine = {
+  productId: string; product: string; supplierId: string; supplier: string; available: boolean; unitCost: number;
+  stuckQty: number; stockNow: number; onOrder: number; stockAtDeliveryMedian: number; naiveExtra: number;
+  simulatedExtra: number; extra: number;
+  tolerance3Days: number; overTolerance: boolean; unblocks: string[];
+};
+
+export type Unblock = {
+  message?: string;
+  pace: Pace;
+  assumptions?: { runs: number; tickMinutes: number; deliveryMinute: number; horizonMinutes: number; comparisonMinutes: number;
+                  shippedPerHour: number; receivedPerHour: number; medianShipMinutes: number; poLeadMinutes: number;
+                  poLeadMeasured: boolean; safetyPercent: number };
+  history?: { shippedOwn: number | null; observedHours: number | null; poDelivered: number | null; notes: string[] };
+  orders: { OrderID: string; Customer: string | null; WaitingHours: number; PastRequiredDate: boolean; Value: number;
+            status: string; withoutExtra: ShipStats; withExtra: ShipStats | null; withNaiveExtra: ShipStats | null;
+            withReservation: ShipStats }[];
+  lines: UnblockLine[];
+  proposals: { supplierId: string; supplier: string; lines: UnblockLine[]; unblocks: string[]; estimatedCost: number;
+               approvalLevel: string; priorityLine: string }[];
+  reservation?: { otherOrdersShippedWithout: number; otherOrdersShippedWith: number; otherOrdersDelayed: number;
+                  stuckFreed: number; stuckTotal: number };
+  source?: { method: string; pulled_at: string };
+};
+
 export class ApiError extends Error {
   status: number;
   constructor(status: number, message: string) {
@@ -89,7 +127,7 @@ export const api = {
   restock: () => call<Recommendation<RestockRow>>("GET", "/api/restock"),
   resubmissions: () => call<Recommendation<ResubRow>>("GET", "/api/resubmissions"),
   demand: (items: Item[]) => call<Demand>("POST", "/api/demand", { items }),
-  draft: (body: { kind: "create" | "resubmit" | "cancel"; supplierId?: string; rejectedPO?: string; items?: Item[] }) =>
+  draft: (body: { kind: "create" | "resubmit" | "cancel" | "unblock"; supplierId?: string; rejectedPO?: string; items?: Item[] }) =>
     call<{ draft: string; model: string }>("POST", "/api/justification-draft", body),
   previewCreate: (pos: { supplierId: string; items: Item[]; justification: string }[]) =>
     call<Review>("POST", "/api/purchase-orders/preview", pos),
@@ -107,6 +145,14 @@ export const api = {
   commitCancel: (previewId: string) =>
     call<{ cancelled: string[]; not_cancelled: { rejectedPO: string; reason: string }[] }>("POST", "/api/cancellations", { previewId }),
   audit: (hours: number) => call<Audit>("GET", `/api/audit?hours=${hours}`),
+  stuckOrders: () => call<{ rows: StuckOrder[]; pace: Pace; windowDays: number; stuckFactor: number; maxOrders: number;
+                            orderIdPrefix: string }>("GET", "/api/stuck-orders"),
+  simulateUnblock: () => call<Unblock>("POST", "/api/stuck-orders/simulate"),
+  previewUnblock: (pos: { supplierId: string; items: Item[]; justification: string }[]) =>
+    call<Review>("POST", "/api/stuck-orders/preview", pos),
+  commitUnblock: (previewId: string) =>
+    call<{ created: { PONumber: string; supplierId: string; EstimatedCost: number; approvalLevel: string; unblocks: string[] }[];
+           left_out: { product: string; reason: string }[] }>("POST", "/api/stuck-orders/commit", { previewId }),
 };
 
 export const money = (n: number | null | undefined) =>
@@ -115,6 +161,6 @@ export const money = (n: number | null | undefined) =>
 /** After any write, every screen's data is stale (a new PO changes what's still needed on rejected POs, and vice
  *  versa): reload them all from the graph, and bring the result message into view. */
 export function refreshAfterWrite(qc: { invalidateQueries: (f: { queryKey: string[] }) => unknown }) {
-  for (const key of ["restock", "resubmissions", "audit", "status"]) qc.invalidateQueries({ queryKey: [key] });
+  for (const key of ["restock", "resubmissions", "audit", "status", "stuck"]) qc.invalidateQueries({ queryKey: [key] });
   window.scrollTo({ top: 0, behavior: "smooth" });
 }

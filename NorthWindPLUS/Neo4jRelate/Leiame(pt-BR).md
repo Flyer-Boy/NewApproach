@@ -117,7 +117,7 @@ flowchart LR
     M[Arquivos do modelo<br/>GRAPH TYPE · ontologia RDF<br/>script de importação · harness] -->|build_kb.py| R
 ```
 
-1. **Construir:** `kb/build_kb.py` transforma os arquivos do modelo em um grafo de conhecimento no relate. Ele lê o GRAPH TYPE (nomes e tipos exatos), a ontologia RDF/Turtle (Entity vs. Collection), significados de negócio selecionados, 61 consultas do script de importação e 19 ações do harness de simulação.
+1. **Construir:** `kb/build_kb.py` transforma os arquivos do modelo em um grafo de conhecimento no relate. Ele lê o GRAPH TYPE (nomes e tipos exatos), a ontologia RDF/Turtle (Entity vs. Collection), significados de negócio selecionados, 64 consultas do script de importação e 19 ações do harness de simulação.
 2. **Perguntar:** o agente reescreve a pergunta no vocabulário do modelo, busca no relate e então executa um modelo de consulta correspondente, adapta um ou escreve um Cypher novo a partir da ontologia. Ele executa a consulta no Aura e responde.
 3. **Aprender:** toda pergunta é guardada no relate com os modelos que usou. Uma consulta nova que funcionou pode ser salva como modelo depois que o usuário aprová-la.
 
@@ -138,6 +138,7 @@ flowchart LR
 | Proveniência como grafo | `(:Interaction)-[:USED\|CREATED]->(:QueryTemplate)`: qual pergunta usou ou criou qual consulta | ciclo de aprendizado |
 | `relate pull` (CLI, pela HTTP Query API do Aura) | Copia os POs aguardando aprovação para um armazenamento de rascunho, onde uma proposta de alteração de limites é ensaiada com o próprio Cypher da simulação | `sandbox/` |
 | Cópias baratas do arquivo de um armazenamento | Cada execução do ensaio começa a partir de uma cópia do armazenamento copiado | `sandbox/whatif.py` |
+| Um armazenamento de rascunho em que se pode gravar | Faz o negócio avançar no tempo (envia pedidos, baixa estoque, acrescenta novos pedidos e entregas) para descobrir o que liberaria pedidos de clientes travados; o Aura nunca é tocado | `sandbox/unblock.py` |
 
 ## Sandbox what-if: copiar para experimentar, Cypher governado para efetivar
 
@@ -195,6 +196,24 @@ Não há chat. Dois tipos de ajuda trabalham nos bastidores, ambos apenas como s
 
 O navegador nunca vê as credenciais do Aura nem escolhe a própria identidade: a API guarda as duas. O login é uma lista de Assistentes de Compras que faz as vezes de um login, como o `--as-employee`. A API não abre o armazenamento de conhecimento (o relate não permite nenhuma outra conexão enquanto o agente o mantém aberto), então lê seus modelos diretamente do script de importação, com o mesmo analisador que o `build_kb.py` usa. Detalhes: [DESIGN_procurement_ui.md](DESIGN_procurement_ui.md) (em inglês).
 
+## Pedidos de clientes travados: o Relate faz o negócio avançar no tempo
+
+O loop do almoxarifado envia o pedido mais antigo cujas linhas estejam todas em estoque. Um pedido grande precisa de todos os seus produtos em estoque ao mesmo tempo, então cada entrega que cobriria parte dele é consumida antes por pedidos menores que estão completos: pedidos grandes podem esperar indefinidamente (inanição, ou *starvation*), e muitas vezes são os clientes mais valiosos. A regra de reposição não resolve isso, porque olha para totais.
+
+A aba **Stuck orders** da interface web lista os pedidos em aberto que esperam mais de 3× o tempo habitual de envio (medido nos últimos 3 dias), destaca os que já passaram da data exigida e tem um botão: *Find what would free them*. Só os pedidos da própria simulação contam (IDs que começam com `CO-`, definido por `ORDER_ID_PREFIX`): depois de uma carga nova, o loop também envia os pedidos históricos importados, feitos há décadas, o que levaria a mediana do tempo de envio a décadas.
+
+A resposta óbvia, "pedir o que falta hoje", está errada: os pedidos à frente na fila e os novos que continuam chegando consomem o estoque antes que uma entrega extra chegue. Encontrar a quantidade real exige repetir o atendimento para a frente no tempo, o que grava sem parar (envia pedidos, baixa estoque, acrescenta chegadas e entregas). Por isso, a API copia a parte relevante do grafo (pedidos em aberto, estoque, POs a caminho, fornecedores) para um **armazenamento Relate de rascunho** e o faz avançar:
+
+- o **próprio Cypher de atendimento da simulação** roda sobre a cópia, sem mudanças além das travas do APOC;
+- novos pedidos chegam no ritmo medido, com o formato de pedidos recentes; os POs chegam depois do prazo de entrega medido;
+- um pedido travado é mais antigo que os pedidos pequenos que continuam passando à frente dele, então é enviado antes deles assim que todas as suas linhas estão em estoque. Só pedidos mais antigos podem passar à frente: pedidos históricos importados ainda em aberto, que são enviados primeiro se a entrega os completar e levam a sua parte. O extra é o que leva o estoque restante no momento da entrega acima das quantidades dos pedidos travados, mais o que esses pedidos mais antigos levam. Uma repetição encontra o estoque e a fila nesse momento e uma segunda confirma que os pedidos são enviados (em pelo menos 4 de 5 execuções);
+- a mesma repetição testa a quantidade ingênua e, como alternativa, uma regra que reserva estoque para os pedidos travados;
+- a projeção se baseia no passado recente, então, em um banco de dados novo (pouco histórico, nenhum PO entregue ainda), a tela avisa e as quantidades provavelmente saem baixas; `UNBLOCK_SAFETY_PERCENT` acrescenta uma margem opcional por cima.
+
+O resultado é um PO prioritário por fornecedor, com a evidência na tela: em estoque agora, esperado quando o PO chegar, o que falta hoje vs. o simulado, e o que os clientes pediram nos últimos 3 dias (mais do que isso é marcado como excesso de estoque deliberado). A justificativa começa com uma linha `PRIORITY:` que cita os pedidos, para que os aprovadores a vejam, e um novo modelo governado grava o PO: em vez da regra de reposição, ele verifica que cada produto está em um pedido travado que continua em aberto e continua travado.
+
+O Aura continua sendo o sistema de registro; o Relate é onde o negócio avança no tempo. Nada é gravado no Aura até que uma pessoa confirme. No grafo de teste, em que um pedido importado ainda em aberto precisa de 35 Chai, a simulação pede 61 Chai extras onde "o que falta hoje" diz 11; a quantidade simulada libera o pedido travado em 4 de 5 execuções, a ingênua em 0, e reservar estoque não libera nada (não há nada a caminho para um dos seus produtos) e ainda atrasa 7 outros pedidos. Detalhes: [DESIGN_stuck_orders.md](DESIGN_stuck_orders.md) (em inglês).
+
 ## O grafo de conhecimento
 
 ```
@@ -214,7 +233,7 @@ O navegador nunca vê as credenciais do Aura nem escolhe a própria identidade: 
 (:ModelPrinciple {text})   (:KnowledgeBase {ontologyVersion, embeddingModel, embeddingDims})
 ```
 
-Inicializado a partir do modelo v2.3.3: **48 tipos de nó, 89 tipos de relacionamento, 175 propriedades, 13 etapas de fluxo de trabalho, 80 modelos de consulta**. Os modelos são 56 consultas de leitura, 4 ações governadas (a alteração dos limites de aprovação e a criação, o reenvio e o cancelamento de POs), 1 gravação só para administradores e 19 ações da simulação.
+Inicializado a partir do modelo v2.3.3: **48 tipos de nó, 89 tipos de relacionamento, 175 propriedades, 13 etapas de fluxo de trabalho, 83 modelos de consulta**. Os modelos são 58 consultas de leitura, 5 ações governadas (a alteração dos limites de aprovação; a criação, o reenvio e o cancelamento de POs; e POs prioritários para pedidos de clientes travados), 1 gravação só para administradores e 19 ações da simulação.
 
 | Governança do modelo | Significado |
 |---|---|
@@ -299,6 +318,7 @@ Uma prova de conceito vale pelas suas surpresas. Estas vieram das execuções co
 - **Contagens pertencem ao banco de dados.** Certa vez, o modelo resumiu 28 linhas como 29 ao somar os grupos por conta própria. Agora os totais precisam vir do Cypher.
 - **O Relate permite uma conexão de escrita por armazenamento, mesmo dentro de um único processo.** Executar de novo a célula de login de um notebook dava `storage locked`, até que a célula passou a fechar a sessão anterior primeiro. Não rode o agente no terminal e um notebook no mesmo armazenamento ao mesmo tempo.
 - **Detalhes de ambiente importam.** O driver Python do Neo4j rejeita objetos `Query(..., timeout=...)` dentro de transações gerenciadas, então os tempos limite passam por `@unit_of_work`. A versão antiga do `brotli` no Anaconda quebrava o cliente HTTP do Anthropic SDK, então `brotli>=1.2.0` está fixado. Instâncias mais novas do Aura podem usar o ID da instância como usuário e como nome do banco de dados.
+- **Ler as próprias gravações.** Depois de criar um PO ou reenviar um PO rejeitado, a interface web às vezes ainda o mostrava como pendente por algum tempo. A leitura seguinte ia para um membro do banco de dados que ainda não tinha aplicado a gravação. Agora todas as sessões do Aura compartilham um mesmo gerenciador de bookmarks, então uma leitura espera pelas gravações feitas antes dela; e as telas são reinicializadas a cada recarga, mesmo quando os dados voltam iguais. E, depois de uma gravação, as telas escondem na hora o que acabou de ser enviado e mostram "Reloading from the graph…" (a demanda de todos os cartões agora vem em uma única consulta, não uma por cartão).
 - **O Aura pode ficar brevemente sem servidor para leituras.** Na primeira execução ao vivo da interface web, a API e quatro dos loops não conseguiram se conectar (`ReadServiceUnavailable`), enquanto um loop já conectado continuou funcionando; um reinício limpo resolveu. O agente e a API agora tentam a conexão algumas vezes, no banco de dados indicado no `.env`, antes de desistir com uma mensagem que diz o que verificar.
 
 ## Duas formas de executar
@@ -418,6 +438,7 @@ kb/                          the knowledge store (Relate)
 sandbox/                     what-if rehearsals on a pulled copy
   pull.py                    relate pull (CLI), or the fallback copier through the Neo4j driver
   whatif.py                  replays the harness's PO-vetting Cypher with current vs proposed limits
+  unblock.py                 plays fulfillment forward to find what would free stuck customer orders
 agent/
   agent.py                   the agent (Anthropic SDK tool use)
   aura.py                    Neo4j side: read transactions with warnings, identity, governed write
@@ -434,6 +455,7 @@ run_ui.bat                         Windows: the web UI at http://localhost:8000 
 DESIGN_what_if_sandbox.md          the what-if sandbox (relate pull)
 DESIGN_procurement_agent.md        the Procurement Assistant agent and model v2.3.3
 DESIGN_procurement_ui.md           the web UI, its API and the help behind the scenes
+DESIGN_stuck_orders.md             unblocking stuck customer orders: the play-forward simulation in Relate
 tools/make_notebooks.py            generates both notebooks
 ```
 
@@ -443,8 +465,9 @@ tools/make_notebooks.py            generates both notebooks
 python tests/test_agent_offline.py     # 27 checks
 python tests/test_aura_driver_path.py  # 8 checks
 python tests/test_whatif_offline.py    # 22 checks; 25 with RELATE_BIN set to a relate CLI
-python tests/test_procurement_offline.py  # 60 checks
-python tests/test_procurement_api.py   # 38 checks: the web UI's API
+python tests/test_procurement_offline.py  # 61 checks
+python tests/test_procurement_api.py   # 52 checks: the web UI's API
+python tests/test_unblock_offline.py   # 34 checks: stuck customer orders
 python kb/eval_search.py               # retrieval: 9/12 without embeddings
 ```
 
@@ -471,6 +494,7 @@ Os testes offline usam o relate duas vezes: como armazenamento de conhecimento d
 | 5 | Sandbox what-if com `relate pull` (sugerido por um engenheiro da equipe da Neo4j) | Executado ao vivo (Colab) |
 | 6 | Modelo v2.3.3 + agente Assistente de Compras: criação e reenvio de POs passados dos loops para uma pessoa com o agente; dois modos de execução (full, agents) | Executado ao vivo (Colab, modo agents): 27 POs criados com alterações, aprovados pelo loop; 16 POs rejeitados reenviados ou cancelados |
 | 7 | Interface web: os mesmos trabalhos de PO com formulários, sugestões de demanda e rascunhos de justificativa por IA; `Source: "ui"` | Executada ao vivo contra o Aura (Chrome e Edge): POs criados com justificativas rascunhadas por IA, POs rejeitados revisados |
+| 8 | Pedidos de clientes travados: simulação que avança no tempo em um armazenamento Relate de rascunho, POs prioritários, a comparação com a reserva de estoque | Testado offline e sobre um grafo de teste; ainda não executado contra o Aura |
 
 **Pendências**
 - Copiar os modelos salvos (e talvez o histórico de perguntas) para o grafo no Aura, para que possam ser consultados ao lado dos dados de negócio: gravação na aprovação pelo agente, ou `relate push`. Decisões em aberto: versão do modelo e escopo.
@@ -478,6 +502,8 @@ Os testes offline usam o relate duas vezes: como armazenamento de conhecimento d
 - Medir o voyage-4-nano contra a linha de base de 9/12.
 
 ## Histórico de alterações
+
+- **Etapa 8 / pedidos de clientes travados:** modelos de leitura *Stuck customer orders* e *Fulfillment pace*; o governado *Create a Purchase Order for stuck customer orders* (justificativa com `PRIORITY:`, cada produto em um pedido travado); `sandbox/unblock.py` (copiar, avançar no tempo com o Cypher de atendimento do harness, encontrar e verificar o extra, testar a quantidade ingênua e a reserva de estoque); `sandbox/pull.py` aceita qualquer consulta de cópia; `stuck_orders`, `recommend_unblock`, `prepare_unblock` e `commit_unblock` em `agent/procurement.py`; endpoints da API e a aba *Stuck orders*; `tests/toy_stuck.py` e `tests/test_unblock_offline.py`. Depois da primeira execução ao vivo: só os pedidos `CO-` contam como travados e para a mediana do tempo de envio (`ORDER_ID_PREFIX`), e a busca considera o que os pedidos mais antigos levam primeiro.
 
 - **Etapa 7 / interface web:** `agent/procurement.py` dividido em prepare/commit, com a verificação de papel e de modo em toda entrada; `$source` nos comandos governados de PO (`"agent"` ou `"ui"`; qualquer outro valor não grava nada); novos modelos de leitura *Recent demand for products* e *PO activity by front end*; o armazenamento de conhecimento registra um hash dos arquivos do modelo e é reconstruído quando eles mudam, sem mudar a versão do modelo; `kb/model_templates.py`; a camada FastAPI (`api/`), a aplicação React (`ui/`), `run_ui.bat` e `tests/serve_toy_ui.py`. Depois da primeira execução ao vivo: quem criou cada PO rejeitado (`RaisedBy` na recomendação de reenvio, então o agente também vê) e uma nota sobre a fila compartilhada; cartões começam fora do lote, com o botão Review fixo embaixo; todas as telas recarregam depois de uma gravação; erros do rascunho por IA mostrados na tela, rascunhos com o modelo do agente; a página nunca é servida de um cache antigo; a conexão com o Aura é tentada de novo; o logotipo da Northwind.
 

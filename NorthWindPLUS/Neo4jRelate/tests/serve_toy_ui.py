@@ -4,6 +4,7 @@ held in relate, with a canned "AI draft". Nothing leaves this machine.
 
   cd ui && npm install && npm run build && cd ..
   python tests/serve_toy_ui.py            # then open http://localhost:8000 and sign in as Albert Camus
+  python tests/serve_toy_ui.py 8000 stuck # the stuck-orders toy graph instead (tests/toy_stuck.py), for the Stuck orders tab
 """
 import sys
 from pathlib import Path
@@ -14,6 +15,7 @@ sys.path.insert(0, str(ROOT / "tests"))
 import uvicorn  # noqa: E402
 
 from test_procurement_api import ThreadedAura  # noqa: E402
+from toy_stuck import TOY_STUCK  # noqa: E402
 from api.main import create_app  # noqa: E402
 
 
@@ -24,4 +26,6 @@ def canned_draft(system: str, prompt: str) -> str:
 
 if __name__ == "__main__":
     port = int(sys.argv[1]) if len(sys.argv) > 1 else 8000
-    uvicorn.run(create_app(aura=ThreadedAura(), llm=canned_draft, mode="agents"), host="127.0.0.1", port=port, log_level="warning")
+    graph = TOY_STUCK if "stuck" in sys.argv[2:] else None
+    uvicorn.run(create_app(aura=ThreadedAura(graph), llm=canned_draft, mode="agents"), host="127.0.0.1", port=port,
+                log_level="warning")

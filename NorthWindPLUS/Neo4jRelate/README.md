@@ -153,7 +153,7 @@ flowchart LR
 ```
 
 1. **Build:** `kb/build_kb.py` turns the model files into a knowledge graph in relate. It reads the GRAPH TYPE
-   (exact names and types), the RDF/Turtle ontology (Entity vs. Collection), curated business meanings, 61 queries
+   (exact names and types), the RDF/Turtle ontology (Entity vs. Collection), curated business meanings, 64 queries
    from the import script and 19 actions from the simulation harness.
 2. **Ask:** the agent rewrites the question into the model's vocabulary, searches relate, and then runs a matching
    template, adapts one, or writes new Cypher from the ontology. It runs the query on Aura and answers.
@@ -177,6 +177,7 @@ flowchart LR
 | Provenance as a graph | `(:Interaction)-[:USED\|CREATED]->(:QueryTemplate)`: which question used or created which query | learning loop |
 | `relate pull` (CLI, over Aura's HTTP Query API) | Copies the POs waiting for approval into a scratch store, where a proposed limit change is rehearsed with the simulation's own Cypher | `sandbox/` |
 | Cheap file copies of a store | Each rehearsal run starts from a copy of the pulled store | `sandbox/whatif.py` |
+| A scratch store you can write to | Plays the business forward (ships orders, decrements stock, adds new orders and deliveries) to find what would free stuck customer orders; Aura is never touched | `sandbox/unblock.py` |
 
 ## What-if sandbox: pull to experiment, governed Cypher to commit
 
@@ -281,6 +282,47 @@ Procurement Assistants, standing in for a login, like `--as-employee`. The API d
 allows no other connection while the agent has it open), so it reads its templates straight from the import script,
 with the same parser `build_kb.py` uses. Details: [DESIGN_procurement_ui.md](DESIGN_procurement_ui.md).
 
+## Stuck customer orders: Relate plays the business forward
+
+The warehouse loop ships the oldest order whose every line is in stock. A large order needs all its products in stock
+at the same moment, so each delivery that would cover part of it is used up first by smaller orders that are complete:
+large orders can wait indefinitely (starvation), and those are often the most valuable customers. The restock rule
+doesn't fix it, because it looks at totals.
+
+The web UI's **Stuck orders** tab lists open orders waiting more than 3× the usual time to ship (measured from the
+last 3 days), flags those past their required date, and has a button: *Find what would free them*. Only the
+simulation's own orders count (IDs starting with `CO-`, set by `ORDER_ID_PREFIX`): after a fresh load the loop also
+ships the imported historical orders, placed decades ago, which would push the median time to ship to decades.
+
+The obvious answer, "order what's missing today", is wrong: the orders ahead in the queue and the new ones still coming
+in use up stock before an extra delivery lands. Finding the real quantity means replaying fulfillment forward, which
+writes constantly (ships orders, decrements stock, adds arrivals and deliveries). So the API copies the relevant part
+of the graph (open orders, stock, incoming POs, suppliers) into a **scratch Relate store** and plays it forward:
+
+- the **simulation's own fulfillment Cypher** runs on the copy, unchanged apart from the APOC locks;
+- new orders arrive at the measured pace, shaped like recent orders; POs land after the measured lead time;
+- a stuck order is older than the small orders that keep overtaking it, so it ships before them as soon as all its
+  lines are in stock. Only older orders can get in first: imported historical orders still open, which ship first if
+  the delivery completes them and take their share. The extra is what lifts the stock left at delivery time above the
+  stuck orders' quantities plus what those older orders take. One replay finds the stock and the queue at that moment,
+  a second confirms the orders ship (in at least 4 of 5 runs);
+- the same replay tests the naive quantity and, as an alternative, a rule that reserves stock for the stuck orders;
+- the projection rests on the recent past, so on a young database (little history, no PO delivered yet) the screen
+  says so and the quantities are probably low; `UNBLOCK_SAFETY_PERCENT` adds an optional margin on top.
+
+The result is a priority PO per Supplier, with the evidence on screen: in stock now, expected when the PO lands,
+missing today vs simulated, and what customers ordered in the last 3 days (more than that is flagged as deliberate
+overstock). The justification starts with a `PRIORITY:` line naming the orders, so the approvers see it, and a new
+governed template writes the PO: instead of the restock rule, it checks that each product is on a stuck order that is
+still open and still stuck.
+
+Aura stays the system of record; Relate is where the business is played forward. Nothing is written to Aura until a
+person confirms. On the toy graph, where an imported order still open needs 35 Chai, the simulation asks for 61 extra
+Chai where "what's missing today" says 11; the simulated quantity frees the stuck order in 4 of 5 runs, the naive one
+in 0, and reserving stock frees nothing (nothing is coming for one of its products) while delaying 7 other orders.
+Details:
+[DESIGN_stuck_orders.md](DESIGN_stuck_orders.md).
+
 ## The knowledge graph
 
 ```
@@ -300,9 +342,9 @@ with the same parser `build_kb.py` uses. Details: [DESIGN_procurement_ui.md](DES
 (:ModelPrinciple {text})   (:KnowledgeBase {ontologyVersion, embeddingModel, embeddingDims})
 ```
 
-Seeded from model v2.3.3: **48 node types, 89 relationship types, 175 properties, 13 workflow steps, 80 templates**.
-The templates are 56 read queries, 4 governed actions (the approval-limit change, and creating, resubmitting and
-cancelling POs), 1 admin-only write and 19 simulation actions.
+Seeded from model v2.3.3: **48 node types, 89 relationship types, 175 properties, 13 workflow steps, 83 templates**.
+The templates are 58 read queries, 5 governed actions (the approval-limit change; creating, resubmitting and
+cancelling POs; and priority POs for stuck customer orders), 1 admin-only write and 19 simulation actions.
 
 | Template governance | Meaning |
 |---|---|
@@ -419,6 +461,11 @@ A proof of concept is worth its surprises. These came from running against the l
 - **Environment details matter.** The Neo4j Python driver rejects `Query(..., timeout=...)` objects inside managed
   transactions, so timeouts go through `@unit_of_work`. Anaconda's older `brotli` broke the Anthropic SDK's HTTP
   client, so `brotli>=1.2.0` is pinned. Newer Aura instances may use the instance ID as both user and database name.
+- **Read your own writes.** After a PO was created or a rejected PO resubmitted, the web UI sometimes showed it as
+  still to do for a while. The next read went to a database member that hadn't applied the write yet. All Aura
+  sessions now share one bookmark manager, so a read waits for the writes made before it; and the screens reset on
+  every reload, even when the data comes back unchanged. And after a write the screens hide what was just submitted at once and
+  show "Reloading from the graph…" (demand for all cards now comes in one query, not one per card).
 - **Aura can briefly have no server for reads.** On the first live run of the web UI, its API and four of the loops
   failed to connect with `ReadServiceUnavailable` while one loop already connected kept working; a clean restart
   fixed it. The agent and the API now retry the connection a few times, in the database `.env` names, before giving
@@ -567,6 +614,7 @@ kb/                          the knowledge store (Relate)
 sandbox/                     what-if rehearsals on a pulled copy
   pull.py                    relate pull (CLI), or the fallback copier through the Neo4j driver
   whatif.py                  replays the harness's PO-vetting Cypher with current vs proposed limits
+  unblock.py                 plays fulfillment forward to find what would free stuck customer orders
 agent/
   agent.py                   the agent (Anthropic SDK tool use)
   aura.py                    Neo4j side: read transactions with warnings, identity, governed write
@@ -583,6 +631,7 @@ run_ui.bat                         Windows: the web UI at http://localhost:8000 
 DESIGN_what_if_sandbox.md          the what-if sandbox (relate pull)
 DESIGN_procurement_agent.md        the Procurement Assistant agent and model v2.3.3
 DESIGN_procurement_ui.md           the web UI, its API and the help behind the scenes
+DESIGN_stuck_orders.md             unblocking stuck customer orders: the play-forward simulation in Relate
 tools/make_notebooks.py            generates both notebooks
 ```
 
@@ -592,8 +641,9 @@ tools/make_notebooks.py            generates both notebooks
 python tests/test_agent_offline.py     # 27 checks
 python tests/test_aura_driver_path.py  # 8 checks
 python tests/test_whatif_offline.py    # 22 checks; 25 with RELATE_BIN set to a relate CLI
-python tests/test_procurement_offline.py  # 60 checks
-python tests/test_procurement_api.py   # 38 checks: the web UI's API
+python tests/test_procurement_offline.py  # 61 checks
+python tests/test_procurement_api.py   # 52 checks: the web UI's API
+python tests/test_unblock_offline.py   # 34 checks: stuck customer orders
 python kb/eval_search.py               # retrieval: 9/12 without embeddings
 ```
 
@@ -637,6 +687,7 @@ mode checks, stale or reused reviews, the loop guard at commit, and drafts built
 | 5 | What-if sandbox with `relate pull` (suggested by a Neo4j staff engineer) | Run live (Colab) |
 | 6 | Model v2.3.3 + Procurement Assistant agent: PO creation and resubmission handed from the loops to a person with the agent; two run modes (full, agents) | Run live (Colab, agents mode): 27 POs created with changes, vetted by the loop; 16 rejected POs resubmitted or cancelled |
 | 7 | Web UI: the same PO jobs with forms, demand suggestions and AI justification drafts; `Source: "ui"` | Run live against Aura (Chrome and Edge): POs created with AI-drafted justifications, rejected POs reviewed |
+| 8 | Stuck customer orders: play-forward simulation in a scratch Relate store, priority POs, the reservation comparison | Tested offline and on a toy graph; not yet run against Aura |
 
 **Parking lot**
 - Copy saved templates (and possibly the question history) into the Aura graph, so they can be queried next to the
@@ -645,6 +696,14 @@ mode checks, stale or reused reviews, the loop guard at commit, and drafts built
 - Measure voyage-4-nano against the 9/12 baseline.
 
 ## Changelog
+
+- **Stage 8 / stuck customer orders:** read templates *Stuck customer orders* and *Fulfillment pace*; the governed
+  *Create a Purchase Order for stuck customer orders* (a `PRIORITY:` justification, each product on a stuck order);
+  `sandbox/unblock.py` (copy, play forward with the harness's fulfillment Cypher, find and verify the extra, test the
+  naive quantity and stock reservation); `sandbox/pull.py` takes any pull query; `stuck_orders`, `recommend_unblock`,
+  `prepare_unblock` and `commit_unblock` in `agent/procurement.py`; API endpoints and the *Stuck orders* tab;
+  `tests/toy_stuck.py` and `tests/test_unblock_offline.py`. After the first live run: only `CO-` orders count as stuck
+  and for the median time to ship (`ORDER_ID_PREFIX`), and the search counts what older orders take first.
 
 - **Stage 7 / web UI:** `agent/procurement.py` split into prepare/commit, with the role and mode check in every entry
   point; `$source` on the governed PO commands (`"agent"` or `"ui"`; any other value writes nothing); new read

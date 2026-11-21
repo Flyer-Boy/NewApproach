@@ -58,7 +58,16 @@ class Aura:
         self.driver = GraphDatabase.driver(
             uri, auth=(user, password),
             notifications_disabled_classifications=[NotificationDisabledClassification.PERFORMANCE])
+        # Read your own writes: every session shares one bookmark manager, so a read that follows a governed write
+        # (the next recommendation after a PO is created) waits until the server answering it has that write. Without
+        # it, on a clustered Aura the read can reach a member that hasn't caught up and return the old state for a while.
+        self.bookmarks = GraphDatabase.bookmark_manager()
         self._check_connection(uri)
+
+    def _session(self):
+        bm = getattr(self, "bookmarks", None)
+        return (self.driver.session(database=self.database, bookmark_manager=bm) if bm is not None
+                else self.driver.session(database=self.database))
 
     def _check_connection(self, uri: str, attempts: int = 4, wait_s: float = 3.0) -> None:
         """Run a trivial read in the configured database, retrying briefly: Aura's routing can be unavailable for a
@@ -105,7 +114,7 @@ class Aura:
             return rows, _warnings(result.consume())
 
         try:
-            with self.driver.session(database=self.database) as session:
+            with self._session() as session:
                 rows, warnings = session.execute_read(work)
             out = {"rows": rows, "row_count": len(rows), "capped": len(rows) >= MAX_ROWS_FETCHED}
             if warnings:
@@ -140,7 +149,7 @@ class Aura:
         def work(tx):
             return [_plain(r.data()) for r in tx.run(cypher, params)]
         try:
-            with self.driver.session(database=self.database) as session:
+            with self._session() as session:
                 rows = session.execute_write(work)
             return {"rows": rows}
         except Exception as exc:

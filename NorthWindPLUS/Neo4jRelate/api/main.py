@@ -29,7 +29,7 @@ from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel, Field
 
 ROOT = Path(__file__).resolve().parent.parent
-for sub in ("agent", "kb"):
+for sub in ("agent", "kb", "sandbox"):
     sys.path.insert(0, str(ROOT / sub))
 
 import procurement  # noqa: E402
@@ -102,7 +102,7 @@ class DemandRequest(BaseModel):
 
 
 class DraftRequest(BaseModel):
-    kind: str = Field(pattern="^(create|resubmit|cancel)$")
+    kind: str = Field(pattern="^(create|resubmit|cancel|unblock)$")
     supplierId: str | None = None
     rejectedPO: str | None = None
     items: list[Item] = []
@@ -230,24 +230,26 @@ def create_app(aura=None, templates=None, llm: Callable[[str, str], str] | None 
 
     # ---------------- recommendations and demand ----------------
 
-    def with_demand(p, rows: list[dict]) -> None:
+    def with_demand(p, rows: list[dict], key: str) -> None:
+        """Recent demand for every card in ONE read (demand_batch), not one round trip per card."""
+        groups = {r[key]: [{"productId": l["ProductID"], "qty": l.get("RecommendedQt") or 0} for l in r["Lines"]
+                           if l.get("RecommendedQt")] for r in rows}
+        found = p.demand_batch({k: v for k, v in groups.items() if v})
         for r in rows:
-            items = [{"productId": l["ProductID"], "qty": l.get("RecommendedQt") or 0} for l in r["Lines"]
-                     if l.get("RecommendedQt")]
-            r["demand"] = p.demand(items) if items else None
+            r["demand"] = found.get(r[key]) if groups[r[key]] else None
 
     @app.get("/api/restock")
     def restock(nwplus_ui: str | None = Cookie(default=None)):
         p = current(nwplus_ui).procurement
         result = _answer(p.recommend_restock({}))
-        with_demand(p, result.get("rows", []))
+        with_demand(p, result.get("rows", []), "SupplierID")
         return result
 
     @app.get("/api/resubmissions")
     def resubmissions(nwplus_ui: str | None = Cookie(default=None)):
         p = current(nwplus_ui).procurement
         result = _answer(p.recommend_resubmissions({}))
-        with_demand(p, result.get("rows", []))
+        with_demand(p, result.get("rows", []), "RejectedPO")
         return result
 
     @app.post("/api/demand")
@@ -287,6 +289,28 @@ def create_app(aura=None, templates=None, llm: Callable[[str, str], str] | None 
         s = current(nwplus_ui)
         return _answer(s.procurement.commit_cancel(take(s, "cancel", body.previewId)))
 
+    # ---------------- stuck customer orders (see DESIGN_stuck_orders.md) ----------------
+
+    @app.get("/api/stuck-orders")
+    def stuck_orders(nwplus_ui: str | None = Cookie(default=None)):
+        found = _answer(current(nwplus_ui).procurement.stuck_orders())
+        return {k: v for k, v in found.items() if k != "_pace_row"}
+
+    @app.post("/api/stuck-orders/simulate")
+    def stuck_simulate(nwplus_ui: str | None = Cookie(default=None)):
+        """Copies the relevant subgraph into a scratch relate store and plays the business forward. Takes seconds."""
+        return _answer(current(nwplus_ui).procurement.recommend_unblock())
+
+    @app.post("/api/stuck-orders/preview")
+    def stuck_preview(pos: list[PO], nwplus_ui: str | None = Cookie(default=None)):
+        s = current(nwplus_ui)
+        return preview(s, "unblock", s.procurement.prepare_unblock({"purchaseOrders": [p.model_dump() for p in pos]}))
+
+    @app.post("/api/stuck-orders/commit")
+    def stuck_commit(body: Commit, nwplus_ui: str | None = Cookie(default=None)):
+        s = current(nwplus_ui)
+        return _answer(s.procurement.commit_unblock(take(s, "unblock", body.previewId)))
+
     # ---------------- justification drafts (Claude, on request) ----------------
 
     @app.post("/api/justification-draft")
@@ -306,6 +330,9 @@ def create_app(aura=None, templates=None, llm: Callable[[str, str], str] | None 
             raise HTTPException(502, f"The AI draft failed ({type(e).__name__}): {msg[:300]}")
         if not text:
             raise HTTPException(502, "The AI draft came back empty. Try again, or write the justification yourself.")
+        if body.kind == "unblock":                    # the approvers' line always comes first
+            line = p.unblock[body.supplierId]["priorityLine"]
+            text = text if text.startswith(procurement.PRIORITY) else f"{line} {text}"
         return {"draft": text, "model": DRAFT_MODEL, "facts": facts}
 
     # ---------------- audit ----------------
@@ -338,6 +365,20 @@ def draft_facts(p: procurement.Procurement, body: DraftRequest) -> str:
     the browser can't feed the model anything else."""
     lines: list[str] = []
     items = {i.productId: i.qty for i in body.items}
+    if body.kind == "unblock":
+        prop = p.unblock.get(body.supplierId or "")
+        if not prop:
+            raise HTTPException(409, "Run the stuck-orders simulation first.")
+        lines.append(f"Priority purchase order to supplier {prop['supplier']}, to free customer orders that have been "
+                     f"waiting far longer than usual because smaller orders keep using the stock first.")
+        lines.append(f"It must start with this line, which will be added for you: {prop['priorityLine']}")
+        for l in prop["lines"]:
+            q = items.get(l["productId"], l["extra"])
+            lines.append(f"- {l['product']}: ordering {q} (the simulation needed {l['extra']}; ordering only what is "
+                         f"missing today, {l['naiveExtra']}, would not free the orders); stuck orders need {l['stuckQty']}, "
+                         f"in stock now {l['stockNow']}, expected in stock when this PO arrives {l['stockAtDeliveryMedian']}; "
+                         f"customers ordered {l['tolerance3Days']} in the last 3 days.")
+        return "\n".join(lines)
     if body.kind == "create":
         rec = p.restock.get(body.supplierId or "")
         if not rec:

@@ -54,8 +54,8 @@ def _fresh(dest: Path):
     dest.parent.mkdir(parents=True, exist_ok=True)
 
 
-def pull(dest: Path, aura=None, method: str = "auto", env: dict | None = None) -> dict:
-    """Pull the vetting subgraph into `dest`. method: auto | cli | driver. `aura` (agent.aura.Aura) is needed for
+def pull(dest: Path, aura=None, method: str = "auto", env: dict | None = None, query: str = PULL_QUERY) -> dict:
+    """Pull a subgraph (by default the vetting one; `query` returns paths as `p`) into `dest`. method: auto | cli | driver. `aura` (agent.aura.Aura) is needed for
     the driver fallback. Returns where the data came from, when, and the pull's own summary."""
     dest = Path(dest)
     _fresh(dest)
@@ -63,18 +63,18 @@ def pull(dest: Path, aura=None, method: str = "auto", env: dict | None = None) -
     if method == "cli" or (method == "auto" and cli):
         if not cli:
             raise RuntimeError("The relate CLI isn't installed (set RELATE_BIN or put `relate` on PATH).")
-        return _pull_cli(cli, dest, env)
+        return _pull_cli(cli, dest, env, query)
     if aura is None:
         raise RuntimeError("No relate CLI found, and no Aura connection was given for the fallback copier.")
-    return _pull_driver(dest, aura)
+    return _pull_driver(dest, aura, query)
 
 
-def _pull_cli(cli: str, dest: Path, env: dict | None) -> dict:
+def _pull_cli(cli: str, dest: Path, env: dict | None, query: str = PULL_QUERY) -> dict:
     run_env = dict(os.environ if env is None else env)
     if "NEO4J_USERNAME" not in run_env and run_env.get("NEO4J_USER"):
         run_env["NEO4J_USERNAME"] = run_env["NEO4J_USER"]
     pulled_at = datetime.now(timezone.utc)
-    r = subprocess.run([cli, "pull", "--query", PULL_QUERY, "--database", str(dest)],
+    r = subprocess.run([cli, "pull", "--query", query, "--database", str(dest)],
                        env=run_env, capture_output=True, text=True, timeout=PULL_TIMEOUT_S)
     if r.returncode != 0:
         raise RuntimeError(f"relate pull failed (exit {r.returncode}): {(r.stderr or r.stdout).strip()[-1500:]}")
@@ -95,12 +95,12 @@ def _plain(value):
     return value
 
 
-def read_paths_neo4j(aura) -> tuple[dict, dict]:
-    """Runs PULL_QUERY on Aura in one read transaction; returns (nodes, rels) keyed by element id."""
+def read_paths_neo4j(aura, query: str = PULL_QUERY) -> tuple[dict, dict]:
+    """Runs the pull query on Aura in one read transaction; returns (nodes, rels) keyed by element id."""
     nodes, rels = {}, {}
 
     def work(tx):
-        for record in tx.run(PULL_QUERY):
+        for record in tx.run(query):
             path = record["p"]
             for n in path.nodes:
                 nodes[n.element_id] = (sorted(n.labels), {k: _plain(v) for k, v in n.items()})
@@ -108,15 +108,17 @@ def read_paths_neo4j(aura) -> tuple[dict, dict]:
                 rels[r.element_id] = (r.type, r.start_node.element_id, r.end_node.element_id,
                                       {k: _plain(v) for k, v in r.items()})
 
-    with aura.driver.session(database=aura.database) as session:
+    # Share the API's bookmarks (agent/aura.py), so the copy includes the writes just made through it.
+    session = aura._session() if hasattr(aura, "_session") else aura.driver.session(database=aura.database)
+    with session:
         session.execute_read(work)
     return nodes, rels
 
 
-def read_paths_relate(conn) -> tuple[dict, dict]:
+def read_paths_relate(conn, query: str = PULL_QUERY) -> tuple[dict, dict]:
     """The same, from a relate store standing in for Aura (offline tests)."""
     nodes, rels = {}, {}
-    for row in conn.execute(PULL_QUERY):
+    for row in conn.execute(query):
         path = row["p"]
         for n in path.nodes:
             nodes[n.element_id] = (sorted(n.labels), {k: _plain(v) for k, v in n.properties.items()})
@@ -152,10 +154,10 @@ def write_store(dest: Path, nodes: dict, rels: dict):
         conn.close()
 
 
-def _pull_driver(dest: Path, aura) -> dict:
+def _pull_driver(dest: Path, aura, query: str = PULL_QUERY) -> dict:
     pulled_at = datetime.now(timezone.utc)
     # A relate connection standing in for Aura (the offline tests) has `conn` and no `driver`.
-    nodes, rels = read_paths_neo4j(aura) if hasattr(aura, "driver") else read_paths_relate(aura.conn)
+    nodes, rels = read_paths_neo4j(aura, query) if hasattr(aura, "driver") else read_paths_relate(aura.conn, query)
     write_store(dest, nodes, rels)
     return {"method": "driver (fallback: no relate CLI found)", "pulled_at": pulled_at.isoformat(timespec="seconds"),
             "summary": f"copied {len(nodes)} nodes, {len(rels)} rels to {dest}",
