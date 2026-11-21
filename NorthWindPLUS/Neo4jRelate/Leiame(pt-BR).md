@@ -338,6 +338,24 @@ Defina o modo no `.env` (`SIMULATION_MODE=full` ou `agents`), com `--mode` no ag
 
 O código como o primeiro artigo o descreveu (modelo v2.3.2, antes do modo agents) está guardado na tag git `v2.3.2-agent`, para referência. Para ter essa experiência hoje, use o modo `full`: é o mesmo agente sobre o modelo mais novo.
 
+### Primeira execução recomendada: aquecimento no modo full
+
+Um banco recém-importado não é um bom ponto de partida para o modo agents. Ele ainda contém os pedidos clássicos do Northwind em aberto (os IDs não começam com `CO-`), e o atendimento sempre despacha o pedido mais antigo que tem estoque suficiente, então esses pedidos ficam com as primeiras entregas. Ele também quase não tem histórico próprio (poucos pedidos `CO-` despachados, nenhum PO entregue ainda), e as sugestões de demanda e a simulação de pedidos travados aprendem com esse histórico.
+
+Por isso, na primeira vez:
+
+1. Inicie no **modo full** (`SIMULATION_MODE=full`, `run_loops_full.bat`) e deixe rodar até os pedidos importados em aberto acabarem. A importação já dá a eles uma vantagem: ela soma 150 unidades ao estoque de todos os produtos (a reposição no fim da seção de importação, por volta da linha 365), então muitos podem ser despachados logo; os loops criam, aprovam e recebem POs para o restante e começam o histórico. O tempo necessário depende das taxas dos loops e ainda não foi medido; confira no Aura Query console e siga adiante quando esta consulta retornar 0:
+
+   ```cypher
+   MATCH (:OrderStatusOpeN {Status:"Open"})-[:IS_OPEN_ORDER_STATE]->(o:Order)
+   WHERE NOT o.OrderID STARTS WITH "CO-"
+   RETURN count(o) AS ImportedOrdersStillOpen
+   ```
+2. Enquanto isso, teste as perguntas de *O que perguntar* com o agente no terminal ou em um notebook; elas funcionam nos dois modos.
+3. Depois, pare os loops, defina `SIMULATION_MODE=agents`, inicie `run_loops_agents.bat` e emita POs como Assistente de Compras, pelo agente ou pela interface web.
+
+Um aquecimento mais longo ajuda a tela de pedidos travados: ela avisa que o histórico é curto até haver 6 horas dele, pelo menos 30 pedidos `CO-` despachados e um PO entregue, e até lá as quantidades saem baixas.
+
 ## Primeiros passos
 
 ### 0. Carregue o modelo no Neo4j Aura (Aura Query console)
@@ -345,7 +363,7 @@ O código como o primeiro artigo o descreveu (modelo v2.3.2, antes do modo agent
 1. `model/NorthWind_PLUS_Graph_Data_Model_Import_v2.3.3.cypher`, **linhas 109–1186**. Isso apaga o banco de dados e constrói o NorthWind PLUS v2.3.3. Opcional: o Motor de Recomendação, linhas 1286–1349. Para manter um banco de dados v2.3.2 existente, pare os loops e execute `model/NorthWind_PLUS_v2.3.3_Upgrade_from_v2.3.2.cypher`, que lista seus passos (a partir da v2.3.1, execute primeiro a atualização para a v2.3.2).
    A importação reconstrói o clássico banco de dados Northwind como uma aplicação graph-native e o estende para um ciclo de negócio completo de 360 graus: pedidos de clientes, detecção de estoque baixo, pedidos de compra com três níveis de aprovação, RFQs de fornecedores, recebimento no almoxarifado, fechamento financeiro e atendimento de pedidos. Daí em diante, tudo roda nativamente no grafo: sem ingestão de dados, sem ETL nem pipelines de dados.
 2. `model/NorthwindPlusGraphType_v2.3.3.cypher` (o esquema GRAPH TYPE). Isso acrescenta uma camada de governança ao modelo: o próprio banco de dados impõe a ontologia.
-3. Inicie os loops em um dos dois modos (veja *Duas formas de executar* acima) e defina `SIMULATION_MODE` no `.env` de acordo. No Windows, `run_loops_full.bat` abre os seis loops e `run_loops_agents.bat`, cinco; os dois leem as credenciais do `.env` e usam taxas que permitem à aprovação e ao atendimento acompanhar os novos pedidos. Execute-o a partir desta pasta, com o `.env` preenchido. Em outros sistemas, execute `python model/NorthwindPlus_Stress_Test.py --loop <name> --rate <per minute>`, uma vez por loop.
+3. Inicie os loops em um dos dois modos (veja *Duas formas de executar* acima) e defina `SIMULATION_MODE` no `.env` de acordo. No Windows, `run_loops_full.bat` abre os seis loops e `run_loops_agents.bat`, cinco; os dois leem as credenciais do `.env` e usam taxas que permitem à aprovação e ao atendimento acompanhar os novos pedidos. Execute-o a partir desta pasta, com o `.env` preenchido. Em outros sistemas, execute `python model/NorthwindPlus_Stress_Test.py --loop <name> --rate <per minute>`, uma vez por loop. Na primeira execução, comece no modo full: veja *Primeira execução recomendada* acima.
 
 ### 1a. Google Colab
 

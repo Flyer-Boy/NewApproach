@@ -338,6 +338,24 @@ Fija el modo en `.env` (`SIMULATION_MODE=full` o `agents`), con `--mode` en el a
 
 El código tal como lo describió el primer artículo (modelo v2.3.2, antes del modo agents) se conserva como la etiqueta git `v2.3.2-agent`, como referencia. Para tener esa experiencia hoy, usa el modo `full`: es el mismo agente sobre el modelo más reciente.
 
+### Primera ejecución recomendada: calentamiento en modo full
+
+Una base de datos recién importada no es un buen punto de partida para el modo agents. Todavía contiene los pedidos clásicos de Northwind abiertos (sus IDs no empiezan por `CO-`), y la preparación de pedidos siempre envía el pedido más antiguo que tiene stock suficiente, así que esos pedidos se quedan con las primeras entregas. Además, casi no tiene historial propio (pocos pedidos `CO-` enviados, ningún PO entregado todavía), y las sugerencias de demanda y la simulación de pedidos atascados aprenden de ese historial.
+
+Por eso, la primera vez:
+
+1. Arranca en **modo full** (`SIMULATION_MODE=full`, `run_loops_full.bat`) y déjalo funcionar hasta que no queden pedidos importados abiertos. La importación ya les da ventaja: suma 150 unidades al stock de todos los productos (la reposición al final de la sección de importación, hacia la línea 365), así que muchos pueden enviarse enseguida; los bucles crean, aprueban y reciben POs para el resto y empiezan el historial. El tiempo necesario depende de los ritmos de los bucles y aún no se ha medido; compruébalo en el Aura Query console y sigue adelante cuando esta consulta devuelva 0:
+
+   ```cypher
+   MATCH (:OrderStatusOpeN {Status:"Open"})-[:IS_OPEN_ORDER_STATE]->(o:Order)
+   WHERE NOT o.OrderID STARTS WITH "CO-"
+   RETURN count(o) AS ImportedOrdersStillOpen
+   ```
+2. Mientras tanto, prueba las preguntas de *Qué preguntar* con el agente en el terminal o en un notebook; funcionan en los dos modos.
+3. Después, detén los bucles, fija `SIMULATION_MODE=agents`, arranca `run_loops_agents.bat` y emite POs como Asistente de Compras, desde el agente o la interfaz web.
+
+Un calentamiento más largo ayuda a la pantalla de pedidos atascados: avisa de que el historial es escaso hasta que haya 6 horas, al menos 30 pedidos `CO-` enviados y un PO entregado, y hasta entonces las cantidades salen bajas.
+
 ## Primeros pasos
 
 ### 0. Carga el modelo en Neo4j Aura (Aura Query console)
@@ -345,7 +363,7 @@ El código tal como lo describió el primer artículo (modelo v2.3.2, antes del 
 1. `model/NorthWind_PLUS_Graph_Data_Model_Import_v2.3.3.cypher`, **líneas 109–1186**. Esto vacía la base de datos y construye NorthWind PLUS v2.3.3. Opcional: el Motor de Recomendación, líneas 1286–1349. Para conservar una base de datos v2.3.2 existente, detén los bucles y ejecuta `model/NorthWind_PLUS_v2.3.3_Upgrade_from_v2.3.2.cypher`, que enumera sus pasos (desde la v2.3.1, ejecuta antes la actualización a la v2.3.2).
    La importación reconstruye la clásica base de datos Northwind como una aplicación graph-native y la amplía a un ciclo de negocio completo de 360 grados: pedidos de clientes, detección de stock bajo, órdenes de compra con tres niveles de aprobación, RFQs de proveedores, recepción en almacén, cierre financiero y preparación de pedidos. A partir de ahí, todo funciona de forma nativa en el grafo: sin ingesta de datos, sin ETL ni pipelines de datos.
 2. `model/NorthwindPlusGraphType_v2.3.3.cypher` (el esquema GRAPH TYPE). Añade una capa de gobernanza al modelo: la propia base de datos impone la ontología.
-3. Arranca los bucles en uno de los dos modos (ver *Dos formas de ejecutarlo* más arriba) y fija `SIMULATION_MODE` en `.env` en consonancia. En Windows, `run_loops_full.bat` abre los seis bucles y `run_loops_agents.bat`, cinco; ambos leen las credenciales de `.env` y usan ritmos que permiten que la aprobación y la preparación de pedidos sigan el paso de los pedidos nuevos. Ejecútalo desde esta carpeta, con el `.env` rellenado. En otros sistemas, ejecuta `python model/NorthwindPlus_Stress_Test.py --loop <name> --rate <per minute>`, una vez por bucle.
+3. Arranca los bucles en uno de los dos modos (ver *Dos formas de ejecutarlo* más arriba) y fija `SIMULATION_MODE` en `.env` en consonancia. En Windows, `run_loops_full.bat` abre los seis bucles y `run_loops_agents.bat`, cinco; ambos leen las credenciales de `.env` y usan ritmos que permiten que la aprobación y la preparación de pedidos sigan el paso de los pedidos nuevos. Ejecútalo desde esta carpeta, con el `.env` rellenado. En otros sistemas, ejecuta `python model/NorthwindPlus_Stress_Test.py --loop <name> --rate <per minute>`, una vez por bucle. En la primera ejecución, empieza en modo full: ver *Primera ejecución recomendada* más arriba.
 
 ### 1a. Google Colab
 

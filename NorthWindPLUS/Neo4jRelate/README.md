@@ -493,6 +493,33 @@ model change, only a different `.bat` file and setting.
 The code as the first article described it (model v2.3.2, before the agents mode) is kept as the git tag
 `v2.3.2-agent`, for reference. To run that experience today, use `full` mode: it's the same agent on the newer model.
 
+### Recommended first run: warm up in full mode
+
+A freshly imported database is a poor starting point for the agents mode. It still holds the classic Northwind orders
+that are open (their IDs don't start with `CO-`), and fulfillment always ships the oldest order that has enough stock,
+so those orders take the first deliveries. It also has almost no history of its own (few shipped `CO-` orders, no PO
+delivered yet), and the demand suggestions and the stuck-orders simulation learn from that history.
+
+So, the first time:
+
+1. Start in **full mode** (`SIMULATION_MODE=full`, `run_loops_full.bat`) and let it run until the imported open orders
+   are gone. The import already gives them a head start: it adds 150 units to every product's stock (the restock at
+   the end of the import section, around line 365), so many of them can ship right away; the loops create,
+   approve and receive POs for the rest, and start the history. How long it takes depends on the loop rates and
+   hasn't been measured yet; check in the Aura Query console, and move on when this returns 0:
+
+   ```cypher
+   MATCH (:OrderStatusOpeN {Status:"Open"})-[:IS_OPEN_ORDER_STATE]->(o:Order)
+   WHERE NOT o.OrderID STARTS WITH "CO-"
+   RETURN count(o) AS ImportedOrdersStillOpen
+   ```
+2. Meanwhile, try the questions in *Things to ask* with the terminal agent or a notebook; they work in both modes.
+3. Then stop the loops, set `SIMULATION_MODE=agents`, start `run_loops_agents.bat`, and issue POs as a Procurement
+   Assistant through the agent or the web UI.
+
+A longer warm-up helps the stuck-orders screen: it warns that the history is thin until there are 6 hours of it, at
+least 30 shipped `CO-` orders and a delivered PO, and its quantities come out low until then.
+
 ## Quick start
 
 ### 0. Load the model into Neo4j Aura (Aura Query console)
@@ -510,6 +537,7 @@ The code as the first article described it (model v2.3.2, before the agents mode
 3. Start the loops in one of the two modes (see *Two ways to run* below), and set `SIMULATION_MODE` in `.env` to
    match. On Windows, `run_loops_full.bat` opens all six loops and `run_loops_agents.bat` five; both read credentials
    from `.env` and use rates that let vetting and fulfillment keep up with new orders. Run it from this folder, with `.env` filled in. Elsewhere, run `python model/NorthwindPlus_Stress_Test.py --loop <name> --rate <per minute>`, once per loop.
+   For a first run, start in full mode: see *Recommended first run* above.
 
 ### 1a. Google Colab
 

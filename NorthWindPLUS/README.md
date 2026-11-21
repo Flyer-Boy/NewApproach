@@ -207,7 +207,7 @@ Then go back to the Query console and watch the graph change in real time.
 
 **4. (Optional) Add the AI agent**
 
-The [`Neo4jRelate/`](Neo4jRelate/README.md) folder adds model **v2.3.3** and an AI agent that answers questions about the running business, rehearses and changes the approval limits under governance, learns new queries, and, in its *agents* mode, takes over PO creation and resubmission from the loops with a Procurement Assistant. Build the graph with its v2.3.3 import script (or upgrade a v2.3.2 database in place with `NorthWind_PLUS_v2.3.3_Upgrade_from_v2.3.2.cypher`), start the loops with `run_loops_full.bat` or `run_loops_agents.bat`, then open the Colab or Jupyter notebook. Its README has the details.
+The [`Neo4jRelate/`](Neo4jRelate/README.md) folder adds model **v2.3.3** and an AI agent that answers questions about the running business, rehearses and changes the approval limits under governance, learns new queries, and, in its *agents* mode, takes over PO creation and resubmission from the loops with a Procurement Assistant. Build the graph with its v2.3.3 import script (or upgrade a v2.3.2 database in place with `NorthWind_PLUS_v2.3.3_Upgrade_from_v2.3.2.cypher`), start the loops with `run_loops_full.bat` or `run_loops_agents.bat`, then open the Colab or Jupyter notebook. Its README has the details. For a first run, let the full mode run until the imported open orders have cleared and some history has built up, before switching to agents mode (see *Recommended first run* there, with a query to check).
 
 ---
 
